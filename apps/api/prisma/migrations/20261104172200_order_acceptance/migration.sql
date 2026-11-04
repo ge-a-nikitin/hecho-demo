@@ -1,0 +1,1 @@
+ALTER TABLE "WorkOrder" ADD COLUMN "acceptedAt" TIMESTAMP(3);

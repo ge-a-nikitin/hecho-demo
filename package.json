@@ -1,0 +1,22 @@
+{
+  "name": "order-desk",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=22.18.0",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "db:format": "pnpm --filter @order-desk/api db:format",
+    "db:validate": "pnpm --filter @order-desk/api db:validate",
+    "db:generate": "pnpm --filter @order-desk/api db:generate",
+    "db:migrate": "pnpm --filter @order-desk/api db:migrate",
+    "db:migrate:status": "pnpm --filter @order-desk/api db:migrate:status",
+    "db:seed:admin": "pnpm --filter @order-desk/api db:seed:admin"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

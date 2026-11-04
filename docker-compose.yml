@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+    ports:
+      - "127.0.0.1:6202:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    command:
+      - mini
+      - -dir=/data
+      - -s3.port=8333
+      - -master.port=9333
+      - -admin.user=${SEAWEEDFS_ADMIN_USER:?Set SEAWEEDFS_ADMIN_USER in .env}
+      - -admin.password=${SEAWEEDFS_ADMIN_PASSWORD:?Set SEAWEEDFS_ADMIN_PASSWORD in .env}
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}
+      S3_BUCKET: ${S3_BUCKET:-order-files}
+    ports:
+      - "127.0.0.1:6203:8333"
+      - "127.0.0.1:6204:12535"
+    volumes:
+      - seaweedfs_data:/data
+
+volumes:
+  postgres_data:
+  seaweedfs_data:

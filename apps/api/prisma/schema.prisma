@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  EXECUTOR
+  ADMIN
+}
+
+enum OrderStatus {
+  NEW
+  WAITING_DISTRIBUTION
+  ASSIGNED
+  IN_PROGRESS
+  ON_REVIEW
+  NEEDS_REVISION
+  INVOICE_ISSUED
+  INVOICE_PAID
+  COMPLETED
+  CANCELLED
+}
+
+enum EstimateStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum AssignmentOutcome {
+  ACTIVE
+  DECLINED
+  REASSIGNED
+  RELEASED
+}
+
+enum InvoiceStatus {
+  ISSUED
+  PAID
+  VOID
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          UserRole @default(CUSTOMER)
+  isActive      Boolean  @default(true)
+  hourlyRate    Decimal? @db.Decimal(12, 4)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions            Session[]
+  accounts            Account[]
+  customerOrders      WorkOrder[]          @relation("OrderCustomer")
+  assignedOrders      WorkOrder[]          @relation("OrderExecutor")
+  createdCategories   Category[]           @relation("CategoryCreator")
+  orderComments       OrderComment[]
+  proposedEstimates   OrderEstimate[]      @relation("EstimateAuthor")
+  assignments         OrderAssignment[]    @relation("AssignedExecutor")
+  madeAssignments     OrderAssignment[]    @relation("AssignmentCreator")
+  statusChanges       OrderStatusHistory[] @relation("StatusActor")
+  issuedInvoices      Invoice[]            @relation("InvoiceIssuer")
+  voidedInvoices      Invoice[]            @relation("InvoiceVoider")
+  uploadedAttachments OrderAttachment[]    @relation("AttachmentUploader")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String   @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  isActive    Boolean  @default(true)
+  createdById String
+  createdBy   User     @relation("CategoryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders WorkOrder[]
+}
+
+model WorkOrder {
+  id                 String      @id @default(cuid())
+  title              String
+  description        String      @db.Text
+  status             OrderStatus @default(NEW)
+  customerId         String
+  customer           User        @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  executorId         String?
+  executor           User?       @relation("OrderExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+  categoryId         String
+  category           Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  dueAt              DateTime?
+  location           String?
+  approvedHours      Decimal?    @db.Decimal(10, 4)
+  approvedHourlyRate Decimal?    @db.Decimal(12, 4)
+  approvedAmount     Decimal?    @db.Decimal(14, 2)
+  cancellationReason String?     @db.Text
+  submittedAt        DateTime?
+  acceptedAt         DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  estimates     OrderEstimate[]
+  assignments   OrderAssignment[]
+  timeEntry     WorkTimeEntry?
+  comments      OrderComment[]
+  attachments   OrderAttachment[]
+  statusHistory OrderStatusHistory[]
+  invoices      Invoice[]
+
+  @@index([customerId, status])
+  @@index([executorId, status])
+  @@index([status, categoryId])
+  @@index([createdAt])
+}
+
+model OrderEstimate {
+  id              String         @id @default(cuid())
+  orderId         String
+  order           WorkOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  proposedById    String
+  proposedBy      User           @relation("EstimateAuthor", fields: [proposedById], references: [id], onDelete: Restrict)
+  hours           Decimal        @db.Decimal(10, 4)
+  hourlyRate      Decimal        @db.Decimal(12, 4)
+  amount          Decimal        @db.Decimal(14, 2)
+  status          EstimateStatus @default(PENDING)
+  responseComment String?        @db.Text
+  proposedAt      DateTime       @default(now())
+  respondedAt     DateTime?
+
+  @@index([orderId, proposedAt])
+}
+
+model OrderAssignment {
+  id           String            @id @default(cuid())
+  orderId      String
+  order        WorkOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  executorId   String
+  executor     User              @relation("AssignedExecutor", fields: [executorId], references: [id], onDelete: Restrict)
+  assignedById String?
+  assignedBy   User?             @relation("AssignmentCreator", fields: [assignedById], references: [id], onDelete: SetNull)
+  outcome      AssignmentOutcome @default(ACTIVE)
+  assignedAt   DateTime          @default(now())
+  endedAt      DateTime?
+
+  @@index([orderId, assignedAt])
+  @@index([executorId, outcome])
+}
+
+model WorkTimeEntry {
+  id        String    @id @default(cuid())
+  orderId   String    @unique
+  order     WorkOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  minutes   Int
+  comment   String?   @db.Text
+  updatedAt DateTime  @updatedAt
+}
+
+model OrderComment {
+  id        String    @id @default(cuid())
+  orderId   String
+  order     WorkOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model OrderAttachment {
+  id           String    @id @default(cuid())
+  orderId      String
+  order        WorkOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User      @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  objectKey    String    @unique
+  filename     String
+  contentType  String?
+  sizeBytes    Int
+  createdAt    DateTime  @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model OrderStatusHistory {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       WorkOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User         @relation("StatusActor", fields: [changedById], references: [id], onDelete: Restrict)
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  note        String?      @db.Text
+  createdAt   DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  orderId      String
+  order        WorkOrder     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  issuedById   String
+  issuedBy     User          @relation("InvoiceIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  voidedById   String?
+  voidedBy     User?         @relation("InvoiceVoider", fields: [voidedById], references: [id], onDelete: Restrict)
+  number       String        @unique
+  status       InvoiceStatus @default(ISSUED)
+  customerName String
+  executorName String
+  currency     String        @default("USD") @db.Char(3)
+  hours        Decimal       @db.Decimal(10, 4)
+  hourlyRate   Decimal       @db.Decimal(12, 4)
+  amount       Decimal       @db.Decimal(14, 2)
+  issuedAt     DateTime      @default(now())
+  paidAt       DateTime?
+  voidedAt     DateTime?
+  voidReason   String?       @db.Text
+  createdAt    DateTime      @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([issuedAt])
+}
+
+model InvoiceSequence {
+  year       Int      @id
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}

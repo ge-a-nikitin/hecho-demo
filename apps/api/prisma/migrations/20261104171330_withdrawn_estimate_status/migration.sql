@@ -1,0 +1,1 @@
+ALTER TYPE "EstimateStatus" ADD VALUE 'WITHDRAWN';
