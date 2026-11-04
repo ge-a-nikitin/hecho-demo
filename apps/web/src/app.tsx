@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   BrowserRouter,
   Link,
@@ -9,8 +9,46 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { authClient } from "./auth-client";
+import { apiRequest } from "./api";
 
 type Role = "CUSTOMER" | "EXECUTOR" | "ADMIN";
+
+type Category = {
+  id: string;
+  name: string;
+};
+
+type WorkOrder = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  category: Category;
+  createdAt: string;
+  dueAt: string | null;
+  location: string | null;
+};
+
+type CreateOrderInput = {
+  title: string;
+  description: string;
+  categoryId: string;
+  dueAt?: string;
+  location?: string;
+};
+
+const orderStatusLabels: Record<string, string> = {
+  NEW: "Черновик",
+  WAITING_DISTRIBUTION: "Ждёт распределения",
+  ASSIGNED: "Назначена",
+  IN_PROGRESS: "В работе",
+  ON_REVIEW: "На проверке",
+  NEEDS_REVISION: "Нужны исправления",
+  INVOICE_ISSUED: "Выставлен счёт",
+  INVOICE_PAID: "Счёт оплачен",
+  COMPLETED: "Завершена",
+  CANCELLED: "Отменена",
+};
 
 const panels: Record<Role, { path: string; label: string; title: string; description: string }> = {
   CUSTOMER: {
@@ -323,15 +361,272 @@ function PanelPage({ role, userName }: { role: Role; userName: string }) {
           <div className="panel-heading">
             <div><div className="eyebrow">{isProfile ? "ВАШ АККАУНТ" : "РАБОЧЕЕ ПРОСТРАНСТВО"}</div><h1>{title}</h1><p>{isProfile ? "Основные данные и параметры учётной записи." : panel.description}</p></div>
           </div>
-          <div className="empty-state" data-testid={isProfile ? "profile-placeholder" : "orders-empty-state"}>
-            <span className="empty-state-icon" aria-hidden="true">{isProfile ? userName.slice(0, 1).toUpperCase() : "✳"}</span>
-            <h2>{isProfile ? `Здравствуйте, ${userName}` : "Рабочий стол готовится"}</h2>
-            <p>{isProfile ? "Управление данными профиля появится на следующем этапе разработки." : "Подключение списков заказов и действий для этой роли — следующий этап разработки."}</p>
-          </div>
+          {role === "CUSTOMER" && !isProfile ? (
+            <CustomerOrdersPage />
+          ) : (
+            <div className="empty-state" data-testid={isProfile ? "profile-placeholder" : "orders-empty-state"}>
+              <span className="empty-state-icon" aria-hidden="true">{isProfile ? userName.slice(0, 1).toUpperCase() : "✳"}</span>
+              <h2>{isProfile ? `Здравствуйте, ${userName}` : "Рабочий стол готовится"}</h2>
+              <p>{isProfile ? "Управление данными профиля появится на следующем этапе разработки." : "Подключение списков заказов и действий для этой роли — следующий этап разработки."}</p>
+            </div>
+          )}
         </div>
       </section>
     </main>
   );
+}
+
+function CustomerOrdersPage() {
+  const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [ordersError, setOrdersError] = useState("");
+  const [categoriesError, setCategoriesError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [location, setLocation] = useState("");
+
+  const loadOrders = useCallback(async () => {
+    setIsLoadingOrders(true);
+    setOrdersError("");
+    try {
+      setOrders(await apiRequest<WorkOrder[]>("/orders"));
+    } catch (error) {
+      setOrdersError(getRequestError(error, "Не удалось загрузить заказы."));
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  }, []);
+
+  const loadCategories = useCallback(async () => {
+    setIsLoadingCategories(true);
+    setCategoriesError("");
+    try {
+      const availableCategories = await apiRequest<Category[]>("/categories");
+      setCategories(availableCategories);
+      setCategoryId((current) => current || availableCategories[0]?.id || "");
+    } catch (error) {
+      setCategoriesError(getRequestError(error, "Не удалось загрузить категории."));
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([loadOrders(), loadCategories()]);
+  }, [loadOrders, loadCategories]);
+
+  async function createOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError("");
+    setNotice("");
+    setIsSubmitting(true);
+
+    try {
+      const input: CreateOrderInput = {
+        title: title.trim(),
+        description: description.trim(),
+        categoryId,
+        ...(dueAt ? { dueAt: new Date(`${dueAt}T00:00:00.000Z`).toISOString() } : {}),
+        ...(location.trim() ? { location: location.trim() } : {}),
+      };
+      const draft = await apiRequest<WorkOrder>("/orders", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+
+      setIsCreateOpen(false);
+      setTitle("");
+      setDescription("");
+      setDueAt("");
+      setLocation("");
+
+      try {
+        await apiRequest<WorkOrder>(`/orders/${encodeURIComponent(draft.id)}/submit`, {
+          method: "POST",
+        });
+        setNotice("Заказ создан и отправлен на распределение.");
+      } catch (error) {
+        setActionError(`Черновик создан, но отправить его не удалось: ${getRequestError(error, "ошибка API")}`);
+      }
+
+      await loadOrders();
+    } catch (error) {
+      setActionError(getRequestError(error, "Не удалось создать заказ."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="customer-orders" aria-label="Заказы заказчика">
+      {actionError && <p className="form-error api-message" role="alert" data-testid="customer-orders-error">{actionError}</p>}
+      {notice && <p className="success-message" role="status" data-testid="customer-orders-notice">{notice}</p>}
+
+      <div className="orders-toolbar">
+        <div>
+          <h2>Список заказов</h2>
+          <p>Ваши текущие и завершённые работы</p>
+        </div>
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={() => {
+            setActionError("");
+            setNotice("");
+            setIsCreateOpen((open) => !open);
+          }}
+          data-testid="create-order"
+        >
+          {isCreateOpen ? "Закрыть форму" : "+ Новый заказ"}
+        </button>
+      </div>
+
+      {isCreateOpen && (
+        <form className="order-form" onSubmit={createOrder} data-testid="create-order-form">
+          <div className="order-form-heading">
+            <div className="eyebrow">НОВЫЙ ЗАПРОС</div>
+            <h2>Опишите, что нужно сделать</h2>
+            <p>После создания заказ сразу станет доступен для распределения.</p>
+          </div>
+          <label>
+            Название
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              required
+              data-testid="order-title"
+            />
+          </label>
+          <label>
+            Описание задачи
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={20_000}
+              rows={5}
+              required
+              data-testid="order-description"
+            />
+          </label>
+          <div className="order-form-grid">
+            <label>
+              Категория
+              <select
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+                required
+                disabled={isLoadingCategories || categories.length === 0}
+                data-testid="order-category"
+              >
+                <option value="" disabled>
+                  {isLoadingCategories ? "Загрузка категорий…" : "Выберите категорию"}
+                </option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Желаемый срок
+              <input
+                type="date"
+                value={dueAt}
+                onChange={(event) => setDueAt(event.target.value)}
+                data-testid="order-due-date"
+              />
+            </label>
+          </div>
+          <label>
+            Место выполнения <span className="optional-label">необязательно</span>
+            <input
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              maxLength={500}
+              data-testid="order-location"
+            />
+          </label>
+          {categoriesError && <p className="form-error" role="alert" data-testid="categories-error">{categoriesError}</p>}
+          {!isLoadingCategories && !categoriesError && categories.length === 0 && (
+            <p className="form-hint" data-testid="no-categories">Пока нет доступных категорий. Обратитесь к администратору.</p>
+          )}
+          <div className="order-form-actions">
+            <button className="button button-quiet" type="button" onClick={() => setIsCreateOpen(false)} data-testid="cancel-create-order">
+              Отмена
+            </button>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isSubmitting || isLoadingCategories || categories.length === 0}
+              data-testid="submit-create-order"
+            >
+              {isSubmitting ? "Создаём…" : "Создать и отправить"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {ordersError ? (
+        <div className="api-load-error" role="alert" data-testid="orders-load-error">
+          <p>{ordersError}</p>
+          <button className="button button-quiet" type="button" onClick={() => void loadOrders()} data-testid="retry-orders">
+            Повторить загрузку
+          </button>
+        </div>
+      ) : isLoadingOrders ? (
+        <div className="orders-loading" role="status" data-testid="orders-loading">Загружаем заказы…</div>
+      ) : orders.length === 0 ? (
+        <div className="empty-state orders-empty" data-testid="orders-empty-state">
+          <span className="empty-state-icon" aria-hidden="true">✳</span>
+          <h2>Заказов пока нет</h2>
+          <p>Создайте первый заказ — он появится здесь и станет доступен для распределения.</p>
+        </div>
+      ) : (
+        <div className="orders-list" data-testid="orders-list">
+          {orders.map((order) => (
+            <article className="order-list-card" key={order.id} data-testid={`order-card-${order.id}`}>
+              <div className="order-list-main">
+                <div className="order-list-meta">
+                  <span>{order.category.name}</span>
+                  <span className={`order-status order-status-${order.status.toLowerCase()}`}>
+                    {orderStatusLabels[order.status] ?? order.status}
+                  </span>
+                </div>
+                <h3>{order.title}</h3>
+                <p>{order.description}</p>
+                <div className="order-list-footer">
+                  <span>Создан {formatDate(order.createdAt)}</span>
+                  {order.dueAt && <span>Срок {formatDate(order.dueAt)}</span>}
+                  {order.location && <span>{order.location}</span>}
+                </div>
+              </div>
+              <span className="order-card-arrow" aria-hidden="true">↗</span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
+function getRequestError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 function LoadingPage() {
