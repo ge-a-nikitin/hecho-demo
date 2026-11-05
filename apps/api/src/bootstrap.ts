@@ -10,14 +10,15 @@ export async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const expressApp = app.getHttpAdapter().getInstance();
 
-  expressApp.all("/api/auth/*splat", toNodeHandler(auth));
-  expressApp.use(json(), urlencoded({ extended: true }));
-
   app.setGlobalPrefix("api");
   app.enableCors({
     origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:6200",
     credentials: true,
   });
+
+  expressApp.all("/api/auth/*splat", toNodeHandler(auth));
+  expressApp.use(json(), urlencoded({ extended: true }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
