@@ -2,13 +2,14 @@
 
 ## Collaboration and planning
 
-- Treat implementation requests as authorization to inspect the repository, implement the agreed change, and verify it. Do not stop at a proposal unless the user asks for planning only.
+- Treat implementation requests as authorization to work toward implementation, but do not assume they waive the approval checkpoints below. Do not stop at a proposal unless the user asks for planning only.
 - Use this workflow for substantial product or engineering work:
-  1. Discover the problem and actively identify gaps in understanding. Ask focused, preferably grouped questions to clarify user needs, constraints, scope, edge cases, and acceptance criteria before treating requirements as settled.
-  2. Record agreed requirements in the appropriate project documentation.
-  3. Explore relevant existing systems and identify architectural choices, dependencies, risks, and unresolved assumptions. Ask about consequential gaps, then agree on an architecture that satisfies the requirements, including data models, component boundaries, and contracts.
-  4. Present an implementation plan ordered by dependencies. Clarify any meaningful scope, sequencing, or acceptance gaps before agreement; build from foundational layers upward (for example, data and persistence, domain/API, then user interfaces), adapting the sequence to the project.
+  1. Discover the problem and actively identify gaps in understanding. Ask focused, preferably grouped questions to clarify user needs, constraints, scope, edge cases, and acceptance criteria before treating requirements as settled. Summarize the requirements and get confirmation.
+  2. Record confirmed requirements and relevant open questions in the appropriate project documentation.
+  3. Explore relevant existing systems and identify architectural choices, dependencies, risks, and unresolved assumptions. Ask about consequential gaps, present the proposed architecture, and get agreement, including for data models, component boundaries, and contracts.
+  4. Present an implementation plan ordered by dependencies. Clarify meaningful scope, sequencing, or acceptance gaps, then get approval before implementation. Build from foundational layers upward (for example, data and persistence, domain/API, then user interfaces), adapting the sequence to the project.
   5. Implement, verify against the agreed criteria and affected workflows, and update relevant documentation. If verification exposes a mismatch or an unmade product decision, report it and clarify the expected behavior rather than silently guessing.
+- Treat confirmation as a checkpoint between requirements, architecture, and implementation planning for substantial work. A clear user instruction to carry the task through implementation, or explicit approval of multiple stages, may authorize proceeding through those checkpoints without pausing again; do not infer such blanket approval from an ambiguous acknowledgment.
 - At each stage, ask enough to establish a shared understanding and expose important edge cases; batch related questions when practical. Do not treat silence or an unverified assumption as user agreement.
 - Do not skip agreement on significant product or architecture decisions. Once the relevant scope and approach are agreed, handle routine implementation details autonomously.
 - For small, low-risk changes, use this workflow proportionally rather than adding unnecessary planning overhead.
@@ -19,6 +20,7 @@
 
 - Keep this file in English. When starting work in a different project or adding project documentation whose language is unclear, ask the user which language to use. Preserve the language and style of existing documents unless asked to change them.
 - Record agreed product behavior and operational instructions in the appropriate project documentation. Keep agent workflow guidance here rather than duplicating user-facing documentation.
+- Record known defects, deferred decisions, and future improvements in the project's existing backlog, roadmap, or open-questions documentation. State why each item is deferred and, where useful, its impact or the condition/stage for revisiting it. Distinguish tracked follow-up work from agreed current scope; do not silently expand the implementation.
 - When changing an API, protocol, schema, or other contract between components, update its authoritative documentation and generated/client types as applicable. Keep producers and consumers consistent.
 - Enforce authentication, authorization, validation, and other trust-boundary checks in the trusted service or layer; client-side checks are not a security boundary.
 
