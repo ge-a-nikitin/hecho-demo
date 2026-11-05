@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   MinLength,
@@ -16,19 +17,24 @@ export class CreateOrderDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
+  @Matches(/\S/)
   title!: string;
 
   @IsString()
   @MinLength(1)
   @MaxLength(20_000)
+  @Matches(/\S/)
   description!: string;
 
   @IsString()
   @MinLength(1)
+  @Matches(/\S/)
   categoryId!: string;
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @Matches(/\S/)
   executorId?: string;
 
   @IsOptional()
@@ -46,21 +52,26 @@ export class UpdateDraftOrderDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
+  @Matches(/\S/)
   title?: string;
 
   @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(20_000)
+  @Matches(/\S/)
   description?: string;
 
   @IsOptional()
   @IsString()
   @MinLength(1)
+  @Matches(/\S/)
   categoryId?: string;
 
   @IsOptional()
   @IsString()
+  @MinLength(1)
+  @Matches(/\S/)
   executorId?: string | null;
 
   @IsOptional()
@@ -76,6 +87,7 @@ export class UpdateDraftOrderDto {
 export class AssignOrderDto {
   @IsString()
   @MinLength(1)
+  @Matches(/\S/)
   executorId!: string;
 }
 
@@ -121,6 +133,7 @@ export class RevisionRequestDto {
   @IsString()
   @MinLength(1)
   @MaxLength(2000)
+  @Matches(/\S/)
   comment!: string;
 }
 
@@ -128,5 +141,6 @@ export class CreateOrderCommentDto {
   @IsString()
   @MinLength(1)
   @MaxLength(10_000)
+  @Matches(/\S/)
   content!: string;
 }

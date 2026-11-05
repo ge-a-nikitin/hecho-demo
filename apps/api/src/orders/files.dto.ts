@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 export class CancelOrderDto {
   @IsOptional()
@@ -11,5 +11,6 @@ export class VoidInvoiceDto {
   @IsString()
   @MinLength(1)
   @MaxLength(2000)
+  @Matches(/\S/)
   reason!: string;
 }

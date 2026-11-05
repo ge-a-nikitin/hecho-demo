@@ -9,7 +9,10 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { authClient } from "./auth-client";
-import { apiRequest } from "./api";
+import { apiRequest, getUserFacingError } from "./api";
+import { AdminOrdersPage, ExecutorOrdersPage } from "./role-order-panels";
+import { OrderDetailView } from "./order-detail";
+import { ToastProvider, useToast } from "./toast";
 
 type Role = "CUSTOMER" | "EXECUTOR" | "ADMIN";
 
@@ -27,6 +30,21 @@ type WorkOrder = {
   createdAt: string;
   dueAt: string | null;
   location: string | null;
+  acceptedAt?: string | null;
+  estimates?: { id: string; hours: number | string; amount: number | string; status: string }[];
+  invoices?: {
+    id: string;
+    number: string;
+    amount: number | string;
+    status: string;
+    paymentReports?: {
+      id: string;
+      filename: string;
+      status: string;
+      reviewComment: string | null;
+      submittedAt: string;
+    }[];
+  }[];
 };
 
 type CreateOrderInput = {
@@ -74,15 +92,17 @@ const panels: Record<Role, { path: string; label: string; title: string; descrip
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<AuthPage mode="login" />} />
-        <Route path="/register" element={<AuthPage mode="register" />} />
-        <Route path="/customer/*" element={<PanelRoute role="CUSTOMER" />} />
-        <Route path="/executor/*" element={<PanelRoute role="EXECUTOR" />} />
-        <Route path="/admin/*" element={<PanelRoute role="ADMIN" />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<AuthPage mode="login" />} />
+          <Route path="/register" element={<AuthPage mode="register" />} />
+          <Route path="/customer/*" element={<PanelRoute role="CUSTOMER" />} />
+          <Route path="/executor/*" element={<PanelRoute role="EXECUTOR" />} />
+          <Route path="/admin/*" element={<PanelRoute role="ADMIN" />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </ToastProvider>
     </BrowserRouter>
   );
 }
@@ -227,26 +247,33 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showToast } = useToast();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
     setIsSubmitting(true);
     try {
       const result = isRegister
         ? await authClient.signUp.email({ name: name.trim(), email: email.trim(), password })
         : await authClient.signIn.email({ email: email.trim(), password });
       if (result.error) {
-        setError(result.error.message ?? "Не удалось выполнить вход. Проверьте данные и попробуйте ещё раз.");
+        showToast(isRegister
+          ? "Не удалось создать аккаунт. Проверьте данные: возможно, этот адрес уже зарегистрирован."
+          : "Не удалось войти. Проверьте электронную почту и пароль.");
         return;
       }
 
       const sessionResult = await authClient.getSession();
-      if (!sessionResult.data) throw new Error("Не удалось получить активную сессию.");
+      if (!sessionResult.data) {
+        showToast("Не удалось получить активную сессию. Попробуйте войти снова.");
+        return;
+      }
       const role = getRole(sessionResult.data.user);
-      if (!role) throw new Error("Для аккаунта не назначена роль. Обратитесь к администратору.");
+      if (!role) {
+        showToast("Для аккаунта не назначена роль. Обратитесь к администратору.");
+        return;
+      }
       const requestedPath = (location.state as { from?: unknown } | null)?.from;
       const panelPath = panels[role].path;
       const destination =
@@ -256,7 +283,10 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
           : panelPath;
       navigate(destination, { replace: true });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Произошла ошибка. Попробуйте ещё раз.");
+      showToast(getUserFacingError(
+        submitError,
+        "Не удалось выполнить вход. Проверьте данные и попробуйте снова.",
+      ));
     } finally {
       setIsSubmitting(false);
     }
@@ -285,7 +315,6 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
             Пароль
             <input autoComplete={isRegister ? "new-password" : "current-password"} name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} data-testid="auth-password" />
           </label>
-          {error && <p className="form-error" role="alert" data-testid="auth-error">{error}</p>}
           <button className="button button-primary auth-submit" type="submit" disabled={isSubmitting} data-testid="auth-submit">
             {isSubmitting ? "Подождите…" : isRegister ? "Создать аккаунт" : "Войти"}
           </button>
@@ -313,36 +342,41 @@ function PanelRoute({ role }: { role: Role }) {
     return <Navigate to={userRole ? panels[userRole].path : "/"} replace />;
   }
 
-  return <PanelPage role={role} userName={session.user.name} />;
+  return <PanelPage role={role} user={session.user} />;
 }
 
-function PanelPage({ role, userName }: { role: Role; userName: string }) {
+function PanelPage({
+  role,
+  user,
+}: {
+  role: Role;
+  user: { id: string; name: string; email: string };
+}) {
   const panel = panels[role];
   const location = useLocation();
   const navigate = useNavigate();
-  const isProfile = location.pathname.endsWith("/profile");
+  const isProfile = location.pathname === `${panel.path}/profile`;
+  const orderMatch = location.pathname.match(new RegExp(`^${panel.path}/orders/([^/]+)$`, "u"));
+  const orderId = orderMatch ? decodeRouteSegment(orderMatch[1]) : null;
+  const [userName, setUserName] = useState(user.name);
+  const [userEmail, setUserEmail] = useState(user.email);
+  useEffect(() => setUserName(user.name), [user.name]);
+  useEffect(() => setUserEmail(user.email), [user.email]);
   const title = isProfile ? "Профиль" : panel.title;
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState("");
+  const { showToast } = useToast();
 
   async function signOut() {
     setIsSigningOut(true);
-    setSignOutError("");
     try {
       const result = await authClient.signOut();
       if (result.error) {
-        setSignOutError(result.error.message ?? "Не удалось завершить сеанс.");
+        showToast(getUserFacingError(result.error, "Не удалось завершить сеанс."));
         return;
       }
       navigate("/", { replace: true });
     } catch (error) {
-      setSignOutError(
-        error instanceof TypeError
-          ? "Не удалось связаться с сервером авторизации. Проверьте, что API запущен, и попробуйте ещё раз."
-          : error instanceof Error
-            ? error.message
-            : "Не удалось завершить сеанс.",
-      );
+      showToast(getUserFacingError(error, "Не удалось завершить сеанс."));
     } finally {
       setIsSigningOut(false);
     }
@@ -367,22 +401,179 @@ function PanelPage({ role, userName }: { role: Role; userName: string }) {
       <section className="panel-content">
         <header className="panel-topbar"><span>{panel.label}</span><span className="online-indicator"><i /> Рабочее пространство</span></header>
         <div className="panel-inner">
-          {signOutError && <p className="form-error" role="alert" data-testid="sign-out-error">{signOutError}</p>}
           <div className="panel-heading">
             <div><div className="eyebrow">{isProfile ? "ВАШ АККАУНТ" : "РАБОЧЕЕ ПРОСТРАНСТВО"}</div><h1>{title}</h1><p>{isProfile ? "Основные данные и параметры учётной записи." : panel.description}</p></div>
           </div>
           {role === "CUSTOMER" && !isProfile ? (
             <CustomerOrdersPage />
-          ) : (
-            <div className="empty-state" data-testid={isProfile ? "profile-placeholder" : "orders-empty-state"}>
-              <span className="empty-state-icon" aria-hidden="true">{isProfile ? userName.slice(0, 1).toUpperCase() : "✳"}</span>
-              <h2>{isProfile ? `Здравствуйте, ${userName}` : "Рабочий стол готовится"}</h2>
-              <p>{isProfile ? "Управление данными профиля появится на следующем этапе разработки." : "Подключение списков заказов и действий для этой роли — следующий этап разработки."}</p>
-            </div>
-          )}
+          ) : role === "EXECUTOR" && !isProfile ? (
+            <ExecutorOrdersPage />
+          ) : role === "ADMIN" && !isProfile ? (
+            <AdminOrdersPage />
+          ) : isProfile ? (
+            <ProfilePage
+              user={{ ...user, name: userName, email: userEmail, role }}
+              onProfileChanged={(updated) => {
+                setUserName(updated.name);
+                setUserEmail(updated.email);
+              }}
+            />
+          ) : null}
         </div>
       </section>
+      {orderId && (
+        <OrderDetailView
+          orderId={orderId}
+          panelPath={panel.path}
+          onClose={() => navigate(panel.path)}
+        />
+      )}
     </main>
+  );
+}
+
+function ProfilePage({
+  user,
+  onProfileChanged,
+}: {
+  user: { id: string; name: string; email: string; role: Role };
+  onProfileChanged: (user: { name: string; email: string }) => void;
+}) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState("");
+  const [passwordCurrentPassword, setPasswordCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    setName(user.name);
+    setEmail(user.email);
+  }, [user.name, user.email]);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const updatedName = name.trim();
+    const updatedEmail = email.trim().toLowerCase();
+    const changes: { name?: string; email?: string } = {};
+    if (updatedName !== user.name) changes.name = updatedName;
+    if (updatedEmail !== user.email.toLowerCase()) changes.email = updatedEmail;
+    if (Object.keys(changes).length === 0) {
+      showToast("Изменений нет.");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const updated = await apiRequest<{ name: string; email: string }>("/users/me/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ ...changes, currentPassword: profileCurrentPassword }),
+      });
+      setName(updated.name);
+      setEmail(updated.email);
+      setProfileCurrentPassword("");
+      onProfileChanged(updated);
+      showToast("Данные профиля обновлены.", "success");
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось обновить профиль."));
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) {
+      showToast("Новый пароль и подтверждение не совпадают.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const result = await authClient.changePassword({
+        currentPassword: passwordCurrentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+      if (result.error) {
+        showToast(getUserFacingError(result.error, "Не удалось изменить пароль. Проверьте текущий пароль."));
+        return;
+      }
+      setPasswordCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showToast("Пароль изменён. Другие активные сеансы завершены.", "success");
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось изменить пароль. Проверьте текущий пароль."));
+    } finally {
+      setIsChangingPassword(false);
+    }
+  }
+
+  return (
+    <section className="profile-content" data-testid="profile-page">
+      <article className="profile-card">
+        <div className="profile-card-heading">
+          <span className="profile-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span>
+          <div>
+            <h2>Данные аккаунта</h2>
+            <p>Изменения имени и почты подтвердите текущим паролем.</p>
+          </div>
+        </div>
+        <form className="profile-form" onSubmit={saveProfile} data-testid="profile-form">
+          <label>
+            Имя
+            <input value={name} onChange={(event) => setName(event.target.value)} minLength={1} maxLength={120} required data-testid="profile-name" />
+          </label>
+          <label>
+            Электронная почта
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} required data-testid="profile-email" />
+          </label>
+          <label>
+            Текущий пароль
+            <input type="password" value={profileCurrentPassword} onChange={(event) => setProfileCurrentPassword(event.target.value)} autoComplete="current-password" minLength={1} required data-testid="profile-current-password" />
+          </label>
+          <p className="profile-help">При смене адреса он применяется сразу. Подтверждение почты в приложении пока не требуется.</p>
+          <button className="button button-primary" type="submit" disabled={isSavingProfile || !profileCurrentPassword} data-testid="save-profile">
+            {isSavingProfile ? "Сохраняем…" : "Сохранить данные"}
+          </button>
+        </form>
+      </article>
+      <article className="profile-card">
+        <div className="profile-card-heading">
+          <span className="profile-avatar profile-avatar-password" aria-hidden="true">⌑</span>
+          <div>
+            <h2>Изменить пароль</h2>
+            <p>После смены пароля остальные сеансы будут завершены.</p>
+          </div>
+        </div>
+        <form className="profile-form" onSubmit={changePassword} data-testid="password-change-form">
+          <label>
+            Текущий пароль
+            <input type="password" value={passwordCurrentPassword} onChange={(event) => setPasswordCurrentPassword(event.target.value)} autoComplete="current-password" minLength={1} required data-testid="password-current" />
+          </label>
+          <label>
+            Новый пароль
+            <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required data-testid="password-new" />
+          </label>
+          <label>
+            Повторите новый пароль
+            <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required data-testid="password-confirm" />
+          </label>
+          <button className="button button-primary" type="submit" disabled={isChangingPassword || !passwordCurrentPassword} data-testid="change-password">
+            {isChangingPassword ? "Меняем пароль…" : "Изменить пароль"}
+          </button>
+        </form>
+      </article>
+      <div className="profile-role-note" data-testid="profile-role">
+        <span>Роль аккаунта</span>
+        <b>{panels[user.role].label}</b>
+        <small>Роль назначается администратором и не изменяется из профиля.</small>
+      </div>
+    </section>
   );
 }
 
@@ -391,10 +582,10 @@ function CustomerOrdersPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [ordersError, setOrdersError] = useState("");
-  const [categoriesError, setCategoriesError] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [ordersError, setOrdersError] = useState(false);
+  const [categoriesError, setCategoriesError] = useState(false);
+  const [revisionComments, setRevisionComments] = useState<Record<string, string>>({});
+  const [reportingInvoiceId, setReportingInvoiceId] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [title, setTitle] = useState("");
@@ -402,32 +593,35 @@ function CustomerOrdersPage() {
   const [categoryId, setCategoryId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [location, setLocation] = useState("");
+  const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
     setIsLoadingOrders(true);
-    setOrdersError("");
+    setOrdersError(false);
     try {
       setOrders(await apiRequest<WorkOrder[]>("/orders"));
     } catch (error) {
-      setOrdersError(getRequestError(error, "Не удалось загрузить заказы."));
+      setOrdersError(true);
+      showToast(getUserFacingError(error, "Не удалось загрузить заказы."));
     } finally {
       setIsLoadingOrders(false);
     }
-  }, []);
+  }, [showToast]);
 
   const loadCategories = useCallback(async () => {
     setIsLoadingCategories(true);
-    setCategoriesError("");
+    setCategoriesError(false);
     try {
       const availableCategories = await apiRequest<Category[]>("/categories");
       setCategories(availableCategories);
       setCategoryId((current) => current || availableCategories[0]?.id || "");
     } catch (error) {
-      setCategoriesError(getRequestError(error, "Не удалось загрузить категории."));
+      setCategoriesError(true);
+      showToast(getUserFacingError(error, "Не удалось загрузить категории."));
     } finally {
       setIsLoadingCategories(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     void Promise.all([loadOrders(), loadCategories()]);
@@ -435,8 +629,6 @@ function CustomerOrdersPage() {
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setActionError("");
-    setNotice("");
     setIsSubmitting(true);
 
     try {
@@ -462,24 +654,51 @@ function CustomerOrdersPage() {
         await apiRequest<WorkOrder>(`/orders/${encodeURIComponent(draft.id)}/submit`, {
           method: "POST",
         });
-        setNotice("Заказ создан и отправлен на распределение.");
+        showToast("Заказ создан и отправлен на распределение.", "success");
       } catch (error) {
-        setActionError(`Черновик создан, но отправить его не удалось: ${getRequestError(error, "ошибка API")}`);
+        showToast(
+          `Черновик создан, но отправить его не удалось. ${getUserFacingError(error, "Попробуйте отправить его позже.")}`,
+        );
       }
 
       await loadOrders();
     } catch (error) {
-      setActionError(getRequestError(error, "Не удалось создать заказ."));
+      showToast(getUserFacingError(error, "Не удалось создать заказ."));
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  async function runOrderAction(path: string, body: Record<string, unknown>, success: string) {
+    try {
+      await apiRequest(path, { method: "POST", body: JSON.stringify(body) });
+      showToast(success, "success");
+      await loadOrders();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось выполнить действие."));
+    }
+  }
+
+  async function reportInvoicePayment(event: FormEvent<HTMLFormElement>, orderId: string, invoiceId: string) {
+    event.preventDefault();
+    setReportingInvoiceId(invoiceId);
+    try {
+      const formData = new FormData(event.currentTarget);
+      await apiRequest(
+        `/orders/${encodeURIComponent(orderId)}/invoices/${encodeURIComponent(invoiceId)}/payment-reports`,
+        { method: "POST", body: formData },
+      );
+      showToast("Подтверждение оплаты отправлено администратору на проверку.", "success");
+      await loadOrders();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось отправить подтверждение оплаты."));
+    } finally {
+      setReportingInvoiceId("");
+    }
+  }
+
   return (
     <section className="customer-orders" aria-label="Заказы заказчика">
-      {actionError && <p className="form-error api-message" role="alert" data-testid="customer-orders-error">{actionError}</p>}
-      {notice && <p className="success-message" role="status" data-testid="customer-orders-notice">{notice}</p>}
-
       <div className="orders-toolbar">
         <div>
           <h2>Список заказов</h2>
@@ -489,8 +708,6 @@ function CustomerOrdersPage() {
           className="button button-primary"
           type="button"
           onClick={() => {
-            setActionError("");
-            setNotice("");
             setIsCreateOpen((open) => !open);
           }}
           data-testid="create-order"
@@ -564,7 +781,11 @@ function CustomerOrdersPage() {
               data-testid="order-location"
             />
           </label>
-          {categoriesError && <p className="form-error" role="alert" data-testid="categories-error">{categoriesError}</p>}
+          {categoriesError && (
+            <button className="button button-quiet" type="button" onClick={() => void loadCategories()} data-testid="retry-categories">
+              Повторить загрузку категорий
+            </button>
+          )}
           {!isLoadingCategories && !categoriesError && categories.length === 0 && (
             <p className="form-hint" data-testid="no-categories">Пока нет доступных категорий. Обратитесь к администратору.</p>
           )}
@@ -585,8 +806,7 @@ function CustomerOrdersPage() {
       )}
 
       {ordersError ? (
-        <div className="api-load-error" role="alert" data-testid="orders-load-error">
-          <p>{ordersError}</p>
+        <div className="api-load-error" role="group" data-testid="orders-load-error">
           <button className="button button-quiet" type="button" onClick={() => void loadOrders()} data-testid="retry-orders">
             Повторить загрузку
           </button>
@@ -601,7 +821,9 @@ function CustomerOrdersPage() {
         </div>
       ) : (
         <div className="orders-list" data-testid="orders-list">
-          {orders.map((order) => (
+          {orders.map((order) => {
+            const pendingEstimate = order.estimates?.find((estimate) => estimate.status === "PENDING");
+            return (
             <article className="order-list-card" key={order.id} data-testid={`order-card-${order.id}`}>
               <div className="order-list-main">
                 <div className="order-list-meta">
@@ -612,15 +834,139 @@ function CustomerOrdersPage() {
                 </div>
                 <h3>{order.title}</h3>
                 <p>{order.description}</p>
+                <Link
+                  className="order-detail-link"
+                  to={`/customer/orders/${encodeURIComponent(order.id)}`}
+                  data-testid={`open-order-${order.id}`}
+                >
+                  Открыть карточку заказа <span aria-hidden="true">↗</span>
+                </Link>
                 <div className="order-list-footer">
                   <span>Создан {formatDate(order.createdAt)}</span>
                   {order.dueAt && <span>Срок {formatDate(order.dueAt)}</span>}
                   {order.location && <span>{order.location}</span>}
                 </div>
+                {pendingEstimate && (
+                  <div className="customer-order-actions" data-testid={`estimate-response-${order.id}`}>
+                    <p className="form-hint">
+                      Оценка исполнителя: {pendingEstimate.hours} ч · {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(pendingEstimate.amount))}
+                    </p>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => void runOrderAction(
+                        `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
+                        { accepted: true },
+                        "Оценка принята, исполнитель может начинать работу.",
+                      )}
+                      data-testid={`accept-estimate-${order.id}`}
+                    >
+                      Принять оценку
+                    </button>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => void runOrderAction(
+                        `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
+                        { accepted: false },
+                        "Оценка отклонена, заказ возвращён в пул.",
+                      )}
+                      data-testid={`reject-estimate-${order.id}`}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                )}
+                {order.status === "ON_REVIEW" && !order.acceptedAt && (
+                  <div className="customer-order-actions" data-testid={`review-response-${order.id}`}>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => void runOrderAction(
+                        `/orders/${encodeURIComponent(order.id)}/accept`,
+                        {},
+                        "Работа принята. Администратор сможет выставить счёт.",
+                      )}
+                      data-testid={`accept-work-${order.id}`}
+                    >
+                      Принять работу
+                    </button>
+                    <form
+                      className="inline-action-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const comment = revisionComments[order.id]?.trim();
+                        if (!comment) return;
+                        void runOrderAction(
+                          `/orders/${encodeURIComponent(order.id)}/request-revision`,
+                          { comment },
+                          "Заказ возвращён исполнителю на исправление.",
+                        );
+                      }}
+                    >
+                      <label>
+                        Что нужно исправить
+                        <input
+                          required
+                          maxLength={2000}
+                          value={revisionComments[order.id] ?? ""}
+                          onChange={(event) => setRevisionComments((values) => ({ ...values, [order.id]: event.target.value }))}
+                          data-testid={`revision-comment-${order.id}`}
+                        />
+                      </label>
+                      <button className="button button-quiet" type="submit" data-testid={`request-revision-${order.id}`}>
+                        Запросить исправления
+                      </button>
+                    </form>
+                  </div>
+                )}
+                {order.invoices?.map((invoice) => {
+                  const latestReport = invoice.paymentReports?.[0];
+                  const canReportPayment = invoice.status === "ISSUED" && latestReport?.status !== "PENDING";
+                  return (
+                    <div className="invoice-payment" key={invoice.id} data-testid={`invoice-payment-${invoice.id}`}>
+                      <p className="form-hint">
+                        Счёт {invoice.number}: {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(invoice.amount))} · {invoice.status === "ISSUED" ? "ожидает оплаты" : invoice.status === "PAID" ? "оплачен" : "аннулирован"}
+                      </p>
+                      {latestReport?.status === "PENDING" && <p className="form-hint">Чек отправлен администратору, ожидает проверки.</p>}
+                      {latestReport?.status === "CONFIRMED" && <p className="form-hint">Оплата подтверждена администратором.</p>}
+                      {latestReport?.status === "REJECTED" && (
+                        <p className="payment-rejected-note">
+                          Подтверждение отклонено: {latestReport.reviewComment}. Можно отправить новый чек.
+                        </p>
+                      )}
+                      {canReportPayment && (
+                        <form
+                          className="payment-report-form"
+                          onSubmit={(event) => void reportInvoicePayment(event, order.id, invoice.id)}
+                        >
+                          <label>
+                            Я оплатил счёт — приложите чек или квитанцию (не более 1 MB)
+                            <input
+                              type="file"
+                              name="file"
+                              required
+                              data-testid={`payment-receipt-${invoice.id}`}
+                            />
+                          </label>
+                          <button
+                            className="button button-primary"
+                            type="submit"
+                            disabled={reportingInvoiceId === invoice.id}
+                            data-testid={`report-payment-${invoice.id}`}
+                          >
+                            {reportingInvoiceId === invoice.id ? "Отправляем…" : "Сообщить об оплате"}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <span className="order-card-arrow" aria-hidden="true">↗</span>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
@@ -632,11 +978,6 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeZone: "UTC",
   }).format(new Date(value));
-}
-
-function getRequestError(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
 }
 
 function LoadingPage() {
@@ -658,4 +999,12 @@ function getRole(user: object): Role | undefined {
   if (!("role" in user)) return undefined;
   const role = user.role;
   return role === "CUSTOMER" || role === "EXECUTOR" || role === "ADMIN" ? role : undefined;
+}
+
+function decodeRouteSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }

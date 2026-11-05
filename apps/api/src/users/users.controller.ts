@@ -10,9 +10,10 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { CurrentUser } from "../auth/current-user.decorator.js";
 import { Roles } from "../auth/roles.decorator.js";
 import { SessionGuard } from "../auth/session.guard.js";
-import { CreateExecutorDto, ResetPasswordDto, UpdateExecutorDto } from "./users.dto.js";
+import { CreateExecutorDto, ResetPasswordDto, UpdateExecutorDto, UpdateOwnProfileDto } from "./users.dto.js";
 import { UsersService } from "./users.service.js";
 
 @ApiTags("users")
@@ -22,6 +23,16 @@ import { UsersService } from "./users.service.js";
 @Controller("users")
 export class UsersController {
   constructor(private readonly users: UsersService) {}
+
+  @Patch("me/profile")
+  @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
+  @ApiOperation({ summary: "Update the current user's name or email after password confirmation" })
+  updateOwnProfile(
+    @Body() body: UpdateOwnProfileDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.users.updateOwnProfile(user.id, body);
+  }
 
   @Get("executors")
   @ApiOperation({ summary: "List executor accounts" })

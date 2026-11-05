@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { toNodeHandler } from "better-auth/node";
 import { json, urlencoded } from "express";
+import { ApiExceptionFilter } from "./api-exception.filter.js";
 import { auth } from "./auth/auth.js";
 import { AppModule } from "./app.module.js";
 
@@ -23,9 +24,12 @@ export async function bootstrap(): Promise<void> {
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
       transform: true,
+      validationError: { target: false, value: false },
     }),
   );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Order Desk API")

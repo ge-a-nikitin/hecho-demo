@@ -165,6 +165,21 @@ erDiagram
         DateTime createdAt
     }
 
+    InvoicePaymentReport {
+        String id PK
+        String invoiceId FK
+        String submittedById FK
+        String reviewedById FK
+        String objectKey UK
+        String filename
+        String contentType
+        Int sizeBytes
+        PaymentReportStatus status
+        String reviewComment
+        DateTime submittedAt
+        DateTime reviewedAt
+    }
+
     InvoiceSequence {
         Int year PK
         Int lastNumber
@@ -192,6 +207,9 @@ erDiagram
     WorkOrder ||--o{ Invoice : billed_by
     User ||--o{ Invoice : issues
     User o|--o{ Invoice : voids
+    Invoice ||--o{ InvoicePaymentReport : payment_reports
+    User ||--o{ InvoicePaymentReport : submits
+    User o|--o{ InvoicePaymentReport : reviews
 ```
 
 `Verification` и `InvoiceSequence` не имеют внешних ключей: Better Auth ищет подтверждения по `identifier`, а годовой счётчик используется при выдаче номера счёта.
@@ -207,6 +225,9 @@ erDiagram
 - Ожидающая оценка получает `WITHDRAWN`, если исполнитель отказывается от назначения или администратор переназначает заказ до ответа заказчика.
 - Принятие заказчиком фиксируется временем `WorkOrder.acceptedAt`; до выставления счёта статус остаётся `ON_REVIEW`, а факт приёмки отражается в истории статусов отдельным событием.
 - `Invoice` хранит снимки имени заказчика, имени исполнителя, часов, ставки и суммы. Номера формируются в формате `INV-ГГГГ-000001` через `InvoiceSequence` внутри транзакции.
+- Заказчик отправляет чек отдельной записью `InvoicePaymentReport`; документ доступен только заказчику и администраторам, не исполнителям. Чеки и решения администратора сохраняются как история.
+- На счёте допускается не более одного ожидающего проверки чека; ограничение обеспечивается частичным уникальным индексом `InvoicePaymentReport_one_pending_per_invoice_key`.
+- Само сообщение об оплате не меняет статус счёта или заказа. Только подтверждение администратором переводит счёт в `PAID`, заказ в `COMPLETED`, а запись чека в `CONFIRMED`. При отклонении требуется причина, запись получает `REJECTED`, заказчик может отправить новый чек.
 - Аннулированный счёт остаётся в БД, его номер не используется повторно. Только неоплаченный счёт можно аннулировать; после аннулирования разрешается выпустить новый.
 - Частичный уникальный индекс PostgreSQL `Invoice_one_current_per_order_key` гарантирует не более одного счёта со статусом, отличным от `VOID`, на заказ. Ограничение `Invoice_status_consistency_check` проверяет согласованность статусов `ISSUED`, `PAID`, `VOID` с полями оплаты и аннулирования. Эти два ограничения определены SQL-миграцией и не выражаются напрямую в Prisma Schema Language.
 - Размер файлов и проверка прав доступа являются правилами API; в таблице `OrderAttachment` хранятся метаданные и ключ объекта в S3-совместимом хранилище.
@@ -218,3 +239,4 @@ erDiagram
 - `EstimateStatus`: `PENDING`, `ACCEPTED`, `REJECTED`, `WITHDRAWN`
 - `AssignmentOutcome`: `ACTIVE`, `DECLINED`, `REASSIGNED`, `RELEASED`
 - `InvoiceStatus`: `ISSUED`, `PAID`, `VOID`
+- `PaymentReportStatus`: `PENDING`, `REJECTED`, `CONFIRMED`

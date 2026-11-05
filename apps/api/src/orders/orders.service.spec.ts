@@ -27,6 +27,10 @@ describe("OrdersService", () => {
       ],
     });
     assert.deepEqual(query?.orderBy, { createdAt: "desc" });
+    const include = query?.include as {
+      invoices?: { include?: Record<string, unknown> };
+    };
+    assert.equal(include.invoices?.include?.paymentReports, undefined);
   });
 
   it("rejects customers who try to access another customer's order", async () => {

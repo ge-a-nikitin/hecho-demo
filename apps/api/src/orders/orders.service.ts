@@ -29,11 +29,38 @@ const orderInclude = {
   executor: { select: { id: true, name: true } },
   estimates: { orderBy: { proposedAt: "desc" as const } },
   assignments: { orderBy: { assignedAt: "desc" as const } },
-  statusHistory: { orderBy: { createdAt: "asc" as const } },
+  statusHistory: {
+    orderBy: { createdAt: "asc" as const },
+    include: { changedBy: { select: { id: true, name: true } } },
+  },
   attachments: { orderBy: { createdAt: "asc" as const } },
-  comments: { orderBy: { createdAt: "asc" as const } },
+  comments: {
+    orderBy: { createdAt: "asc" as const },
+    include: { author: { select: { id: true, name: true } } },
+  },
   timeEntry: true,
   invoices: { orderBy: { createdAt: "asc" as const } },
+};
+
+const orderIncludeWithPaymentReports = {
+  ...orderInclude,
+  invoices: {
+    orderBy: { createdAt: "asc" as const },
+    include: {
+      paymentReports: {
+        orderBy: { submittedAt: "desc" as const },
+        select: {
+          id: true,
+          filename: true,
+          sizeBytes: true,
+          status: true,
+          reviewComment: true,
+          submittedAt: true,
+          reviewedAt: true,
+        },
+      },
+    },
+  },
 };
 
 type Actor = { id: string; role: UserRole };
@@ -65,7 +92,7 @@ export class OrdersService {
 
     return this.prisma.workOrder.findMany({
       where,
-      include: orderInclude,
+      include: actor.role === UserRole.EXECUTOR ? orderInclude : orderIncludeWithPaymentReports,
       orderBy: { createdAt: "desc" },
     });
   }
@@ -73,7 +100,7 @@ export class OrdersService {
   async get(id: string, actor: Actor) {
     const order = await this.prisma.workOrder.findUnique({
       where: { id },
-      include: orderInclude,
+      include: actor.role === UserRole.EXECUTOR ? orderInclude : orderIncludeWithPaymentReports,
     });
     if (!order) throw new NotFoundException("Order not found");
     if (

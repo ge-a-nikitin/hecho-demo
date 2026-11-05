@@ -46,6 +46,12 @@ enum InvoiceStatus {
   VOID
 }
 
+enum PaymentReportStatus {
+  PENDING
+  REJECTED
+  CONFIRMED
+}
+
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -58,19 +64,21 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions            Session[]
-  accounts            Account[]
-  customerOrders      WorkOrder[]          @relation("OrderCustomer")
-  assignedOrders      WorkOrder[]          @relation("OrderExecutor")
-  createdCategories   Category[]           @relation("CategoryCreator")
-  orderComments       OrderComment[]
-  proposedEstimates   OrderEstimate[]      @relation("EstimateAuthor")
-  assignments         OrderAssignment[]    @relation("AssignedExecutor")
-  madeAssignments     OrderAssignment[]    @relation("AssignmentCreator")
-  statusChanges       OrderStatusHistory[] @relation("StatusActor")
-  issuedInvoices      Invoice[]            @relation("InvoiceIssuer")
-  voidedInvoices      Invoice[]            @relation("InvoiceVoider")
-  uploadedAttachments OrderAttachment[]    @relation("AttachmentUploader")
+  sessions                Session[]
+  accounts                Account[]
+  customerOrders          WorkOrder[]            @relation("OrderCustomer")
+  assignedOrders          WorkOrder[]            @relation("OrderExecutor")
+  createdCategories       Category[]             @relation("CategoryCreator")
+  orderComments           OrderComment[]
+  proposedEstimates       OrderEstimate[]        @relation("EstimateAuthor")
+  assignments             OrderAssignment[]      @relation("AssignedExecutor")
+  madeAssignments         OrderAssignment[]      @relation("AssignmentCreator")
+  statusChanges           OrderStatusHistory[]   @relation("StatusActor")
+  issuedInvoices          Invoice[]              @relation("InvoiceIssuer")
+  voidedInvoices          Invoice[]              @relation("InvoiceVoider")
+  uploadedAttachments     OrderAttachment[]      @relation("AttachmentUploader")
+  submittedPaymentReports InvoicePaymentReport[] @relation("PaymentReportSubmitter")
+  reviewedPaymentReports  InvoicePaymentReport[] @relation("PaymentReportReviewer")
 }
 
 model Session {
@@ -271,8 +279,30 @@ model Invoice {
   voidReason   String?       @db.Text
   createdAt    DateTime      @default(now())
 
+  paymentReports InvoicePaymentReport[]
+
   @@index([orderId, createdAt])
   @@index([issuedAt])
+}
+
+model InvoicePaymentReport {
+  id            String              @id @default(cuid())
+  invoiceId     String
+  invoice       Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  submittedById String
+  submittedBy   User                @relation("PaymentReportSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviewedById  String?
+  reviewedBy    User?               @relation("PaymentReportReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  objectKey     String              @unique
+  filename      String
+  contentType   String?
+  sizeBytes     Int
+  status        PaymentReportStatus @default(PENDING)
+  reviewComment String?             @db.Text
+  submittedAt   DateTime            @default(now())
+  reviewedAt    DateTime?
+
+  @@index([invoiceId, submittedAt])
 }
 
 model InvoiceSequence {

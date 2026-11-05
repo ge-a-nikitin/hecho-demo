@@ -70,6 +70,8 @@ type SeedFixture = {
 };
 
 const fixtureUrl = new URL("./fixtures/test-data.json", import.meta.url);
+const retiredFixtureOrderIds = ["devtools-seed-v1-order-completed"];
+const retiredFixtureInvoiceIds = ["devtools-seed-v1-invoice-paid"];
 
 @Injectable()
 export class DevToolsService {
@@ -325,11 +327,12 @@ export class DevToolsService {
     tx: Prisma.TransactionClient,
     fixture: SeedFixture,
   ): Promise<{ version: number; deletedUsers: number; deletedOrders: number }> {
-    const orderIds = fixture.orders.map(({ id }) => id);
+    const orderIds = [...fixture.orders.map(({ id }) => id), ...retiredFixtureOrderIds];
+    const invoiceIds = [...fixture.invoices.map(({ id }) => id), ...retiredFixtureInvoiceIds];
     const userIds = fixture.users.map(({ id }) => id);
     const categoryIds = fixture.categories.map(({ id }) => id);
 
-    await tx.invoice.deleteMany({ where: { id: { in: fixture.invoices.map(({ id }) => id) } } });
+    await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
     const deletedOrders = await tx.workOrder.deleteMany({ where: { id: { in: orderIds } } });
     await tx.category.deleteMany({ where: { id: { in: categoryIds } } });
     await tx.session.deleteMany({ where: { userId: { in: userIds } } });
