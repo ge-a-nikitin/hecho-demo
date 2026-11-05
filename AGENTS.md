@@ -3,8 +3,14 @@
 ## Collaboration and planning
 
 - Treat implementation requests as authorization to inspect the repository, implement the agreed change, and verify it. Do not stop at a proposal unless the user asks for planning only.
-- Before significant changes to functionality, architecture, data models, or external behavior, clarify unresolved product decisions and present a concise plan for agreement. Handle routine implementation details autonomously.
-- For layered systems, agree on user-visible behavior and acceptance criteria first, then settle data and interface contracts before building dependent components. Implement in dependency order where appropriate.
+- Use this workflow for substantial product or engineering work:
+  1. Discover the problem and clarify user needs, constraints, scope, and acceptance criteria.
+  2. Record agreed requirements in the appropriate project documentation.
+  3. Design and agree on an architecture that satisfies those requirements, including data models, component boundaries, and contracts.
+  4. Present an implementation plan ordered by dependencies; build from foundational layers upward (for example, data and persistence, domain/API, then user interfaces), adapting the sequence to the project.
+  5. Implement, verify against the agreed criteria, and update relevant documentation.
+- Do not skip agreement on significant product or architecture decisions. Ask concise questions where needed; once requirements and approach are agreed, handle routine implementation details autonomously.
+- For small, low-risk changes, use this workflow proportionally rather than adding unnecessary planning overhead.
 - Ask concise questions in the user's preferred language when requirements leave a meaningful decision unresolved. Do not ask about details that can be safely resolved by following established project conventions.
 - Give brief progress updates at meaningful phase changes. In the final response, summarize the outcome, verification, commit, and remaining caveats.
 
