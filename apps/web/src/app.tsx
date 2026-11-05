@@ -329,10 +329,20 @@ function PanelPage({ role, userName }: { role: Role; userName: string }) {
     setIsSigningOut(true);
     setSignOutError("");
     try {
-      await authClient.signOut();
+      const result = await authClient.signOut();
+      if (result.error) {
+        setSignOutError(result.error.message ?? "Не удалось завершить сеанс.");
+        return;
+      }
       navigate("/", { replace: true });
     } catch (error) {
-      setSignOutError(error instanceof Error ? error.message : "Не удалось завершить сеанс.");
+      setSignOutError(
+        error instanceof TypeError
+          ? "Не удалось связаться с сервером авторизации. Проверьте, что API запущен, и попробуйте ещё раз."
+          : error instanceof Error
+            ? error.message
+            : "Не удалось завершить сеанс.",
+      );
     } finally {
       setIsSigningOut(false);
     }
