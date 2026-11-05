@@ -4,14 +4,15 @@
 
 - Treat implementation requests as authorization to inspect the repository, implement the agreed change, and verify it. Do not stop at a proposal unless the user asks for planning only.
 - Use this workflow for substantial product or engineering work:
-  1. Discover the problem and clarify user needs, constraints, scope, and acceptance criteria.
+  1. Discover the problem and actively identify gaps in understanding. Ask focused, preferably grouped questions to clarify user needs, constraints, scope, edge cases, and acceptance criteria before treating requirements as settled.
   2. Record agreed requirements in the appropriate project documentation.
-  3. Design and agree on an architecture that satisfies those requirements, including data models, component boundaries, and contracts.
-  4. Present an implementation plan ordered by dependencies; build from foundational layers upward (for example, data and persistence, domain/API, then user interfaces), adapting the sequence to the project.
-  5. Implement, verify against the agreed criteria, and update relevant documentation.
-- Do not skip agreement on significant product or architecture decisions. Ask concise questions where needed; once requirements and approach are agreed, handle routine implementation details autonomously.
+  3. Explore relevant existing systems and identify architectural choices, dependencies, risks, and unresolved assumptions. Ask about consequential gaps, then agree on an architecture that satisfies the requirements, including data models, component boundaries, and contracts.
+  4. Present an implementation plan ordered by dependencies. Clarify any meaningful scope, sequencing, or acceptance gaps before agreement; build from foundational layers upward (for example, data and persistence, domain/API, then user interfaces), adapting the sequence to the project.
+  5. Implement, verify against the agreed criteria and affected workflows, and update relevant documentation. If verification exposes a mismatch or an unmade product decision, report it and clarify the expected behavior rather than silently guessing.
+- At each stage, ask enough to establish a shared understanding and expose important edge cases; batch related questions when practical. Do not treat silence or an unverified assumption as user agreement.
+- Do not skip agreement on significant product or architecture decisions. Once the relevant scope and approach are agreed, handle routine implementation details autonomously.
 - For small, low-risk changes, use this workflow proportionally rather than adding unnecessary planning overhead.
-- Ask concise questions in the user's preferred language when requirements leave a meaningful decision unresolved. Do not ask about details that can be safely resolved by following established project conventions.
+- Ask concise questions in the user's preferred language. Avoid unnecessary questions about details that are low-risk, evident from context, or safely resolved by established project conventions; state consequential assumptions and remaining uncertainties explicitly.
 - Give brief progress updates at meaningful phase changes. In the final response, summarize the outcome, verification, commit, and remaining caveats.
 
 ## Documentation and contracts
