@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest, downloadApiFile, getUserFacingError } from "./api";
+import {
+  OrderListControls,
+  OrderPagination,
+  emptyOrderFilters,
+  filterOrders,
+  getOrderCategoryOptions,
+  orderStatusLabels,
+  paginateOrders,
+  type OrderFilterValues,
+} from "./order-list-controls";
 import { useToast } from "./toast";
 
 type Category = { id: string; name: string };
@@ -47,19 +57,6 @@ type WorkOrder = {
   timeEntry: { minutes: number; comment: string | null } | null;
 };
 
-const statusLabels: Record<string, string> = {
-  NEW: "Черновик",
-  WAITING_DISTRIBUTION: "Ждёт распределения",
-  ASSIGNED: "Назначена",
-  IN_PROGRESS: "В работе",
-  ON_REVIEW: "На проверке",
-  NEEDS_REVISION: "Нужны исправления",
-  INVOICE_ISSUED: "Выставлен счёт",
-  INVOICE_PAID: "Счёт оплачен",
-  COMPLETED: "Завершена",
-  CANCELLED: "Отменена",
-};
-
 export function ExecutorOrdersPage() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +65,8 @@ export function ExecutorOrdersPage() {
   const [hoursByOrder, setHoursByOrder] = useState<Record<string, string>>({});
   const [minutesByOrder, setMinutesByOrder] = useState<Record<string, string>>({});
   const [timeCommentsByOrder, setTimeCommentsByOrder] = useState<Record<string, string>>({});
+  const [orderFilters, setOrderFilters] = useState<OrderFilterValues>(emptyOrderFilters);
+  const [ordersPage, setOrdersPage] = useState(1);
   const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -114,8 +113,24 @@ export function ExecutorOrdersPage() {
     );
   }
 
-  const poolOrders = orders.filter((order) => order.status === "WAITING_DISTRIBUTION" && !order.executor);
-  const assignedOrders = orders.filter((order) => order.executor !== null);
+  const filteredOrders = filterOrders(orders, orderFilters);
+  const orderCategories = getOrderCategoryOptions(orders);
+  const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
+    filteredOrders,
+    ordersPage,
+  );
+  const poolOrders = visibleOrders.filter((order) => order.status === "WAITING_DISTRIBUTION" && !order.executor);
+  const assignedOrders = visibleOrders.filter((order) => order.executor !== null);
+
+  function updateOrderFilters(next: OrderFilterValues) {
+    setOrderFilters(next);
+    setOrdersPage(1);
+  }
+
+  function resetOrderFilters() {
+    setOrderFilters(emptyOrderFilters);
+    setOrdersPage(1);
+  }
 
   return (
     <section className="customer-orders role-orders" aria-label="Заказы исполнителя" data-testid="executor-orders">
@@ -131,8 +146,32 @@ export function ExecutorOrdersPage() {
         <div className="orders-loading" role="status" data-testid="executor-orders-loading">Загружаем заказы…</div>
       ) : (
         <>
-          <OrderGroup
-            title="Свободные заказы"
+          {orders.length > 0 && (
+            <OrderListControls
+              filters={orderFilters}
+              categories={orderCategories}
+              onChange={updateOrderFilters}
+              onReset={resetOrderFilters}
+            />
+          )}
+          {orders.length > 0 && filteredOrders.length === 0 ? (
+            <div className="empty-state orders-empty" data-testid="executor-orders-no-results">
+              <span className="empty-state-icon" aria-hidden="true">⌕</span>
+              <h2>Ничего не найдено</h2>
+              <p>Измените поисковый запрос или сбросьте фильтры.</p>
+              <button
+                className="button button-quiet"
+                type="button"
+                onClick={resetOrderFilters}
+                data-testid="executor-orders-reset-filters"
+              >
+                Сбросить фильтры
+              </button>
+            </div>
+          ) : (
+            <>
+              <OrderGroup
+                title="Свободные заказы"
             orders={poolOrders}
             emptyText="Сейчас нет свободных заказов."
             testId="executor-order-pool"
@@ -287,6 +326,16 @@ export function ExecutorOrdersPage() {
               );
             }}
           />
+            </>
+          )}
+          {filteredOrders.length > 0 && (
+            <OrderPagination
+              page={currentPage}
+              total={filteredOrders.length}
+              totalPages={totalPages}
+              onPageChange={setOrdersPage}
+            />
+          )}
         </>
       )}
     </section>
@@ -302,6 +351,8 @@ export function AdminOrdersPage() {
   const [selectedExecutors, setSelectedExecutors] = useState<Record<string, string>>({});
   const [paymentReviewReasons, setPaymentReviewReasons] = useState<Record<string, string>>({});
   const [voidReasons, setVoidReasons] = useState<Record<string, string>>({});
+  const [orderFilters, setOrderFilters] = useState<OrderFilterValues>(emptyOrderFilters);
+  const [ordersPage, setOrdersPage] = useState(1);
   const { showToast } = useToast();
 
   const loadData = useCallback(async () => {
@@ -339,6 +390,23 @@ export function AdminOrdersPage() {
     }
   }
 
+  const filteredOrders = filterOrders(orders, orderFilters);
+  const orderCategories = getOrderCategoryOptions(orders);
+  const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
+    filteredOrders,
+    ordersPage,
+  );
+
+  function updateOrderFilters(next: OrderFilterValues) {
+    setOrderFilters(next);
+    setOrdersPage(1);
+  }
+
+  function resetOrderFilters() {
+    setOrderFilters(emptyOrderFilters);
+    setOrdersPage(1);
+  }
+
   return (
     <section className="customer-orders role-orders" aria-label="Управление заказами" data-testid="admin-orders">
       <div className="orders-toolbar">
@@ -347,6 +415,15 @@ export function AdminOrdersPage() {
           Обновить
         </button>
       </div>
+
+      {!isLoading && !loadError && orders.length > 0 && (
+        <OrderListControls
+          filters={orderFilters}
+          categories={orderCategories}
+          onChange={updateOrderFilters}
+          onReset={resetOrderFilters}
+        />
+      )}
 
       {loadError ? (
         <LoadError retry={() => void loadData()} testId="admin-orders-load-error" />
@@ -358,9 +435,24 @@ export function AdminOrdersPage() {
           <h2>Заказов пока нет</h2>
           <p>Новые заказы появятся здесь после отправки заказчиком.</p>
         </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="empty-state orders-empty" data-testid="admin-orders-no-results">
+          <span className="empty-state-icon" aria-hidden="true">⌕</span>
+          <h2>Ничего не найдено</h2>
+          <p>Измените поисковый запрос или сбросьте фильтры.</p>
+          <button
+            className="button button-quiet"
+            type="button"
+            onClick={resetOrderFilters}
+            data-testid="admin-orders-reset-filters"
+          >
+            Сбросить фильтры
+          </button>
+        </div>
       ) : (
-        <div className="orders-list" data-testid="admin-orders-list">
-          {orders.map((order) => {
+        <>
+          <div className="orders-list" data-testid="admin-orders-list">
+            {visibleOrders.map((order) => {
             const issuedInvoice = order.invoices.find((invoice) => invoice.status === "ISSUED");
             const latestPaymentReport = issuedInvoice?.paymentReports?.[0];
             const pendingPaymentReport = latestPaymentReport?.status === "PENDING" ? latestPaymentReport : undefined;
@@ -592,8 +684,15 @@ export function AdminOrdersPage() {
                 )}
               />
             );
-          })}
-        </div>
+            })}
+          </div>
+          <OrderPagination
+            page={currentPage}
+            total={filteredOrders.length}
+            totalPages={totalPages}
+            onPageChange={setOrdersPage}
+          />
+        </>
       )}
     </section>
   );
@@ -643,7 +742,7 @@ function OrderCard({
       <div className="order-list-main">
         <div className="order-list-meta">
           <span>{order.category.name}</span>
-          <span className={`order-status order-status-${order.status.toLowerCase()}`}>{statusLabels[order.status] ?? order.status}</span>
+          <span className={`order-status order-status-${order.status.toLowerCase()}`}>{orderStatusLabels[order.status] ?? order.status}</span>
         </div>
         <h3>{order.title}</h3>
         <p>{order.description}</p>

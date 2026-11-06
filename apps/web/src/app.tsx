@@ -12,6 +12,16 @@ import { authClient } from "./auth-client";
 import { apiRequest, getUserFacingError } from "./api";
 import { AdminCategoriesPage, AdminUsersPage } from "./admin-pages";
 import { AdminOrdersPage, ExecutorOrdersPage } from "./role-order-panels";
+import {
+  OrderListControls,
+  OrderPagination,
+  emptyOrderFilters,
+  filterOrders,
+  getOrderCategoryOptions,
+  orderStatusLabels,
+  paginateOrders,
+  type OrderFilterValues,
+} from "./order-list-controls";
 import { OrderDetailView } from "./order-detail";
 import { ToastProvider, useToast } from "./toast";
 
@@ -56,19 +66,6 @@ type CreateOrderInput = {
   executorId?: string;
   dueAt?: string;
   location?: string;
-};
-
-const orderStatusLabels: Record<string, string> = {
-  NEW: "Черновик",
-  WAITING_DISTRIBUTION: "Ждёт распределения",
-  ASSIGNED: "Назначена",
-  IN_PROGRESS: "В работе",
-  ON_REVIEW: "На проверке",
-  NEEDS_REVISION: "Нужны исправления",
-  INVOICE_ISSUED: "Выставлен счёт",
-  INVOICE_PAID: "Счёт оплачен",
-  COMPLETED: "Завершена",
-  CANCELLED: "Отменена",
 };
 
 const panels: Record<Role, { path: string; label: string; title: string; description: string }> = {
@@ -420,7 +417,21 @@ function PanelPage({
         </div>
       </aside>
       <section className="panel-content">
-        <header className="panel-topbar"><span>{panel.label}</span><span className="online-indicator"><i /> Рабочее пространство</span></header>
+        <header className="panel-topbar">
+          <span>{panel.label}</span>
+          <div className="panel-topbar-actions">
+            <span className="online-indicator"><i /> Рабочее пространство</span>
+            <button
+              className="mobile-signout-button"
+              type="button"
+              onClick={signOut}
+              disabled={isSigningOut}
+              data-testid="mobile-sign-out"
+            >
+              {isSigningOut ? "Выходим…" : "Выйти"}
+            </button>
+          </div>
+        </header>
         <div className="panel-inner">
           <div className="panel-heading">
             <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>
@@ -714,6 +725,8 @@ function CustomerOrdersPage() {
   const [editLocation, setEditLocation] = useState("");
   const [savingDraftId, setSavingDraftId] = useState("");
   const [submittingDraftId, setSubmittingDraftId] = useState("");
+  const [orderFilters, setOrderFilters] = useState<OrderFilterValues>(emptyOrderFilters);
+  const [ordersPage, setOrdersPage] = useState(1);
   const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -755,6 +768,23 @@ function CustomerOrdersPage() {
   useEffect(() => {
     void Promise.all([loadOrders(), loadCategories(), loadExecutors()]);
   }, [loadOrders, loadCategories, loadExecutors]);
+
+  const filteredOrders = filterOrders(orders, orderFilters);
+  const orderCategories = getOrderCategoryOptions(orders);
+  const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
+    filteredOrders,
+    ordersPage,
+  );
+
+  function updateOrderFilters(next: OrderFilterValues) {
+    setOrderFilters(next);
+    setOrdersPage(1);
+  }
+
+  function resetOrderFilters() {
+    setOrderFilters(emptyOrderFilters);
+    setOrdersPage(1);
+  }
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1023,6 +1053,15 @@ function CustomerOrdersPage() {
         </form>
       )}
 
+      {!isLoadingOrders && !ordersError && orders.length > 0 && (
+        <OrderListControls
+          filters={orderFilters}
+          categories={orderCategories}
+          onChange={updateOrderFilters}
+          onReset={resetOrderFilters}
+        />
+      )}
+
       {ordersError ? (
         <div className="api-load-error" role="group" data-testid="orders-load-error">
           <button className="button button-quiet" type="button" onClick={() => void loadOrders()} data-testid="retry-orders">
@@ -1037,9 +1076,24 @@ function CustomerOrdersPage() {
           <h2>Заказов пока нет</h2>
           <p>Создайте первый заказ — он появится здесь и станет доступен для распределения.</p>
         </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="empty-state orders-empty" data-testid="orders-no-results">
+          <span className="empty-state-icon" aria-hidden="true">⌕</span>
+          <h2>Ничего не найдено</h2>
+          <p>Измените поисковый запрос или сбросьте фильтры.</p>
+          <button
+            className="button button-quiet"
+            type="button"
+            onClick={resetOrderFilters}
+            data-testid="orders-reset-filters"
+          >
+            Сбросить фильтры
+          </button>
+        </div>
       ) : (
-        <div className="orders-list" data-testid="orders-list">
-          {orders.map((order) => {
+        <>
+          <div className="orders-list" data-testid="orders-list">
+            {visibleOrders.map((order) => {
             const pendingEstimate = order.estimates?.find((estimate) => estimate.status === "PENDING");
             return (
             <article className="order-list-card" key={order.id} data-testid={`order-card-${order.id}`}>
@@ -1324,8 +1378,15 @@ function CustomerOrdersPage() {
               <span className="order-card-arrow" aria-hidden="true">↗</span>
             </article>
             );
-          })}
-        </div>
+            })}
+          </div>
+          <OrderPagination
+            page={currentPage}
+            total={filteredOrders.length}
+            totalPages={totalPages}
+            onPageChange={setOrdersPage}
+          />
+        </>
       )}
     </section>
   );
