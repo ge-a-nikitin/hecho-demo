@@ -541,3 +541,43 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #dfe5dd;
+  border-radius: 7px;
+  background: #f7f9f5;
+}
+
+.language-option {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #7c857b;
+  cursor: pointer;
+  font: 600 9px "Aptos", "Segoe UI", Arial, sans-serif;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  transition: background .15s ease, color .15s ease;
+}
+
+.language-option:hover { color: #38463a; }
+
+.language-option.active {
+  background: #fff;
+  color: #2f6b45;
+  box-shadow: 0 1px 3px rgba(46, 70, 51, .14);
+}
+
+.topbar .language-switcher { margin-left: auto; margin-right: 14px; }
+.auth-page > .language-switcher { position: absolute; top: 22px; right: 22px; }
+
+@media (max-width: 720px) {
+  .topbar .language-switcher { order: 3; margin-left: 0; margin-right: 0; }
+  .auth-page > .language-switcher { position: static; align-self: flex-end; margin: 14px 18px 0; }
+}

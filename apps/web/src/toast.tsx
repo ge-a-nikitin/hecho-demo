@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useI18n } from "./i18n";
 
 type ToastKind = "success" | "error";
 type ToastContextValue = {
@@ -13,6 +14,7 @@ type ToastItem = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toast, setToast] = useState<ToastItem | null>(null);
   const nextId = useRef(0);
   const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,7 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {toast.kind === "success" ? "✓" : "!"}
           </span>
           <p>{toast.message}</p>
-          <button type="button" onClick={dismissToast} aria-label="Закрыть уведомление">
+          <button type="button" onClick={dismissToast} aria-label={t.common.close}>
             ×
           </button>
         </div>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { apiRequest, downloadApiFile, getUserFacingError } from "./api";
+import { apiRequest, downloadApiFile } from "./api";
 import { useToast } from "./toast";
+import { useI18n } from "./i18n";
 
 type OrderStatusHistory = {
   id: string;
@@ -89,19 +90,6 @@ type WorkOrderDetail = {
   invoices: Invoice[];
 };
 
-const statusLabels: Record<string, string> = {
-  NEW: "Черновик",
-  WAITING_DISTRIBUTION: "Ждёт распределения",
-  ASSIGNED: "Назначена",
-  IN_PROGRESS: "В работе",
-  ON_REVIEW: "На проверке",
-  NEEDS_REVISION: "Нужны исправления",
-  INVOICE_ISSUED: "Выставлен счёт",
-  INVOICE_PAID: "Счёт оплачен",
-  COMPLETED: "Завершена",
-  CANCELLED: "Отменена",
-};
-
 export function OrderDetailView({
   orderId,
   panelPath,
@@ -117,6 +105,7 @@ export function OrderDetailView({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const { showToast } = useToast();
+  const { t, errorMessage } = useI18n();
 
   const loadOrder = useCallback(async () => {
     setIsLoading(true);
@@ -125,11 +114,11 @@ export function OrderDetailView({
       setOrder(await apiRequest<WorkOrderDetail>(`/orders/${encodeURIComponent(orderId)}`));
     } catch (error) {
       setHasError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить заказ."));
+      showToast(errorMessage(error, t.toasts.loadOrderFailed));
     } finally {
       setIsLoading(false);
     }
-  }, [orderId, showToast]);
+  }, [orderId, showToast, errorMessage, t]);
 
   useEffect(() => {
     void loadOrder();
@@ -160,20 +149,20 @@ export function OrderDetailView({
       >
         <header className="order-detail-header">
           <div>
-            <div className="eyebrow">КАРТОЧКА ЗАКАЗА</div>
-            <h2 id="order-detail-title">{order?.title ?? "Заказ"}</h2>
+            <div className="eyebrow">{t.orderDetail.eyebrow}</div>
+            <h2 id="order-detail-title">{order?.title ?? t.orderDetail.titleFallback}</h2>
           </div>
-          <button type="button" className="order-detail-close" onClick={onClose} aria-label="Закрыть карточку заказа" data-testid="close-order-detail">
+          <button type="button" className="order-detail-close" onClick={onClose} aria-label={t.orderDetail.closeAria} data-testid="close-order-detail">
             ×
           </button>
         </header>
         <div className="order-detail-content">
           {isLoading ? (
-            <div className="orders-loading" role="status">Загружаем заказ…</div>
+            <div className="orders-loading" role="status">{t.orderDetail.loading}</div>
           ) : hasError ? (
             <div className="order-detail-error">
-              <p>Не удалось загрузить карточку заказа.</p>
-              <button className="button button-quiet" type="button" onClick={() => void loadOrder()}>Повторить</button>
+              <p>{t.orderDetail.loadError}</p>
+              <button className="button button-quiet" type="button" onClick={() => void loadOrder()}>{t.common.retry}</button>
             </div>
           ) : order ? (
             <OrderDetailContent order={order} panelPath={panelPath} role={role} onReload={loadOrder} />
@@ -196,6 +185,19 @@ function OrderDetailContent({
   onReload: () => Promise<void>;
 }) {
   const { showToast } = useToast();
+  const {
+    t,
+    format,
+    formatDate,
+    formatAmount,
+    formatBytes,
+    formatMinutes,
+    errorMessage,
+    statusLabel,
+    estimateStatusLabel,
+    invoiceStatusLabel,
+    paymentReportStatusLabel,
+  } = useI18n();
   const [comment, setComment] = useState("");
   const [isCommenting, setIsCommenting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -225,10 +227,10 @@ function OrderDetailContent({
         body: JSON.stringify({ content }),
       });
       setComment("");
-      showToast("Комментарий добавлен.", "success");
+      showToast(t.toasts.commentAdded, "success");
       await onReload();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось добавить комментарий."));
+      showToast(errorMessage(error, t.toasts.addCommentFailed));
     } finally {
       setIsCommenting(false);
     }
@@ -241,7 +243,7 @@ function OrderDetailContent({
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) return;
     if (file.size > 1_048_576) {
-      showToast("Файл слишком большой. Максимальный размер — 1 МБ.");
+      showToast(t.toasts.fileTooLarge);
       return;
     }
     setIsUploading(true);
@@ -251,10 +253,10 @@ function OrderDetailContent({
         body: formData,
       });
       form.reset();
-      showToast("Файл прикреплён к заказу.", "success");
+      showToast(t.toasts.fileAttached, "success");
       await onReload();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось прикрепить файл."));
+      showToast(errorMessage(error, t.toasts.attachFileFailed));
     } finally {
       setIsUploading(false);
     }
@@ -271,10 +273,10 @@ function OrderDetailContent({
         body: JSON.stringify(reason ? { reason } : {}),
       });
       setCancelReason("");
-      showToast("Заказ отменён.", "success");
+      showToast(t.toasts.orderCancelled, "success");
       await onReload();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось отменить заказ."));
+      showToast(errorMessage(error, t.toasts.cancelOrderFailed));
     } finally {
       setIsCancelling(false);
     }
@@ -283,36 +285,44 @@ function OrderDetailContent({
     <div className="order-detail-body">
       <div className="order-detail-meta">
         <span>{order.category.name}</span>
-        <span className={`order-status order-status-${order.status.toLowerCase()}`}>{statusLabels[order.status] ?? order.status}</span>
+        <span className={`order-status order-status-${order.status.toLowerCase()}`}>{statusLabel(order.status)}</span>
       </div>
       <p className="order-detail-description">{order.description}</p>
       <div className="order-detail-facts">
-        <DetailFact label="Заказчик" value={order.customer.name} />
-        <DetailFact label="Исполнитель" value={order.executor?.name ?? "Не назначен"} />
-        <DetailFact label="Создан" value={formatDate(order.createdAt)} />
-        <DetailFact label="Срок" value={order.dueAt ? formatDate(order.dueAt) : "Не указан"} />
-        {order.location && <DetailFact label="Место выполнения" value={order.location} />}
-        {order.acceptedAt && <DetailFact label="Принят заказчиком" value={formatDate(order.acceptedAt)} />}
-        {order.completedAt && <DetailFact label="Завершён" value={formatDate(order.completedAt)} />}
+        <DetailFact label={t.common.customer} value={order.customer.name} />
+        <DetailFact label={t.common.executor} value={order.executor?.name ?? t.common.notAssigned} />
+        <DetailFact label={t.common.created} value={formatDate(order.createdAt)} />
+        <DetailFact label={t.common.due} value={order.dueAt ? formatDate(order.dueAt) : t.common.notSpecified} />
+        {order.location && <DetailFact label={t.common.location} value={order.location} />}
+        {order.acceptedAt && <DetailFact label={t.orderDetail.acceptedByCustomer} value={formatDate(order.acceptedAt)} />}
+        {order.completedAt && <DetailFact label={t.orderDetail.completed} value={formatDate(order.completedAt)} />}
       </div>
-      {order.cancellationReason && <DetailSection title="Причина отмены"><p>{order.cancellationReason}</p></DetailSection>}
+      {order.cancellationReason && <DetailSection title={t.orderDetail.cancellationReason}><p>{order.cancellationReason}</p></DetailSection>}
       {order.approvedAmount !== null && order.approvedAmount !== undefined && (
-        <DetailSection title="Согласованная оценка">
-          <p>{formatAmount(order.approvedAmount)} · {order.approvedHours} ч × {formatAmount(order.approvedHourlyRate ?? 0)} / ч</p>
+        <DetailSection title={t.orderDetail.approvedEstimate}>
+          <p>{format(t.orderDetail.approvedLine, {
+            amount: formatAmount(order.approvedAmount),
+            hours: order.approvedHours ?? 0,
+            rate: formatAmount(order.approvedHourlyRate ?? 0),
+          })}</p>
           {order.timeEntry && (
             <p className="order-detail-subtext">
-              Учтено {formatMinutes(order.timeEntry.minutes)}
+              {format(t.orderDetail.tracked, { duration: formatMinutes(order.timeEntry.minutes) })}
               {order.timeEntry.comment ? ` · ${order.timeEntry.comment}` : ""}
             </p>
           )}
         </DetailSection>
       )}
       {order.estimates.length > 0 && (
-        <DetailSection title="Оценки">
+        <DetailSection title={t.orderDetail.estimates}>
           <ul className="order-detail-list">
             {order.estimates.map((estimate) => (
               <li key={estimate.id}>
-                <span>{formatAmount(estimate.amount)} · {estimate.hours} ч · {estimate.status}</span>
+                <span>{format(t.orderDetail.estimateLine, {
+                  amount: formatAmount(estimate.amount),
+                  hours: estimate.hours,
+                  status: estimateStatusLabel(estimate.status),
+                })}</span>
                 <small>{formatDate(estimate.proposedAt)}{estimate.responseComment ? ` · ${estimate.responseComment}` : ""}</small>
               </li>
             ))}
@@ -320,7 +330,7 @@ function OrderDetailContent({
         </DetailSection>
       )}
       {(order.attachments.length > 0 || canUploadAttachment) && (
-        <DetailSection title={`Файлы${order.attachments.length > 0 ? ` (${order.attachments.length})` : ""}`}>
+        <DetailSection title={`${t.orderDetail.files}${order.attachments.length > 0 ? ` (${order.attachments.length})` : ""}`}>
           {order.attachments.length > 0 && (
             <ul className="order-detail-list">
               {order.attachments.map((attachment) => (
@@ -331,7 +341,7 @@ function OrderDetailContent({
                     onClick={() => void downloadApiFile(
                       `/orders/${encodeURIComponent(order.id)}/attachments/${encodeURIComponent(attachment.id)}`,
                       attachment.filename,
-                    ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать файл заказа.")))}
+                    ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadAttachmentFailed)))}
                     data-testid={`download-order-attachment-${attachment.id}`}
                   >
                     {attachment.filename}
@@ -344,26 +354,26 @@ function OrderDetailContent({
           {canUploadAttachment && (
             <form className="inline-action-form" onSubmit={(event) => void uploadAttachment(event)} data-testid="attachment-upload-form">
               <label>
-                Прикрепить файл (не более 1 MB)
+                {t.orderDetail.attachLabel}
                 <input type="file" name="file" required data-testid="order-attachment-file" />
               </label>
               <button className="button button-quiet" type="submit" disabled={isUploading} data-testid="upload-order-attachment">
-                {isUploading ? "Загружаем…" : "Прикрепить"}
+                {isUploading ? t.orderDetail.attaching : t.orderDetail.attach}
               </button>
             </form>
           )}
         </DetailSection>
       )}
       {order.invoices.length > 0 && (
-        <DetailSection title="Счета">
+        <DetailSection title={t.orderDetail.invoices}>
           <ul className="order-detail-list">
             {order.invoices.map((invoice) => (
               <li key={invoice.id}>
-                <span>{invoice.number} · {formatAmount(invoice.amount)} {invoice.currency} · {invoiceStatus(invoice.status)}</span>
+                <span>{invoice.number} · {formatAmount(invoice.amount)} {invoice.currency} · {invoiceStatusLabel(invoice.status)}</span>
                 <small>
-                  Выставлен {formatDate(invoice.issuedAt)}
-                  {invoice.paidAt ? ` · Оплачен ${formatDate(invoice.paidAt)}` : ""}
-                  {invoice.voidReason ? ` · Аннулирован: ${invoice.voidReason}` : ""}
+                  {format(t.orderDetail.issued, { date: formatDate(invoice.issuedAt) })}
+                  {invoice.paidAt ? ` · ${format(t.orderDetail.paid, { date: formatDate(invoice.paidAt) })}` : ""}
+                  {invoice.voidReason ? ` · ${format(t.orderDetail.voided, { reason: invoice.voidReason })}` : ""}
                   {" · "}
                   <button
                     type="button"
@@ -371,15 +381,15 @@ function OrderDetailContent({
                     onClick={() => void downloadApiFile(
                       `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/pdf`,
                       `${invoice.number}.pdf`,
-                    ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать PDF счёта.")))}
+                    ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadInvoiceFailed)))}
                     data-testid={`download-invoice-pdf-${invoice.id}`}
                   >
-                    Скачать PDF
+                    {t.orderDetail.downloadPdf}
                   </button>
                 </small>
                 {invoice.paymentReports?.map((report) => (
                   <small key={report.id}>
-                    Чек: {report.filename} · {paymentReportStatus(report.status)}
+                    {format(t.common.receipt, { filename: report.filename })} · {paymentReportStatusLabel(report.status)}
                     {report.reviewComment ? ` · ${report.reviewComment}` : ""}
                     {" · "}
                     <button
@@ -388,9 +398,9 @@ function OrderDetailContent({
                       onClick={() => void downloadApiFile(
                         `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/payment-reports/${encodeURIComponent(report.id)}/file`,
                         report.filename,
-                      ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать чек.")))}
+                      ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadReceiptFailed)))}
                     >
-                      Скачать
+                      {t.orderDetail.download}
                     </button>
                   </small>
                 ))}
@@ -399,7 +409,7 @@ function OrderDetailContent({
           </ul>
         </DetailSection>
       )}
-      <DetailSection title={`Комментарии${order.comments.length > 0 ? ` (${order.comments.length})` : ""}`}>
+      <DetailSection title={`${t.orderDetail.comments}${order.comments.length > 0 ? ` (${order.comments.length})` : ""}`}>
         {order.comments.length > 0 && (
           <ul className="order-detail-comments">
             {order.comments.map((item) => (
@@ -412,7 +422,7 @@ function OrderDetailContent({
         )}
         <form className="inline-action-form" onSubmit={(event) => void addComment(event)} data-testid="order-comment-form">
           <label>
-            Новый комментарий
+            {t.orderDetail.newComment}
             <textarea
               value={comment}
               onChange={(event) => setComment(event.target.value)}
@@ -423,15 +433,15 @@ function OrderDetailContent({
             />
           </label>
           <button className="button button-quiet" type="submit" disabled={isCommenting || !comment.trim()} data-testid="submit-order-comment">
-            {isCommenting ? "Отправляем…" : "Добавить комментарий"}
+            {isCommenting ? t.orderDetail.adding : t.orderDetail.addComment}
           </button>
         </form>
       </DetailSection>
       {canCancel && (
-        <DetailSection title="Отмена заказа">
+        <DetailSection title={t.orderDetail.cancelTitle}>
           <form className="inline-action-form" onSubmit={(event) => void cancelOrder(event)} data-testid="cancel-order-form">
             <label>
-              {notStarted ? "Причина (необязательно)" : "Причина отмены"}
+              {notStarted ? t.orderDetail.cancelReasonOptional : t.orderDetail.cancelReason}
               <input
                 value={cancelReason}
                 onChange={(event) => setCancelReason(event.target.value)}
@@ -441,19 +451,19 @@ function OrderDetailContent({
               />
             </label>
             <button className="button button-quiet" type="submit" disabled={isCancelling || (!notStarted && !cancelReason.trim())} data-testid="cancel-order-submit">
-              {isCancelling ? "Отменяем…" : "Отменить заказ"}
+              {isCancelling ? t.orderDetail.cancelling : t.orderDetail.cancel}
             </button>
           </form>
         </DetailSection>
       )}
       {order.statusHistory.length > 0 && (
-        <DetailSection title="История заказа">
+        <DetailSection title={t.orderDetail.history}>
           <ol className="order-detail-timeline">
             {[...order.statusHistory].reverse().map((entry) => (
               <li key={entry.id}>
                 <span className="order-detail-timeline-dot" />
                 <div>
-                  <b>{statusLabels[entry.toStatus] ?? entry.toStatus}</b>
+                  <b>{statusLabel(entry.toStatus)}</b>
                   <small>{formatDate(entry.createdAt)} · {entry.changedBy.name}</small>
                   {entry.note && <p>{entry.note}</p>}
                 </div>
@@ -463,9 +473,9 @@ function OrderDetailContent({
         </DetailSection>
       )}
       <footer className="order-detail-footer">
-        <span>Последнее обновление: {formatDate(order.updatedAt)}</span>
+        <span>{format(t.orderDetail.lastUpdated, { date: formatDate(order.updatedAt) })}</span>
         <Link className="button button-quiet" to={panelPath}>
-          Вернуться к заказам
+          {t.orderDetail.backToOrders}
         </Link>
       </footer>
     </div>
@@ -483,36 +493,4 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
 
 function DetailFact({ label, value }: { label: string; value: string }) {
   return <div><small>{label}</small><span>{value}</span></div>;
-}
-
-function formatAmount(value: number | string): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(value));
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
-}
-
-function formatBytes(bytes: number): string {
-  return bytes < 1024 ? `${bytes} Б` : `${(bytes / 1024).toFixed(1)} КБ`;
-}
-
-function formatMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return hours ? `${hours} ч ${remainder} мин` : `${remainder} мин`;
-}
-
-function invoiceStatus(status: string): string {
-  if (status === "ISSUED") return "ожидает оплаты";
-  if (status === "PAID") return "оплачен";
-  if (status === "VOID") return "аннулирован";
-  return status;
-}
-
-function paymentReportStatus(status: string): string {
-  if (status === "PENDING") return "на проверке";
-  if (status === "CONFIRMED") return "подтверждён";
-  if (status === "REJECTED") return "отклонён";
-  return status;
 }

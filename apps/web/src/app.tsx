@@ -9,7 +9,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { authClient } from "./auth-client";
-import { apiRequest, getUserFacingError } from "./api";
+import { apiRequest } from "./api";
 import { AdminCategoriesPage, AdminUsersPage } from "./admin-pages";
 import { AdminOrdersPage, ExecutorOrdersPage } from "./role-order-panels";
 import {
@@ -18,12 +18,13 @@ import {
   emptyOrderFilters,
   filterOrders,
   getOrderCategoryOptions,
-  orderStatusLabels,
   paginateOrders,
   type OrderFilterValues,
 } from "./order-list-controls";
 import { OrderDetailView } from "./order-detail";
 import { ToastProvider, useToast } from "./toast";
+import { useI18n } from "./i18n";
+import { LanguageSwitcher } from "./language-switcher";
 
 type Role = "CUSTOMER" | "EXECUTOR" | "ADMIN";
 
@@ -68,25 +69,10 @@ type CreateOrderInput = {
   location?: string;
 };
 
-const panels: Record<Role, { path: string; label: string; title: string; description: string }> = {
-  CUSTOMER: {
-    path: "/customer",
-    label: "Заказчик",
-    title: "Ваши заказы",
-    description: "Создавайте заказы и следите за ходом работ в одном месте.",
-  },
-  EXECUTOR: {
-    path: "/executor",
-    label: "Исполнитель",
-    title: "Рабочий стол",
-    description: "Находите новые задачи и ведите работу по назначенным заказам.",
-  },
-  ADMIN: {
-    path: "/admin",
-    label: "Администратор",
-    title: "Управление заказами",
-    description: "Распределяйте заказы, управляйте командой и выставляйте счета.",
-  },
+const panelPaths: Record<Role, string> = {
+  CUSTOMER: "/customer",
+  EXECUTOR: "/executor",
+  ADMIN: "/admin",
 };
 
 export function App() {
@@ -110,24 +96,26 @@ export function App() {
 function LandingPage() {
   const { data: session, isPending } = authClient.useSession();
   const role = session ? getRole(session.user) : undefined;
+  const { t } = useI18n();
 
   return (
     <main className="landing" data-testid="landing-page">
       <header className="topbar wrap">
-        <Link className="brand" to="/" aria-label="Дело — на главную" data-testid="brand-home">
+        <Link className="brand" to="/" aria-label={t.landing.brandAria} data-testid="brand-home">
           <span className="brand-mark" aria-hidden="true">д</span>
           <span>дело<span className="brand-period">.</span></span>
         </Link>
-        <nav className="topnav" aria-label="Главная навигация">
-          <a href="#how-it-works" data-testid="nav-how-it-works">Как это работает</a>
-          <a href="#for-whom" data-testid="nav-for-whom">Для кого</a>
+        <LanguageSwitcher />
+        <nav className="topnav" aria-label={t.landing.navAria}>
+          <a href="#how-it-works" data-testid="nav-how-it-works">{t.landing.howItWorks}</a>
+          <a href="#for-whom" data-testid="nav-for-whom">{t.landing.forWhom}</a>
           {!isPending && role ? (
-            <Link className="button button-dark button-small" to={panels[role].path} data-testid="nav-dashboard">
-              В мой кабинет
+            <Link className="button button-dark button-small" to={panelPaths[role]} data-testid="nav-dashboard">
+              {t.landing.myWorkspace}
             </Link>
           ) : (
             <Link className="button button-dark button-small" to="/login" data-testid="nav-login">
-              Войти
+              {t.landing.signIn}
             </Link>
           )}
         </nav>
@@ -135,84 +123,83 @@ function LandingPage() {
 
       <section className="hero wrap">
         <div className="hero-copy">
-          <div className="eyebrow"><span className="eyebrow-dot" /> Работа начинается с ясности</div>
-          <h1>Все задачи.<br /><span>В одном деле.</span></h1>
+          <div className="eyebrow"><span className="eyebrow-dot" /> {t.landing.eyebrow}</div>
+          <h1>{t.landing.titleLead}<br /><span>{t.landing.titleAccent}</span></h1>
           <p className="hero-text">
-            Создавайте заказы, находите исполнителей и держите весь процесс под контролем —
-            от первого описания до готового результата.
+            {t.landing.text}
           </p>
           <div className="hero-actions">
-            <Link className="button button-primary" to={role ? panels[role].path : "/register"} data-testid="hero-register">
-              {role === "CUSTOMER" ? "Перейти к заказам" : role ? "Открыть кабинет" : "Создать заказ"} <span aria-hidden="true">↗</span>
+            <Link className="button button-primary" to={role ? panelPaths[role] : "/register"} data-testid="hero-register">
+              {role === "CUSTOMER" ? t.landing.ctaCustomer : role ? t.landing.ctaOpenWorkspace : t.landing.ctaCreate} <span aria-hidden="true">↗</span>
             </Link>
             <Link className="button button-quiet" to="/login" data-testid="hero-login">
-              Уже есть аккаунт? <span>Войти</span>
+              {t.landing.haveAccount} <span>{t.landing.signInAction}</span>
             </Link>
           </div>
           <div className="hero-note">
-            <span className="avatar-stack" aria-hidden="true"><i>А</i><i>М</i><i>К</i></span>
-            <span>Заказ, команда и результат — ничего не теряется</span>
+            <span className="avatar-stack" aria-hidden="true"><i>{t.landing.avatarFirst}</i><i>{t.landing.avatarSecond}</i><i>{t.landing.avatarThird}</i></span>
+            <span>{t.landing.note}</span>
           </div>
         </div>
 
-        <div className="hero-visual" role="img" aria-label="Пример рабочего пространства">
+        <div className="hero-visual" role="img" aria-label={t.landing.visualAria}>
           <div className="visual-glow" />
           <div className="task-card task-card-main">
             <div className="task-card-top">
               <span className="task-icon" aria-hidden="true">✳</span>
-              <span className="task-status"><i /> В работе</span>
+              <span className="task-status"><i /> {t.landing.taskStatus}</span>
               <span className="more-dots" aria-hidden="true">···</span>
             </div>
-            <span className="task-category">ДИЗАЙН · ЗАКАЗ #024</span>
-            <h2>Обновить презентацию<br />для нового продукта</h2>
-            <p className="task-subtitle">12 слайдов · дедлайн 24 октября</p>
+            <span className="task-category">{t.landing.taskCategory}</span>
+            <h2>{t.landing.taskTitleLead}<br />{t.landing.taskTitleAccent}</h2>
+            <p className="task-subtitle">{t.landing.taskSubtitle}</p>
             <div className="task-divider" />
             <div className="task-footer">
-              <div className="task-person"><span className="person-avatar">МК</span><span><b>Мария К.</b><small>Исполнитель</small></span></div>
+              <div className="task-person"><span className="person-avatar">{t.landing.personAvatar}</span><span><b>{t.landing.personName}</b><small>{t.landing.personRole}</small></span></div>
               <div className="progress-ring"><span>68<small>%</small></span></div>
             </div>
           </div>
           <div className="floating-note">
             <span className="note-check">✓</span>
-            <span><b>Этап завершён</b><small>Можно переходить дальше</small></span>
+            <span><b>{t.landing.stageDone}</b><small>{t.landing.stageDoneText}</small></span>
           </div>
-          <div className="visual-caption"><span /> Всё важное — в карточке заказа</div>
+          <div className="visual-caption"><span /> {t.landing.visualCaption}</div>
         </div>
       </section>
 
       <section className="process-section" id="how-it-works">
         <div className="wrap">
           <div className="section-heading">
-            <div><div className="eyebrow">ПРОСТОЙ ПРОЦЕСС</div><h2>От задачи до результата</h2></div>
-            <p>Понятный маршрут помогает заказчику и исполнителю работать слаженно.</p>
+            <div><div className="eyebrow">{t.landing.processEyebrow}</div><h2>{t.landing.processTitle}</h2></div>
+            <p>{t.landing.processText}</p>
           </div>
           <div className="steps-grid">
-            <Step number="01" title="Опишите задачу" text="Добавьте описание, категорию и желаемый срок. Все детали останутся в заказе." />
-            <Step number="02" title="Договоритесь о работе" text="Исполнитель предложит оценку, а вы согласуете объём до начала работы." />
-            <Step number="03" title="Примите результат" text="Обсудите ход работы, проверьте результат и завершите заказ." />
+            <Step number="01" title={t.landing.step1Title} text={t.landing.step1Text} />
+            <Step number="02" title={t.landing.step2Title} text={t.landing.step2Text} />
+            <Step number="03" title={t.landing.step3Title} text={t.landing.step3Text} />
           </div>
         </div>
       </section>
 
       <section className="audience-section wrap" id="for-whom">
         <div className="audience-copy">
-          <div className="eyebrow">ОДНА ДОСКА — ОБЩИЙ ПРОЦЕСС</div>
-          <h2>Каждый знает,<br />что делать дальше.</h2>
-          <p>Заказчики, исполнители и администраторы видят только нужные им действия, а история работы остаётся рядом с заказом.</p>
-          <Link className="text-link" to="/register" data-testid="audience-register">Начать работу <span aria-hidden="true">→</span></Link>
+          <div className="eyebrow">{t.landing.audienceEyebrow}</div>
+          <h2>{t.landing.audienceTitleLead}<br />{t.landing.audienceTitleAccent}</h2>
+          <p>{t.landing.audienceText}</p>
+          <Link className="text-link" to="/register" data-testid="audience-register">{t.landing.audienceCta} <span aria-hidden="true">→</span></Link>
         </div>
         <div className="roles-list">
-          <RoleRow mark="З" title="Заказчику" text="Создавать заказы и принимать результат" />
-          <RoleRow mark="И" title="Исполнителю" text="Выбирать задачи и вести свою работу" />
-          <RoleRow mark="А" title="Администратору" text="Распределять заказы и управлять процессом" />
+          <RoleRow mark={t.landing.roleCustomerMark} title={t.landing.roleCustomerTitle} text={t.landing.roleCustomerText} />
+          <RoleRow mark={t.landing.roleExecutorMark} title={t.landing.roleExecutorTitle} text={t.landing.roleExecutorText} />
+          <RoleRow mark={t.landing.roleAdminMark} title={t.landing.roleAdminTitle} text={t.landing.roleAdminText} />
         </div>
       </section>
 
       <footer className="footer">
         <div className="wrap footer-inner">
           <Link className="brand" to="/" data-testid="footer-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
-          <span>Пространство для работы, которая движется вперёд.</span>
-          <Link to="/login" data-testid="footer-login">Войти в кабинет <span aria-hidden="true">↗</span></Link>
+          <span>{t.landing.footerTagline}</span>
+          <Link to="/login" data-testid="footer-login">{t.landing.footerLogin} <span aria-hidden="true">↗</span></Link>
         </div>
       </footer>
     </main>
@@ -249,6 +236,7 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showToast } = useToast();
+  const { t, errorMessage } = useI18n();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -259,23 +247,23 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
         : await authClient.signIn.email({ email: email.trim(), password });
       if (result.error) {
         showToast(isRegister
-          ? "Не удалось создать аккаунт. Проверьте данные: возможно, этот адрес уже зарегистрирован."
-          : "Не удалось войти. Проверьте электронную почту и пароль.");
+          ? t.auth.errorRegister
+          : t.auth.errorLogin);
         return;
       }
 
       const sessionResult = await authClient.getSession();
       if (!sessionResult.data) {
-        showToast("Не удалось получить активную сессию. Попробуйте войти снова.");
+        showToast(t.auth.errorSession);
         return;
       }
       const role = getRole(sessionResult.data.user);
       if (!role) {
-        showToast("Для аккаунта не назначена роль. Обратитесь к администратору.");
+        showToast(t.auth.errorNoRole);
         return;
       }
       const requestedPath = (location.state as { from?: unknown } | null)?.from;
-      const panelPath = panels[role].path;
+      const panelPath = panelPaths[role];
       const destination =
         typeof requestedPath === "string" &&
         (requestedPath === panelPath || requestedPath.startsWith(`${panelPath}/`))
@@ -283,9 +271,9 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
           : panelPath;
       navigate(destination, { replace: true });
     } catch (submitError) {
-      showToast(getUserFacingError(
+      showToast(errorMessage(
         submitError,
-        "Не удалось выполнить вход. Проверьте данные и попробуйте снова.",
+        t.auth.errorSubmit,
       ));
     } finally {
       setIsSubmitting(false);
@@ -294,39 +282,40 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   return (
     <main className="auth-page" data-testid={isRegister ? "register-page" : "login-page"}>
-      <Link className="brand auth-brand" to="/" data-testid="auth-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
+      <LanguageSwitcher />
+      <Link className="brand auth-brand" to="/" data-testid="auth-brand" aria-label={t.auth.brandAria}><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
       <section className="auth-card">
-        <Link className="back-link" to="/" data-testid="auth-back">← На главную</Link>
-        <div className="eyebrow">{isRegister ? "НАЧНИТЕ РАБОТУ" : "С ВОЗВРАЩЕНИЕМ"}</div>
-        <h1>{isRegister ? "Создать аккаунт" : "Войти в кабинет"}</h1>
-        <p className="auth-description">{isRegister ? "Зарегистрируйтесь как заказчик, чтобы создавать и отслеживать заказы." : "Введите данные аккаунта, чтобы продолжить работу."}</p>
+        <Link className="back-link" to="/" data-testid="auth-back">← {t.auth.back}</Link>
+        <div className="eyebrow">{isRegister ? t.auth.registerEyebrow : t.auth.loginEyebrow}</div>
+        <h1>{isRegister ? t.auth.registerTitle : t.auth.loginTitle}</h1>
+        <p className="auth-description">{isRegister ? t.auth.registerDescription : t.auth.loginDescription}</p>
         <form className="auth-form" onSubmit={submit} data-testid="auth-form">
           {isRegister && (
             <label>
-              Имя
+              {t.auth.name}
               <input autoComplete="name" name="name" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} data-testid="auth-name" />
             </label>
           )}
           <label>
-            Электронная почта
+            {t.auth.email}
             <input autoComplete="email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required data-testid="auth-email" />
           </label>
           <label>
-            Пароль
+            {t.auth.password}
             <input autoComplete={isRegister ? "new-password" : "current-password"} name="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} data-testid="auth-password" />
           </label>
           <button className="button button-primary auth-submit" type="submit" disabled={isSubmitting} data-testid="auth-submit">
-            {isSubmitting ? "Подождите…" : isRegister ? "Создать аккаунт" : "Войти"}
+            {isSubmitting ? t.auth.submitting : isRegister ? t.auth.submitRegister : t.auth.submitLogin}
           </button>
         </form>
         <p className="auth-switch">
-          {isRegister ? "Уже зарегистрированы?" : "Нет аккаунта?"}{" "}
+          {isRegister ? t.auth.haveAccount : t.auth.noAccount}{" "}
           <Link to={isRegister ? "/login" : "/register"} state={location.state} data-testid="auth-switch">
-            {isRegister ? "Войти" : "Создать аккаунт"}
+            {isRegister ? t.auth.signIn : t.auth.signUp}
           </Link>
         </p>
       </section>
-      <p className="auth-footer">Дело — работа начинается с ясности.</p>
+      <p className="auth-footer">{t.auth.footer}</p>
     </main>
   );
 }
@@ -339,7 +328,7 @@ function PanelRoute({ role }: { role: Role }) {
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   if (getRole(session.user) !== role) {
     const userRole = getRole(session.user);
-    return <Navigate to={userRole ? panels[userRole].path : "/"} replace />;
+    return <Navigate to={userRole ? panelPaths[userRole] : "/"} replace />;
   }
 
   return <PanelPage role={role} user={session.user} />;
@@ -352,7 +341,13 @@ function PanelPage({
   role: Role;
   user: { id: string; name: string; email: string };
 }) {
-  const panel = panels[role];
+  const { t, errorMessage } = useI18n();
+  const panel = {
+    path: panelPaths[role],
+    label: t.roles[role],
+    title: t.roleTitles[role],
+    description: t.roleDescriptions[role],
+  };
   const location = useLocation();
   const navigate = useNavigate();
   const relativePath = location.pathname.slice(panel.path.length).replace(/\/+$/u, "") || "/";
@@ -366,14 +361,14 @@ function PanelPage({
   const [userEmail, setUserEmail] = useState(user.email);
   useEffect(() => setUserName(user.name), [user.name]);
   useEffect(() => setUserEmail(user.email), [user.email]);
-  const title = isProfile ? "Профиль" : isCategories ? "Категории" : isUsers ? "Пользователи" : panel.title;
-  const eyebrow = isProfile ? "ВАШ АККАУНТ" : isCategories || isUsers ? "УПРАВЛЕНИЕ" : "РАБОЧЕЕ ПРОСТРАНСТВО";
+  const title = isProfile ? t.panel.profile : isCategories ? t.panel.categories : isUsers ? t.panel.users : panel.title;
+  const eyebrow = isProfile ? t.panel.profileEyebrow : isCategories || isUsers ? t.panel.managementEyebrow : t.panel.workspaceEyebrow;
   const description = isProfile
-    ? "Основные данные и параметры учётной записи."
+    ? t.panel.profileDescription
     : isCategories
-      ? "Создавайте направления работ и управляйте их доступностью."
+      ? t.panel.categoriesDescription
       : isUsers
-        ? "Управляйте исполнителями и заказчиками, их доступом и паролями."
+        ? t.panel.usersDescription
         : panel.description;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { showToast } = useToast();
@@ -383,12 +378,12 @@ function PanelPage({
     try {
       const result = await authClient.signOut();
       if (result.error) {
-        showToast(getUserFacingError(result.error, "Не удалось завершить сеанс."));
+        showToast(errorMessage(result.error, t.toasts.signOutFailed));
         return;
       }
       navigate("/", { replace: true });
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось завершить сеанс."));
+      showToast(errorMessage(error, t.toasts.signOutFailed));
     } finally {
       setIsSigningOut(false);
     }
@@ -399,20 +394,20 @@ function PanelPage({
       <aside className="panel-sidebar">
         <Link className="brand" to="/" data-testid="panel-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
         <div className="panel-role-label">{panel.label.toUpperCase()}</div>
-        <nav className="panel-nav" aria-label="Навигация панели">
-          <Link className={`panel-nav-item${isOrders ? " active" : ""}`} to={panel.path} data-testid="panel-orders-link"><span aria-hidden="true">▦</span>Заказы</Link>
+        <nav className="panel-nav" aria-label={t.panel.navAria}>
+          <Link className={`panel-nav-item${isOrders ? " active" : ""}`} to={panel.path} data-testid="panel-orders-link"><span aria-hidden="true">▦</span>{t.panel.orders}</Link>
           {role === "ADMIN" && (
-            <Link className={`panel-nav-item${isCategories ? " active" : ""}`} to={`${panel.path}/categories`} data-testid="panel-categories-link"><span aria-hidden="true">▤</span>Категории</Link>
+            <Link className={`panel-nav-item${isCategories ? " active" : ""}`} to={`${panel.path}/categories`} data-testid="panel-categories-link"><span aria-hidden="true">▤</span>{t.panel.categories}</Link>
           )}
           {role === "ADMIN" && (
-            <Link className={`panel-nav-item${isUsers ? " active" : ""}`} to={`${panel.path}/users`} data-testid="panel-users-link"><span aria-hidden="true">◌</span>Пользователи</Link>
+            <Link className={`panel-nav-item${isUsers ? " active" : ""}`} to={`${panel.path}/users`} data-testid="panel-users-link"><span aria-hidden="true">◌</span>{t.panel.users}</Link>
           )}
-          <Link className={`panel-nav-item${isProfile ? " active" : ""}`} to={`${panel.path}/profile`} data-testid="panel-profile-link"><span aria-hidden="true">◉</span>Профиль</Link>
+          <Link className={`panel-nav-item${isProfile ? " active" : ""}`} to={`${panel.path}/profile`} data-testid="panel-profile-link"><span aria-hidden="true">◉</span>{t.panel.profile}</Link>
         </nav>
         <div className="sidebar-bottom">
           <div className="user-chip"><span className="user-avatar">{userName.slice(0, 1).toUpperCase()}</span><span><b>{userName}</b><small>{panel.label}</small></span></div>
           <button className="signout-button" onClick={signOut} disabled={isSigningOut} data-testid="sign-out">
-            {isSigningOut ? "Выходим…" : "Выйти"}
+            {isSigningOut ? t.panel.signingOut : t.panel.signOut}
           </button>
         </div>
       </aside>
@@ -420,7 +415,8 @@ function PanelPage({
         <header className="panel-topbar">
           <span>{panel.label}</span>
           <div className="panel-topbar-actions">
-            <span className="online-indicator"><i /> Рабочее пространство</span>
+            <span className="online-indicator"><i /> {t.panel.workspace}</span>
+            <LanguageSwitcher />
             <button
               className="mobile-signout-button"
               type="button"
@@ -428,7 +424,7 @@ function PanelPage({
               disabled={isSigningOut}
               data-testid="mobile-sign-out"
             >
-              {isSigningOut ? "Выходим…" : "Выйти"}
+              {isSigningOut ? t.panel.signingOut : t.panel.signOut}
             </button>
           </div>
         </header>
@@ -488,6 +484,7 @@ function ProfilePage({
   const [isSavingRate, setIsSavingRate] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const { showToast } = useToast();
+  const { t, errorMessage } = useI18n();
 
   useEffect(() => {
     setName(user.name);
@@ -504,7 +501,7 @@ function ProfilePage({
         setHourlyRate(profile.hourlyRate === null ? "" : String(profile.hourlyRate));
       })
       .catch((error: unknown) => {
-        if (!cancelled) showToast(getUserFacingError(error, "Не удалось загрузить ставку."));
+        if (!cancelled) showToast(errorMessage(error, t.toasts.loadRateFailed));
       })
       .finally(() => {
         if (!cancelled) setIsLoadingRate(false);
@@ -522,7 +519,7 @@ function ProfilePage({
     if (updatedName !== user.name) changes.name = updatedName;
     if (updatedEmail !== user.email.toLowerCase()) changes.email = updatedEmail;
     if (Object.keys(changes).length === 0) {
-      showToast("Изменений нет.");
+      showToast(t.toasts.noChanges);
       return;
     }
 
@@ -536,9 +533,9 @@ function ProfilePage({
       setEmail(updated.email);
       setProfileCurrentPassword("");
       onProfileChanged(updated);
-      showToast("Данные профиля обновлены.", "success");
+      showToast(t.toasts.profileUpdated, "success");
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось обновить профиль."));
+      showToast(errorMessage(error, t.toasts.updateProfileFailed));
     } finally {
       setIsSavingProfile(false);
     }
@@ -548,7 +545,7 @@ function ProfilePage({
     event.preventDefault();
     const rate = Number(hourlyRate);
     if (!Number.isFinite(rate) || rate <= 0) {
-      showToast("Укажите положительную ставку.");
+      showToast(t.toasts.invalidRate);
       return;
     }
 
@@ -559,9 +556,9 @@ function ProfilePage({
         body: JSON.stringify({ hourlyRate: rate }),
       });
       setHourlyRate(String(updated.hourlyRate));
-      showToast("Почасовая ставка обновлена.", "success");
+      showToast(t.toasts.rateUpdated, "success");
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось сохранить ставку."));
+      showToast(errorMessage(error, t.toasts.saveRateFailed));
     } finally {
       setIsSavingRate(false);
     }
@@ -570,7 +567,7 @@ function ProfilePage({
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
-      showToast("Новый пароль и подтверждение не совпадают.");
+      showToast(t.toasts.passwordsMismatch);
       return;
     }
 
@@ -582,15 +579,15 @@ function ProfilePage({
         revokeOtherSessions: true,
       });
       if (result.error) {
-        showToast(getUserFacingError(result.error, "Не удалось изменить пароль. Проверьте текущий пароль."));
+        showToast(errorMessage(result.error, t.toasts.passwordChangeFailed));
         return;
       }
       setPasswordCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      showToast("Пароль изменён. Другие активные сеансы завершены.", "success");
+      showToast(t.toasts.passwordChanged, "success");
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось изменить пароль. Проверьте текущий пароль."));
+      showToast(errorMessage(error, t.toasts.passwordChangeFailed));
     } finally {
       setIsChangingPassword(false);
     }
@@ -602,26 +599,26 @@ function ProfilePage({
         <div className="profile-card-heading">
           <span className="profile-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span>
           <div>
-            <h2>Данные аккаунта</h2>
-            <p>Изменения имени и почты подтвердите текущим паролем.</p>
+            <h2>{t.profile.accountTitle}</h2>
+            <p>{t.profile.accountDescription}</p>
           </div>
         </div>
         <form className="profile-form" onSubmit={saveProfile} data-testid="profile-form">
           <label>
-            Имя
+            {t.profile.name}
             <input value={name} onChange={(event) => setName(event.target.value)} minLength={1} maxLength={120} required data-testid="profile-name" />
           </label>
           <label>
-            Электронная почта
+            {t.profile.email}
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} required data-testid="profile-email" />
           </label>
           <label>
-            Текущий пароль
+            {t.profile.currentPassword}
             <input type="password" value={profileCurrentPassword} onChange={(event) => setProfileCurrentPassword(event.target.value)} autoComplete="current-password" minLength={1} required data-testid="profile-current-password" />
           </label>
-          <p className="profile-help">При смене адреса он применяется сразу. Подтверждение почты в приложении пока не требуется.</p>
+          <p className="profile-help">{t.profile.profileHelp}</p>
           <button className="button button-primary" type="submit" disabled={isSavingProfile || !profileCurrentPassword} data-testid="save-profile">
-            {isSavingProfile ? "Сохраняем…" : "Сохранить данные"}
+            {isSavingProfile ? t.common.saving : t.profile.save}
           </button>
         </form>
       </article>
@@ -630,34 +627,34 @@ function ProfilePage({
           <div className="profile-card-heading">
             <span className="profile-avatar profile-avatar-rate" aria-hidden="true">$</span>
             <div>
-              <h2>Почасовая ставка</h2>
-              <p>Используется при расчёте новых оценок по назначенным вам заказам.</p>
+              <h2>{t.profile.rateTitle}</h2>
+              <p>{t.profile.rateDescription}</p>
             </div>
           </div>
           <form className="profile-form" onSubmit={saveHourlyRate} data-testid="hourly-rate-form">
             <label>
-              Ставка, USD в час
+              {t.profile.rateLabel}
               <input
                 type="number"
                 min="0.0001"
                 max="1000000"
                 step="0.0001"
                 required
-                placeholder="Например, 45"
+                placeholder={t.profile.ratePlaceholder}
                 value={hourlyRate}
                 onChange={(event) => setHourlyRate(event.target.value)}
                 disabled={isLoadingRate || isSavingRate}
                 data-testid="profile-hourly-rate"
               />
             </label>
-            <p className="profile-help">Уже предложенные оценки и выставленные счета сохраняют прежнюю ставку.</p>
+            <p className="profile-help">{t.profile.rateHelp}</p>
             <button
               className="button button-primary"
               type="submit"
               disabled={isLoadingRate || isSavingRate || !hourlyRate}
               data-testid="save-hourly-rate"
             >
-              {isLoadingRate ? "Загружаем…" : isSavingRate ? "Сохраняем…" : "Сохранить ставку"}
+              {isLoadingRate ? t.common.loading : isSavingRate ? t.common.saving : t.profile.saveRate}
             </button>
           </form>
         </article>
@@ -666,38 +663,39 @@ function ProfilePage({
         <div className="profile-card-heading">
           <span className="profile-avatar profile-avatar-password" aria-hidden="true">⌑</span>
           <div>
-            <h2>Изменить пароль</h2>
-            <p>После смены пароля остальные сеансы будут завершены.</p>
+            <h2>{t.profile.passwordTitle}</h2>
+            <p>{t.profile.passwordDescription}</p>
           </div>
         </div>
         <form className="profile-form" onSubmit={changePassword} data-testid="password-change-form">
           <label>
-            Текущий пароль
+            {t.profile.currentPassword}
             <input type="password" value={passwordCurrentPassword} onChange={(event) => setPasswordCurrentPassword(event.target.value)} autoComplete="current-password" minLength={1} required data-testid="password-current" />
           </label>
           <label>
-            Новый пароль
+            {t.profile.newPassword}
             <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required data-testid="password-new" />
           </label>
           <label>
-            Повторите новый пароль
+            {t.profile.confirmPassword}
             <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required data-testid="password-confirm" />
           </label>
           <button className="button button-primary" type="submit" disabled={isChangingPassword || !passwordCurrentPassword} data-testid="change-password">
-            {isChangingPassword ? "Меняем пароль…" : "Изменить пароль"}
+            {isChangingPassword ? t.profile.changingPassword : t.profile.changePassword}
           </button>
         </form>
       </article>
       <div className="profile-role-note" data-testid="profile-role">
-        <span>Роль аккаунта</span>
-        <b>{panels[user.role].label}</b>
-        <small>Роль назначается администратором и не изменяется из профиля.</small>
+        <span>{t.profile.roleLabel}</span>
+        <b>{t.roles[user.role]}</b>
+        <small>{t.profile.roleNote}</small>
       </div>
     </section>
   );
 }
 
 function CustomerOrdersPage() {
+  const { t, locale, format, errorMessage, formatDate, formatAmount, statusLabel, invoiceStatusLabel } = useI18n();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [executors, setExecutors] = useState<{ id: string; name: string }[]>([]);
@@ -736,7 +734,7 @@ function CustomerOrdersPage() {
       setOrders(await apiRequest<WorkOrder[]>("/orders"));
     } catch (error) {
       setOrdersError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить заказы."));
+      showToast(errorMessage(error, t.customer.errorLoadOrders));
     } finally {
       setIsLoadingOrders(false);
     }
@@ -751,7 +749,7 @@ function CustomerOrdersPage() {
       setCategoryId((current) => current || availableCategories[0]?.id || "");
     } catch (error) {
       setCategoriesError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить категории."));
+      showToast(errorMessage(error, t.customer.errorLoadCategories));
     } finally {
       setIsLoadingCategories(false);
     }
@@ -761,7 +759,7 @@ function CustomerOrdersPage() {
     try {
       setExecutors(await apiRequest<{ id: string; name: string }[]>("/users/executors/available"));
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось загрузить список исполнителей."));
+      showToast(errorMessage(error, t.customer.errorLoadExecutors));
     }
   }, [showToast]);
 
@@ -769,8 +767,8 @@ function CustomerOrdersPage() {
     void Promise.all([loadOrders(), loadCategories(), loadExecutors()]);
   }, [loadOrders, loadCategories, loadExecutors]);
 
-  const filteredOrders = filterOrders(orders, orderFilters);
-  const orderCategories = getOrderCategoryOptions(orders);
+  const filteredOrders = filterOrders(orders, orderFilters, locale);
+  const orderCategories = getOrderCategoryOptions(orders, locale);
   const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
     filteredOrders,
     ordersPage,
@@ -820,22 +818,24 @@ function CustomerOrdersPage() {
           });
           showToast(
             draft.executor
-              ? "Заказ создан и отправлен выбранному исполнителю."
-              : "Заказ создан и отправлен на распределение.",
+              ? t.customer.toastSentToExecutor
+              : t.customer.toastSentForDistribution,
             "success",
           );
         } catch (error) {
           showToast(
-            `Черновик создан, но отправить его не удалось. ${getUserFacingError(error, "Откройте черновик и отправьте его позже.")}`,
+            format(t.customer.draftPartialFailure, {
+              error: errorMessage(error, t.customer.draftPartialFailureFallback),
+            }),
           );
         }
       } else {
-        showToast("Черновик сохранён. Его можно отредактировать и отправить позже.", "success");
+        showToast(t.customer.draftSaved, "success");
       }
 
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось создать заказ."));
+      showToast(errorMessage(error, t.customer.errorCreate));
     } finally {
       setIsSubmitting(false);
     }
@@ -867,10 +867,10 @@ function CustomerOrdersPage() {
         }),
       });
       setEditingOrderId("");
-      showToast("Черновик обновлён.", "success");
+      showToast(t.customer.draftUpdated, "success");
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось сохранить черновик."));
+      showToast(errorMessage(error, t.customer.errorSaveDraft));
     } finally {
       setSavingDraftId("");
     }
@@ -882,13 +882,13 @@ function CustomerOrdersPage() {
       await apiRequest(`/orders/${encodeURIComponent(order.id)}/submit`, { method: "POST" });
       showToast(
         order.executor
-          ? "Заказ отправлен выбранному исполнителю."
-          : "Заказ отправлен на распределение.",
+          ? t.customer.toastDraftSentToExecutor
+          : t.customer.toastDraftSentForDistribution,
         "success",
       );
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось отправить черновик."));
+      showToast(errorMessage(error, t.customer.errorSubmitDraft));
     } finally {
       setSubmittingDraftId("");
     }
@@ -900,7 +900,7 @@ function CustomerOrdersPage() {
       showToast(success, "success");
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось выполнить действие."));
+      showToast(errorMessage(error, t.customer.errorAction));
     }
   }
 
@@ -913,21 +913,21 @@ function CustomerOrdersPage() {
         `/orders/${encodeURIComponent(orderId)}/invoices/${encodeURIComponent(invoiceId)}/payment-reports`,
         { method: "POST", body: formData },
       );
-      showToast("Подтверждение оплаты отправлено администратору на проверку.", "success");
+      showToast(t.customer.paymentReportSent, "success");
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось отправить подтверждение оплаты."));
+      showToast(errorMessage(error, t.customer.errorPaymentReport));
     } finally {
       setReportingInvoiceId("");
     }
   }
 
   return (
-    <section className="customer-orders" aria-label="Заказы заказчика">
+    <section className="customer-orders" aria-label={t.customer.aria}>
       <div className="orders-toolbar">
         <div>
-          <h2>Список заказов</h2>
-          <p>Ваши текущие и завершённые работы</p>
+          <h2>{t.customer.listTitle}</h2>
+          <p>{t.customer.listDescription}</p>
         </div>
         <button
           className="button button-primary"
@@ -937,19 +937,19 @@ function CustomerOrdersPage() {
           }}
           data-testid="create-order"
         >
-          {isCreateOpen ? "Закрыть форму" : "+ Новый заказ"}
+          {isCreateOpen ? t.customer.closeForm : t.customer.newOrder}
         </button>
       </div>
 
       {isCreateOpen && (
         <form className="order-form" onSubmit={createOrder} data-testid="create-order-form">
           <div className="order-form-heading">
-            <div className="eyebrow">НОВЫЙ ЗАПРОС</div>
-            <h2>Опишите, что нужно сделать</h2>
-            <p>Сохраните черновик или сразу отправьте заказ выбранному исполнителю либо в общий пул.</p>
+            <div className="eyebrow">{t.customer.formEyebrow}</div>
+            <h2>{t.customer.formTitle}</h2>
+            <p>{t.customer.formText}</p>
           </div>
           <label>
-            Название
+            {t.customer.titleLabel}
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -959,7 +959,7 @@ function CustomerOrdersPage() {
             />
           </label>
           <label>
-            Описание задачи
+            {t.customer.descriptionLabel}
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -971,7 +971,7 @@ function CustomerOrdersPage() {
           </label>
           <div className="order-form-grid">
             <label>
-              Категория
+              {t.customer.categoryLabel}
               <select
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
@@ -980,7 +980,7 @@ function CustomerOrdersPage() {
                 data-testid="order-category"
               >
                 <option value="" disabled>
-                  {isLoadingCategories ? "Загрузка категорий…" : "Выберите категорию"}
+                  {isLoadingCategories ? t.customer.loadingCategories : t.customer.chooseCategory}
                 </option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
@@ -988,7 +988,7 @@ function CustomerOrdersPage() {
               </select>
             </label>
             <label>
-              Желаемый срок
+              {t.customer.dueLabel}
               <input
                 type="date"
                 value={dueAt}
@@ -998,20 +998,20 @@ function CustomerOrdersPage() {
             </label>
           </div>
           <label>
-            Исполнитель <span className="optional-label">необязательно</span>
+            {t.customer.executorLabel} <span className="optional-label">{t.common.optional}</span>
             <select
               value={executorId}
               onChange={(event) => setExecutorId(event.target.value)}
               data-testid="order-executor"
             >
-              <option value="">Не назначать — заказ попадёт в общий пул</option>
+              <option value="">{t.customer.poolOption}</option>
               {executors.map((executor) => (
                 <option key={executor.id} value={executor.id}>{executor.name}</option>
               ))}
             </select>
           </label>
           <label>
-            Место выполнения <span className="optional-label">необязательно</span>
+            {t.customer.locationLabel} <span className="optional-label">{t.common.optional}</span>
             <input
               value={location}
               onChange={(event) => setLocation(event.target.value)}
@@ -1021,15 +1021,15 @@ function CustomerOrdersPage() {
           </label>
           {categoriesError && (
             <button className="button button-quiet" type="button" onClick={() => void loadCategories()} data-testid="retry-categories">
-              Повторить загрузку категорий
+              {t.customer.retryCategories}
             </button>
           )}
           {!isLoadingCategories && !categoriesError && categories.length === 0 && (
-            <p className="form-hint" data-testid="no-categories">Пока нет доступных категорий. Обратитесь к администратору.</p>
+            <p className="form-hint" data-testid="no-categories">{t.customer.noCategories}</p>
           )}
           <div className="order-form-actions">
             <button className="button button-quiet" type="button" onClick={() => setIsCreateOpen(false)} data-testid="cancel-create-order">
-              Отмена
+              {t.common.cancel}
             </button>
             <button
               className="button button-quiet"
@@ -1038,7 +1038,7 @@ function CustomerOrdersPage() {
               disabled={isSubmitting || isLoadingCategories || categories.length === 0}
               data-testid="save-draft"
             >
-              {isSubmitting ? "Сохраняем…" : "Сохранить черновик"}
+              {isSubmitting ? t.customer.submittingDraft : t.customer.saveDraft}
             </button>
             <button
               className="button button-primary"
@@ -1047,7 +1047,7 @@ function CustomerOrdersPage() {
               disabled={isSubmitting || isLoadingCategories || categories.length === 0}
               data-testid="submit-create-order"
             >
-              {isSubmitting ? "Создаём…" : "Создать и отправить"}
+              {isSubmitting ? t.customer.submittingCreate : t.customer.createAndSend}
             </button>
           </div>
         </form>
@@ -1065,29 +1065,29 @@ function CustomerOrdersPage() {
       {ordersError ? (
         <div className="api-load-error" role="group" data-testid="orders-load-error">
           <button className="button button-quiet" type="button" onClick={() => void loadOrders()} data-testid="retry-orders">
-            Повторить загрузку
+            {t.common.retryLoad}
           </button>
         </div>
       ) : isLoadingOrders ? (
-        <div className="orders-loading" role="status" data-testid="orders-loading">Загружаем заказы…</div>
+        <div className="orders-loading" role="status" data-testid="orders-loading">{t.customer.loadingOrders}</div>
       ) : orders.length === 0 ? (
         <div className="empty-state orders-empty" data-testid="orders-empty-state">
           <span className="empty-state-icon" aria-hidden="true">✳</span>
-          <h2>Заказов пока нет</h2>
-          <p>Создайте первый заказ — он появится здесь и станет доступен для распределения.</p>
+          <h2>{t.customer.emptyTitle}</h2>
+          <p>{t.customer.emptyText}</p>
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="empty-state orders-empty" data-testid="orders-no-results">
           <span className="empty-state-icon" aria-hidden="true">⌕</span>
-          <h2>Ничего не найдено</h2>
-          <p>Измените поисковый запрос или сбросьте фильтры.</p>
+          <h2>{t.common.nothingFound}</h2>
+          <p>{t.common.changeSearch}</p>
           <button
             className="button button-quiet"
             type="button"
             onClick={resetOrderFilters}
             data-testid="orders-reset-filters"
           >
-            Сбросить фильтры
+            {t.common.resetFilters}
           </button>
         </div>
       ) : (
@@ -1101,7 +1101,7 @@ function CustomerOrdersPage() {
                 <div className="order-list-meta">
                   <span>{order.category.name}</span>
                   <span className={`order-status order-status-${order.status.toLowerCase()}`}>
-                    {orderStatusLabels[order.status] ?? order.status}
+                    {statusLabel(order.status)}
                   </span>
                 </div>
                 <h3>{order.title}</h3>
@@ -1111,23 +1111,23 @@ function CustomerOrdersPage() {
                   to={`/customer/orders/${encodeURIComponent(order.id)}`}
                   data-testid={`open-order-${order.id}`}
                 >
-                  Открыть карточку заказа <span aria-hidden="true">↗</span>
+                  {t.common.openOrder} <span aria-hidden="true">↗</span>
                 </Link>
                 <div className="order-list-footer">
-                  <span>Создан {formatDate(order.createdAt)}</span>
-                  {order.executor && <span>Исполнитель: {order.executor.name}</span>}
-                  {order.dueAt && <span>Срок {formatDate(order.dueAt)}</span>}
+                  <span>{format(t.common.createdOn, { date: formatDate(order.createdAt) })}</span>
+                  {order.executor && <span>{format(t.common.executorName, { name: order.executor.name })}</span>}
+                  {order.dueAt && <span>{format(t.common.dueOn, { date: formatDate(order.dueAt) })}</span>}
                   {order.location && <span>{order.location}</span>}
                 </div>
                 {order.status === "NEW" && (
                   editingOrderId === order.id ? (
                     <form className="order-form draft-edit-form" onSubmit={(event) => void saveDraft(event, order)} data-testid={`edit-order-form-${order.id}`}>
                       <div className="order-form-heading">
-                        <div className="eyebrow">ЧЕРНОВИК</div>
-                        <h2>Редактирование заказа</h2>
+                        <div className="eyebrow">{t.customer.draftEyebrow}</div>
+                        <h2>{t.customer.editTitle}</h2>
                       </div>
                       <label>
-                        Название
+                        {t.customer.titleLabel}
                         <input
                           value={editTitle}
                           onChange={(event) => setEditTitle(event.target.value)}
@@ -1137,7 +1137,7 @@ function CustomerOrdersPage() {
                         />
                       </label>
                       <label>
-                        Описание задачи
+                        {t.customer.descriptionLabel}
                         <textarea
                           value={editDescription}
                           onChange={(event) => setEditDescription(event.target.value)}
@@ -1149,7 +1149,7 @@ function CustomerOrdersPage() {
                       </label>
                       <div className="order-form-grid">
                         <label>
-                          Категория
+                          {t.customer.categoryLabel}
                           <select
                             value={editCategoryId}
                             onChange={(event) => setEditCategoryId(event.target.value)}
@@ -1162,7 +1162,7 @@ function CustomerOrdersPage() {
                           </select>
                         </label>
                         <label>
-                          Желаемый срок
+                          {t.customer.dueLabel}
                           <input
                             type="date"
                             value={editDueAt}
@@ -1172,20 +1172,20 @@ function CustomerOrdersPage() {
                         </label>
                       </div>
                       <label>
-                        Исполнитель <span className="optional-label">необязательно</span>
+                        {t.customer.executorLabel} <span className="optional-label">{t.common.optional}</span>
                         <select
                           value={editExecutorId}
                           onChange={(event) => setEditExecutorId(event.target.value)}
                           data-testid={`edit-executor-${order.id}`}
                         >
-                          <option value="">Не назначать — заказ попадёт в общий пул</option>
+                          <option value="">{t.customer.poolOption}</option>
                           {executors.map((executor) => (
                             <option key={executor.id} value={executor.id}>{executor.name}</option>
                           ))}
                         </select>
                       </label>
                       <label>
-                        Место выполнения <span className="optional-label">необязательно</span>
+                        {t.customer.locationLabel} <span className="optional-label">{t.common.optional}</span>
                         <input
                           value={editLocation}
                           onChange={(event) => setEditLocation(event.target.value)}
@@ -1200,7 +1200,7 @@ function CustomerOrdersPage() {
                           onClick={() => setEditingOrderId("")}
                           data-testid={`cancel-edit-${order.id}`}
                         >
-                          Отмена
+                          {t.common.cancel}
                         </button>
                         <button
                           className="button button-primary"
@@ -1208,7 +1208,7 @@ function CustomerOrdersPage() {
                           disabled={savingDraftId === order.id}
                           data-testid={`save-draft-${order.id}`}
                         >
-                          {savingDraftId === order.id ? "Сохраняем…" : "Сохранить изменения"}
+                          {savingDraftId === order.id ? t.common.saving : t.customer.saveChanges}
                         </button>
                       </div>
                     </form>
@@ -1220,7 +1220,7 @@ function CustomerOrdersPage() {
                         onClick={() => startEditingDraft(order)}
                         data-testid={`edit-order-${order.id}`}
                       >
-                        Редактировать
+                        {t.customer.edit}
                       </button>
                       <button
                         className="button button-primary"
@@ -1230,10 +1230,10 @@ function CustomerOrdersPage() {
                         data-testid={`submit-draft-${order.id}`}
                       >
                         {submittingDraftId === order.id
-                          ? "Отправляем…"
+                          ? t.common.sending
                           : order.executor
-                            ? "Отправить исполнителю"
-                            : "Отправить на распределение"}
+                            ? t.customer.sendToExecutor
+                            : t.customer.sendForDistribution}
                       </button>
                     </div>
                   )
@@ -1241,7 +1241,7 @@ function CustomerOrdersPage() {
                 {pendingEstimate && (
                   <div className="customer-order-actions" data-testid={`estimate-response-${order.id}`}>
                     <p className="form-hint">
-                      Оценка исполнителя: {pendingEstimate.hours} ч · {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(pendingEstimate.amount))}
+                      {format(t.customer.estimateLabel, { hours: pendingEstimate.hours, amount: formatAmount(pendingEstimate.amount) })}
                     </p>
                     <button
                       className="button button-primary"
@@ -1249,11 +1249,11 @@ function CustomerOrdersPage() {
                       onClick={() => void runOrderAction(
                         `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
                         { accepted: true },
-                        "Оценка принята, исполнитель может начинать работу.",
+                        t.toasts.estimateAccepted,
                       )}
                       data-testid={`accept-estimate-${order.id}`}
                     >
-                      Принять оценку
+                      {t.customer.acceptEstimate}
                     </button>
                     <form
                       className="inline-action-form"
@@ -1264,12 +1264,12 @@ function CustomerOrdersPage() {
                         void runOrderAction(
                           `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
                           { accepted: false, comment },
-                          "Оценка отклонена, заказ возвращён в пул.",
+                          t.toasts.estimateRejected,
                         );
                       }}
                     >
                       <label>
-                        Причина отклонения
+                        {t.customer.rejectReason}
                         <input
                           required
                           maxLength={2000}
@@ -1284,7 +1284,7 @@ function CustomerOrdersPage() {
                         disabled={!estimateRejectComments[order.id]?.trim()}
                         data-testid={`reject-estimate-${order.id}`}
                       >
-                        Отклонить
+                        {t.customer.reject}
                       </button>
                     </form>
                   </div>
@@ -1297,11 +1297,11 @@ function CustomerOrdersPage() {
                       onClick={() => void runOrderAction(
                         `/orders/${encodeURIComponent(order.id)}/accept`,
                         {},
-                        "Работа принята. Администратор сможет выставить счёт.",
+                        t.toasts.workAccepted,
                       )}
                       data-testid={`accept-work-${order.id}`}
                     >
-                      Принять работу
+                      {t.customer.acceptWork}
                     </button>
                     <form
                       className="inline-action-form"
@@ -1312,12 +1312,12 @@ function CustomerOrdersPage() {
                         void runOrderAction(
                           `/orders/${encodeURIComponent(order.id)}/request-revision`,
                           { comment },
-                          "Заказ возвращён исполнителю на исправление.",
+                          t.toasts.revisionRequested,
                         );
                       }}
                     >
                       <label>
-                        Что нужно исправить
+                        {t.customer.revisionLabel}
                         <input
                           required
                           maxLength={2000}
@@ -1327,7 +1327,7 @@ function CustomerOrdersPage() {
                         />
                       </label>
                       <button className="button button-quiet" type="submit" data-testid={`request-revision-${order.id}`}>
-                        Запросить исправления
+                        {t.customer.requestRevision}
                       </button>
                     </form>
                   </div>
@@ -1338,13 +1338,17 @@ function CustomerOrdersPage() {
                   return (
                     <div className="invoice-payment" key={invoice.id} data-testid={`invoice-payment-${invoice.id}`}>
                       <p className="form-hint">
-                        Счёт {invoice.number}: {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(invoice.amount))} · {invoice.status === "ISSUED" ? "ожидает оплаты" : invoice.status === "PAID" ? "оплачен" : "аннулирован"}
+                        {format(t.common.invoiceLine, {
+                          number: invoice.number,
+                          amount: formatAmount(invoice.amount),
+                          status: invoiceStatusLabel(invoice.status),
+                        })}
                       </p>
-                      {latestReport?.status === "PENDING" && <p className="form-hint">Чек отправлен администратору, ожидает проверки.</p>}
-                      {latestReport?.status === "CONFIRMED" && <p className="form-hint">Оплата подтверждена администратором.</p>}
+                      {latestReport?.status === "PENDING" && <p className="form-hint">{t.customer.receiptPending}</p>}
+                      {latestReport?.status === "CONFIRMED" && <p className="form-hint">{t.customer.paymentConfirmed}</p>}
                       {latestReport?.status === "REJECTED" && (
                         <p className="payment-rejected-note">
-                          Подтверждение отклонено: {latestReport.reviewComment}. Можно отправить новый чек.
+                          {format(t.customer.paymentRejected, { comment: latestReport.reviewComment ?? "" })}
                         </p>
                       )}
                       {canReportPayment && (
@@ -1353,7 +1357,7 @@ function CustomerOrdersPage() {
                           onSubmit={(event) => void reportInvoicePayment(event, order.id, invoice.id)}
                         >
                           <label>
-                            Я оплатил счёт — приложите чек или квитанцию (не более 1 MB)
+                            {t.customer.paymentLabel}
                             <input
                               type="file"
                               name="file"
@@ -1367,7 +1371,7 @@ function CustomerOrdersPage() {
                             disabled={reportingInvoiceId === invoice.id}
                             data-testid={`report-payment-${invoice.id}`}
                           >
-                            {reportingInvoiceId === invoice.id ? "Отправляем…" : "Сообщить об оплате"}
+                            {reportingInvoiceId === invoice.id ? t.common.sending : t.customer.reportPayment}
                           </button>
                         </form>
                       )}
@@ -1392,24 +1396,20 @@ function CustomerOrdersPage() {
   );
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeZone: "UTC",
-  }).format(new Date(value));
-}
-
 function LoadingPage() {
-  return <main className="loading-page" role="status" data-testid="auth-loading">Загружаем рабочее пространство…</main>;
+  const { t } = useI18n();
+  return <main className="loading-page" role="status" data-testid="auth-loading">{t.loadingPage}</main>;
 }
 
 function NotFoundPage() {
+  const { t } = useI18n();
   return (
     <main className="not-found-page" data-testid="not-found-page">
+      <LanguageSwitcher />
       <span className="brand-mark" aria-hidden="true">д</span>
-      <div className="eyebrow">СТРАНИЦА НЕ НАЙДЕНА</div>
-      <h1>Кажется, здесь пока пусто.</h1>
-      <Link className="button button-primary" to="/" data-testid="not-found-home">На главную</Link>
+      <div className="eyebrow">{t.notFound.eyebrow}</div>
+      <h1>{t.notFound.title}</h1>
+      <Link className="button button-primary" to="/" data-testid="not-found-home">{t.notFound.home}</Link>
     </main>
   );
 }

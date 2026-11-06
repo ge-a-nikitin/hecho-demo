@@ -14,24 +14,6 @@ export class ApiError extends Error {
   }
 }
 
-const errorMessages: Record<string, string> = {
-  BAD_REQUEST: "Проверьте введённые данные и состояние заказа. Возможно, действие уже недоступно.",
-  UNAUTHENTICATED: "Сеанс завершён. Войдите в аккаунт и попробуйте снова.",
-  INVALID_CREDENTIALS: "Текущий пароль указан неверно.",
-  FORBIDDEN: "У вас нет прав на это действие.",
-  NOT_FOUND: "Запись не найдена или уже была изменена. Обновите страницу.",
-  METHOD_NOT_ALLOWED: "Это действие сейчас недоступно.",
-  CONFLICT: "Данные уже изменились или конфликтуют с существующими. Обновите страницу.",
-  PAYLOAD_TOO_LARGE: "Файл слишком большой. Максимальный размер — 1 МБ.",
-  UNSUPPORTED_MEDIA_TYPE: "Формат отправленных данных не поддерживается.",
-  VALIDATION_FAILED: "Некоторые данные заполнены неверно. Проверьте форму.",
-  TOO_MANY_REQUESTS: "Слишком много запросов. Подождите немного и попробуйте снова.",
-  SERVICE_UNAVAILABLE: "Сервис временно недоступен. Попробуйте позже.",
-  INTERNAL_SERVER_ERROR: "Не удалось выполнить запрос из-за ошибки сервера. Попробуйте позже.",
-  REQUEST_FAILED: "Не удалось выполнить запрос. Попробуйте снова.",
-  NETWORK_ERROR: "Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.",
-};
-
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -130,19 +112,4 @@ function getErrorCode(body: unknown, status: number): string {
     case 503: return "SERVICE_UNAVAILABLE";
     default: return status >= 500 ? "INTERNAL_SERVER_ERROR" : "REQUEST_FAILED";
   }
-}
-
-export function getUserFacingError(error: unknown, fallback: string): string {
-  if (error instanceof TypeError) return errorMessages.NETWORK_ERROR;
-
-  if (typeof error === "object" && error !== null) {
-    if ("code" in error && typeof error.code === "string" && error.code in errorMessages) {
-      return errorMessages[error.code];
-    }
-    if ("status" in error && typeof error.status === "number") {
-      return errorMessages[getErrorCode(undefined, error.status)] ?? fallback;
-    }
-  }
-
-  return fallback;
 }

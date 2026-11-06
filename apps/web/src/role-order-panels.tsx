@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { apiRequest, downloadApiFile, getUserFacingError } from "./api";
+import { apiRequest, downloadApiFile } from "./api";
 import {
   OrderListControls,
   OrderPagination,
   emptyOrderFilters,
   filterOrders,
   getOrderCategoryOptions,
-  orderStatusLabels,
   paginateOrders,
   type OrderFilterValues,
 } from "./order-list-controls";
 import { useToast } from "./toast";
+import { useI18n } from "./i18n";
 
 type Category = { id: string; name: string };
 type Executor = {
@@ -58,6 +58,7 @@ type WorkOrder = {
 };
 
 export function ExecutorOrdersPage() {
+  const { t, locale, format, formatAmount, errorMessage, estimateStatusLabel } = useI18n();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -76,7 +77,7 @@ export function ExecutorOrdersPage() {
       setOrders(await apiRequest<WorkOrder[]>("/orders"));
     } catch (error) {
       setLoadError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить заказы."));
+      showToast(errorMessage(error, t.executor.errorLoad));
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +94,7 @@ export function ExecutorOrdersPage() {
       showToast(success, "success");
       await loadOrders();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось выполнить действие."));
+      showToast(errorMessage(error, t.executor.errorAction));
     } finally {
       setBusyOrderId("");
     }
@@ -109,12 +110,12 @@ export function ExecutorOrdersPage() {
         method: "POST",
         body: JSON.stringify({ minutes, ...(comment ? { comment } : {}) }),
       }),
-      "Учёт времени сохранён.",
+      t.toasts.timeSaved,
     );
   }
 
-  const filteredOrders = filterOrders(orders, orderFilters);
-  const orderCategories = getOrderCategoryOptions(orders);
+  const filteredOrders = filterOrders(orders, orderFilters, locale);
+  const orderCategories = getOrderCategoryOptions(orders, locale);
   const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
     filteredOrders,
     ordersPage,
@@ -133,17 +134,17 @@ export function ExecutorOrdersPage() {
   }
 
   return (
-    <section className="customer-orders role-orders" aria-label="Заказы исполнителя" data-testid="executor-orders">
+    <section className="customer-orders role-orders" aria-label={t.executor.aria} data-testid="executor-orders">
       <div className="orders-toolbar">
-        <div><h2>Заказы</h2><p>Свободные задачи и ваша текущая работа</p></div>
+        <div><h2>{t.executor.title}</h2><p>{t.executor.description}</p></div>
         <button className="button button-quiet" type="button" onClick={() => void loadOrders()} disabled={isLoading} data-testid="executor-refresh">
-          Обновить
+          {t.common.refresh}
         </button>
       </div>
       {loadError ? (
         <LoadError retry={() => void loadOrders()} testId="executor-orders-load-error" />
       ) : isLoading ? (
-        <div className="orders-loading" role="status" data-testid="executor-orders-loading">Загружаем заказы…</div>
+        <div className="orders-loading" role="status" data-testid="executor-orders-loading">{t.customer.loadingOrders}</div>
       ) : (
         <>
           {orders.length > 0 && (
@@ -157,23 +158,23 @@ export function ExecutorOrdersPage() {
           {orders.length > 0 && filteredOrders.length === 0 ? (
             <div className="empty-state orders-empty" data-testid="executor-orders-no-results">
               <span className="empty-state-icon" aria-hidden="true">⌕</span>
-              <h2>Ничего не найдено</h2>
-              <p>Измените поисковый запрос или сбросьте фильтры.</p>
+              <h2>{t.common.nothingFound}</h2>
+              <p>{t.common.changeSearch}</p>
               <button
                 className="button button-quiet"
                 type="button"
                 onClick={resetOrderFilters}
                 data-testid="executor-orders-reset-filters"
               >
-                Сбросить фильтры
+                {t.common.resetFilters}
               </button>
             </div>
           ) : (
             <>
               <OrderGroup
-                title="Свободные заказы"
+                title={t.executor.poolTitle}
             orders={poolOrders}
-            emptyText="Сейчас нет свободных заказов."
+            emptyText={t.executor.poolEmpty}
             testId="executor-order-pool"
             panelPath="/executor"
             renderActions={(order) => (
@@ -184,18 +185,18 @@ export function ExecutorOrdersPage() {
                 onClick={() => void runOrderAction(
                   order,
                   () => apiRequest(`/orders/${encodeURIComponent(order.id)}/claim`, { method: "POST" }),
-                  "Заказ назначен вам.",
+                  t.toasts.orderClaimed,
                 )}
                 data-testid={`claim-order-${order.id}`}
               >
-                {busyOrderId === order.id ? "Забираем…" : "Взять заказ"}
+                {busyOrderId === order.id ? t.executor.fetching : t.executor.claimOrder}
               </button>
             )}
           />
           <OrderGroup
-            title="Назначенные заказы"
+            title={t.executor.assignedTitle}
             orders={assignedOrders}
-            emptyText="У вас пока нет назначенных заказов."
+            emptyText={t.executor.assignedEmpty}
             testId="executor-assigned-orders"
             panelPath="/executor"
             renderActions={(order) => {
@@ -215,12 +216,12 @@ export function ExecutorOrdersPage() {
                             method: "POST",
                             body: JSON.stringify({ hours }),
                           }),
-                          "Оценка отправлена заказчику.",
+                          t.toasts.estimateSent,
                         );
                       }}
                     >
                       <label>
-                        Оценка, часов
+                        {t.executor.estimateHours}
                         <input
                           type="number"
                           min="0.0001"
@@ -233,7 +234,7 @@ export function ExecutorOrdersPage() {
                         />
                       </label>
                       <button className="button button-primary" type="submit" disabled={isBusy} data-testid={`submit-estimate-${order.id}`}>
-                        Предложить оценку
+                        {t.executor.proposeEstimate}
                       </button>
                     </form>
                   )}
@@ -248,19 +249,19 @@ export function ExecutorOrdersPage() {
                           method: "POST",
                           body: JSON.stringify({}),
                         }),
-                        "Заказ возвращён в общий пул.",
+                        t.toasts.orderReturnedToPool,
                       )}
                       data-testid={`decline-order-${order.id}`}
                     >
-                      Отказаться от заказа
+                      {t.executor.declineOrder}
                     </button>
                   )}
-                  {hasPendingEstimate && <p className="form-hint">Оценка ожидает ответа заказчика.</p>}
+                  {hasPendingEstimate && <p className="form-hint">{t.executor.estimatePending}</p>}
                   {(order.status === "IN_PROGRESS") && (
                     <>
                       <form className="inline-action-form" onSubmit={(event) => void saveWorkTime(event, order)}>
                         <label>
-                          Время, минут
+                          {t.executor.timeMinutes}
                           <input
                             type="number"
                             min="0"
@@ -273,7 +274,7 @@ export function ExecutorOrdersPage() {
                           />
                         </label>
                         <label>
-                          Комментарий
+                          {t.executor.timeComment}
                           <input
                             type="text"
                             maxLength={2000}
@@ -283,7 +284,7 @@ export function ExecutorOrdersPage() {
                           />
                         </label>
                         <button className="button button-quiet" type="submit" disabled={isBusy} data-testid={`save-work-time-${order.id}`}>
-                          Сохранить время
+                          {t.executor.saveTime}
                         </button>
                       </form>
                       <button
@@ -293,11 +294,11 @@ export function ExecutorOrdersPage() {
                         onClick={() => void runOrderAction(
                           order,
                           () => apiRequest(`/orders/${encodeURIComponent(order.id)}/submit-review`, { method: "POST" }),
-                          "Работа отправлена заказчику на проверку.",
+                          t.toasts.workSubmitted,
                         )}
                         data-testid={`submit-review-${order.id}`}
                       >
-                        Отправить на проверку
+                        {t.executor.submitReview}
                       </button>
                     </>
                   )}
@@ -309,17 +310,20 @@ export function ExecutorOrdersPage() {
                       onClick={() => void runOrderAction(
                         order,
                         () => apiRequest(`/orders/${encodeURIComponent(order.id)}/resume-revisions`, { method: "POST" }),
-                        "Работа над исправлениями начата.",
+                        t.toasts.revisionsStarted,
                       )}
                       data-testid={`resume-revisions-${order.id}`}
                     >
-                      Начать исправления
+                      {t.executor.startRevisions}
                     </button>
                   )}
-                  {order.timeEntry && <p className="form-hint">Учтено: {order.timeEntry.minutes} мин.</p>}
+                  {order.timeEntry && <p className="form-hint">{format(t.executor.timeTracked, { minutes: order.timeEntry.minutes })}</p>}
                   {order.estimates.length > 0 && (
                     <p className="form-hint">
-                      Последняя оценка: {formatAmount(order.estimates[0].amount)} · {estimateStatus(order.estimates[0].status)}
+                      {format(t.executor.lastEstimate, {
+                        amount: formatAmount(order.estimates[0].amount),
+                        status: estimateStatusLabel(order.estimates[0].status),
+                      })}
                     </p>
                   )}
                 </div>
@@ -343,6 +347,7 @@ export function ExecutorOrdersPage() {
 }
 
 export function AdminOrdersPage() {
+  const { t, locale, format, formatAmount, errorMessage } = useI18n();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [executors, setExecutors] = useState<Executor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -367,7 +372,7 @@ export function AdminOrdersPage() {
       setExecutors(nextExecutors);
     } catch (error) {
       setLoadError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить данные панели."));
+      showToast(errorMessage(error, t.adminOrders.errorLoad));
     } finally {
       setIsLoading(false);
     }
@@ -384,14 +389,14 @@ export function AdminOrdersPage() {
       showToast(success, "success");
       await loadData();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось выполнить действие."));
+      showToast(errorMessage(error, t.adminOrders.errorAction));
     } finally {
       setBusyOrderId("");
     }
   }
 
-  const filteredOrders = filterOrders(orders, orderFilters);
-  const orderCategories = getOrderCategoryOptions(orders);
+  const filteredOrders = filterOrders(orders, orderFilters, locale);
+  const orderCategories = getOrderCategoryOptions(orders, locale);
   const { items: visibleOrders, page: currentPage, totalPages } = paginateOrders(
     filteredOrders,
     ordersPage,
@@ -408,11 +413,11 @@ export function AdminOrdersPage() {
   }
 
   return (
-    <section className="customer-orders role-orders" aria-label="Управление заказами" data-testid="admin-orders">
+    <section className="customer-orders role-orders" aria-label={t.adminOrders.aria} data-testid="admin-orders">
       <div className="orders-toolbar">
-        <div><h2>Все заказы</h2><p>Назначайте исполнителей и контролируйте оплату</p></div>
+        <div><h2>{t.adminOrders.title}</h2><p>{t.adminOrders.description}</p></div>
         <button className="button button-quiet" type="button" onClick={() => void loadData()} disabled={isLoading} data-testid="admin-refresh">
-          Обновить
+          {t.common.refresh}
         </button>
       </div>
 
@@ -428,25 +433,25 @@ export function AdminOrdersPage() {
       {loadError ? (
         <LoadError retry={() => void loadData()} testId="admin-orders-load-error" />
       ) : isLoading ? (
-        <div className="orders-loading" role="status" data-testid="admin-orders-loading">Загружаем данные…</div>
+        <div className="orders-loading" role="status" data-testid="admin-orders-loading">{t.adminOrders.loading}</div>
       ) : orders.length === 0 ? (
         <div className="empty-state orders-empty" data-testid="admin-orders-empty">
           <span className="empty-state-icon" aria-hidden="true">✳</span>
-          <h2>Заказов пока нет</h2>
-          <p>Новые заказы появятся здесь после отправки заказчиком.</p>
+          <h2>{t.adminOrders.emptyTitle}</h2>
+          <p>{t.adminOrders.emptyText}</p>
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="empty-state orders-empty" data-testid="admin-orders-no-results">
           <span className="empty-state-icon" aria-hidden="true">⌕</span>
-          <h2>Ничего не найдено</h2>
-          <p>Измените поисковый запрос или сбросьте фильтры.</p>
+          <h2>{t.common.nothingFound}</h2>
+          <p>{t.common.changeSearch}</p>
           <button
             className="button button-quiet"
             type="button"
             onClick={resetOrderFilters}
             data-testid="admin-orders-reset-filters"
           >
-            Сбросить фильтры
+            {t.common.resetFilters}
           </button>
         </div>
       ) : (
@@ -482,12 +487,12 @@ export function AdminOrdersPage() {
                               method: "POST",
                               body: JSON.stringify({ executorId }),
                             }),
-                            "Исполнитель назначен.",
+                            t.toasts.executorAssigned,
                           );
                         }}
                       >
                         <label>
-                          {order.executor ? `Назначен: ${order.executor.name}` : "Назначить исполнителя"}
+                          {order.executor ? format(t.adminOrders.assignedTo, { name: order.executor.name }) : t.adminOrders.assignLabel}
                           <select
                             value={selectedExecutors[order.id] ?? ""}
                             required
@@ -495,16 +500,16 @@ export function AdminOrdersPage() {
                             onChange={(event) => setSelectedExecutors((values) => ({ ...values, [order.id]: event.target.value }))}
                             data-testid={`assign-executor-${order.id}`}
                           >
-                            <option value="" disabled>Выберите исполнителя</option>
+                            <option value="" disabled>{t.adminOrders.chooseExecutor}</option>
                             {executors.map((executor) => (
                               <option key={executor.id} value={executor.id} disabled={executor.id === order.executor?.id}>
-                                {executor.name} · {formatAmount(executor.hourlyRate ?? 0)}/ч
+                                {executor.name} · {formatAmount(executor.hourlyRate ?? 0)}{t.common.perHourShort}
                               </option>
                             ))}
                           </select>
                         </label>
                         <button className="button button-quiet" type="submit" disabled={isBusy || executors.length === 0} data-testid={`submit-assignment-${order.id}`}>
-                          {order.executor ? "Переназначить" : "Назначить"}
+                          {order.executor ? t.adminOrders.reassign : t.adminOrders.assign}
                         </button>
                       </form>
                     )}
@@ -516,11 +521,11 @@ export function AdminOrdersPage() {
                         onClick={() => void runOrderAction(
                           order,
                           () => apiRequest(`/orders/${encodeURIComponent(order.id)}/invoices`, { method: "POST" }),
-                          "Счёт выставлен.",
+                          t.toasts.invoiceIssued,
                         )}
                         data-testid={`issue-invoice-${order.id}`}
                       >
-                        Выставить счёт
+                        {t.adminOrders.issueInvoice}
                       </button>
                     )}
                     {order.invoices.length > 0 && (
@@ -533,10 +538,10 @@ export function AdminOrdersPage() {
                               onClick={() => void downloadApiFile(
                                 `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/pdf`,
                                 `${invoice.number}.pdf`,
-                              ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать PDF счёта.")))}
+                              ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadInvoiceFailed)))}
                               data-testid={`download-invoice-pdf-${invoice.id}`}
                             >
-                              PDF счёта {invoice.number}
+                              {format(t.adminOrders.downloadInvoicePdf, { number: invoice.number })}
                             </button>
                             {invoice.status === "ISSUED" && !pendingPaymentReport && (
                               <form
@@ -551,12 +556,12 @@ export function AdminOrdersPage() {
                                       `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/void`,
                                       { method: "POST", body: JSON.stringify({ reason }) },
                                     ),
-                                    "Счёт аннулирован. Можно выставить новый.",
+                                    t.toasts.invoiceVoided,
                                   );
                                 }}
                               >
                                 <label>
-                                  Причина аннулирования счёта {invoice.number}
+                                  {format(t.adminOrders.voidReason, { number: invoice.number })}
                                   <input
                                     required
                                     maxLength={2000}
@@ -571,7 +576,7 @@ export function AdminOrdersPage() {
                                   disabled={isBusy || !voidReasons[invoice.id]?.trim()}
                                   data-testid={`void-invoice-${invoice.id}`}
                                 >
-                                  Аннулировать счёт
+                                  {t.adminOrders.voidInvoice}
                                 </button>
                               </form>
                             )}
@@ -581,7 +586,7 @@ export function AdminOrdersPage() {
                     )}
                     {order.status === "INVOICE_PAID" && (
                       <div className="payment-review" data-testid={`complete-order-section-${order.id}`}>
-                        <p className="form-hint">Оплата подтверждена. Завершите заказ после проверки поступления денег.</p>
+                        <p className="form-hint">{t.adminOrders.paymentConfirmedHint}</p>
                         <button
                           className="button button-primary"
                           type="button"
@@ -589,11 +594,11 @@ export function AdminOrdersPage() {
                           onClick={() => void runOrderAction(
                             order,
                             () => apiRequest(`/orders/${encodeURIComponent(order.id)}/complete`, { method: "POST" }),
-                            "Заказ завершён.",
+                            t.toasts.orderCompleted,
                           )}
                           data-testid={`complete-order-${order.id}`}
                         >
-                          Завершить заказ
+                          {t.adminOrders.completeOrder}
                         </button>
                       </div>
                     )}
@@ -601,17 +606,17 @@ export function AdminOrdersPage() {
                       <div className="payment-review" data-testid={`payment-review-${order.id}`}>
                         {pendingPaymentReport ? (
                           <>
-                            <p className="form-hint">Заказчик сообщил об оплате. Проверьте поступление денег и чек.</p>
+                            <p className="form-hint">{t.adminOrders.customerReported}</p>
                             <button
                               className="text-link"
                               type="button"
                               onClick={() => void downloadApiFile(
                                 `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(issuedInvoice.id)}/payment-reports/${encodeURIComponent(pendingPaymentReport.id)}/file`,
                                 pendingPaymentReport.filename,
-                              ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать чек.")))}
+                              ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadReceiptFailed)))}
                               data-testid={`download-payment-receipt-${order.id}`}
                             >
-                              Скачать чек: {pendingPaymentReport.filename}
+                              {format(t.common.downloadReceipt, { filename: pendingPaymentReport.filename })}
                             </button>
                             <button
                               className="button button-primary"
@@ -623,11 +628,11 @@ export function AdminOrdersPage() {
                                   `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(issuedInvoice.id)}/payment-reports/${encodeURIComponent(pendingPaymentReport.id)}/confirm`,
                                   { method: "POST" },
                                 ),
-                                "Оплата подтверждена. Заказ перешёл в статус «Счёт оплачен».",
+                                t.toasts.paymentConfirmed,
                               )}
                               data-testid={`confirm-payment-${order.id}`}
                             >
-                              Подтвердить оплату
+                              {t.adminOrders.confirmPayment}
                             </button>
                             <form
                               className="inline-action-form"
@@ -641,12 +646,12 @@ export function AdminOrdersPage() {
                                     `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(issuedInvoice.id)}/payment-reports/${encodeURIComponent(pendingPaymentReport.id)}/reject`,
                                     { method: "POST", body: JSON.stringify({ reason }) },
                                   ),
-                                  "Подтверждение оплаты отклонено. Заказчик сможет отправить чек повторно.",
+                                  t.toasts.paymentRejected,
                                 );
                               }}
                             >
                               <label>
-                                Причина отклонения чека
+                                {t.adminOrders.rejectReason}
                                 <input
                                   required
                                   maxLength={2000}
@@ -656,7 +661,7 @@ export function AdminOrdersPage() {
                                 />
                               </label>
                               <button className="button button-quiet" type="submit" disabled={isBusy} data-testid={`reject-payment-${order.id}`}>
-                                Отклонить чек
+                                {t.adminOrders.rejectReceipt}
                               </button>
                             </form>
                           </>
@@ -668,15 +673,15 @@ export function AdminOrdersPage() {
                               onClick={() => void downloadApiFile(
                                 `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(issuedInvoice.id)}/payment-reports/${encodeURIComponent(latestPaymentReport.id)}/file`,
                                 latestPaymentReport.filename,
-                              ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать чек.")))}
+                              ).catch((error: unknown) => showToast(errorMessage(error, t.toasts.downloadReceiptFailed)))}
                               data-testid={`download-rejected-payment-receipt-${order.id}`}
                             >
-                              Чек: {latestPaymentReport.filename}
+                              {format(t.common.receipt, { filename: latestPaymentReport.filename })}
                             </button>
-                            <p className="form-hint">Последний чек отклонён: {latestPaymentReport.reviewComment}</p>
+                            <p className="form-hint">{format(t.adminOrders.latestRejected, { comment: latestPaymentReport.reviewComment ?? "" })}</p>
                           </>
                         ) : (
-                          <p className="form-hint">Ожидается оплата заказчиком и чек.</p>
+                          <p className="form-hint">{t.adminOrders.awaitingPayment}</p>
                         )}
                       </div>
                     )}
@@ -736,30 +741,35 @@ function OrderCard({
   panelPath: string;
   testId?: string;
 }) {
+  const { t, format, formatDate, formatAmount, statusLabel, invoiceStatusLabel } = useI18n();
   const pendingEstimate = order.estimates.find((estimate) => estimate.status === "PENDING");
   return (
     <article className="order-list-card role-order-card" data-testid={testId}>
       <div className="order-list-main">
         <div className="order-list-meta">
           <span>{order.category.name}</span>
-          <span className={`order-status order-status-${order.status.toLowerCase()}`}>{orderStatusLabels[order.status] ?? order.status}</span>
+          <span className={`order-status order-status-${order.status.toLowerCase()}`}>{statusLabel(order.status)}</span>
         </div>
         <h3>{order.title}</h3>
         <p>{order.description}</p>
         <div className="order-list-footer">
-          <span>Заказчик: {order.customer.name}</span>
-          {order.executor && <span>Исполнитель: {order.executor.name}</span>}
-          <span>Создан {formatDate(order.createdAt)}</span>
-          {order.dueAt && <span>Срок {formatDate(order.dueAt)}</span>}
+          <span>{format(t.common.customerName, { name: order.customer.name })}</span>
+          {order.executor && <span>{format(t.common.executorName, { name: order.executor.name })}</span>}
+          <span>{format(t.common.createdOn, { date: formatDate(order.createdAt) })}</span>
+          {order.dueAt && <span>{format(t.common.dueOn, { date: formatDate(order.dueAt) })}</span>}
           {order.location && <span>{order.location}</span>}
         </div>
         <Link className="order-detail-link" to={`${panelPath}/orders/${encodeURIComponent(order.id)}`} data-testid={`open-order-${order.id}`}>
-          Открыть карточку заказа <span aria-hidden="true">↗</span>
+          {t.common.openOrder} <span aria-hidden="true">↗</span>
         </Link>
-        {pendingEstimate && <p className="form-hint">Оценка ожидает ответа: {formatAmount(pendingEstimate.amount)}</p>}
+        {pendingEstimate && <p className="form-hint">{format(t.adminOrders.pendingEstimate, { amount: formatAmount(pendingEstimate.amount) })}</p>}
         {order.invoices.map((invoice) => (
           <p className="form-hint" key={invoice.id}>
-            Счёт {invoice.number}: {formatAmount(invoice.amount)} · {invoiceStatus(invoice.status)}
+            {format(t.common.invoiceLine, {
+              number: invoice.number,
+              amount: formatAmount(invoice.amount),
+              status: invoiceStatusLabel(invoice.status),
+            })}
           </p>
         ))}
       </div>
@@ -769,32 +779,10 @@ function OrderCard({
 }
 
 function LoadError({ retry, testId }: { retry: () => void; testId: string }) {
+  const { t } = useI18n();
   return (
     <div className="api-load-error" role="group" data-testid={testId}>
-      <button className="button button-quiet" type="button" onClick={retry}>Повторить загрузку</button>
+      <button className="button button-quiet" type="button" onClick={retry}>{t.common.retryLoad}</button>
     </div>
   );
-}
-
-function formatAmount(value: number | string): string {
-  const amount = Number(value);
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(amount);
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
-}
-
-function estimateStatus(status: string): string {
-  if (status === "PENDING") return "ожидает ответа";
-  if (status === "ACCEPTED") return "принята";
-  if (status === "REJECTED") return "отклонена";
-  return status;
-}
-
-function invoiceStatus(status: string): string {
-  if (status === "ISSUED") return "выставлен";
-  if (status === "PAID") return "оплачен";
-  if (status === "VOID") return "аннулирован";
-  return status;
 }

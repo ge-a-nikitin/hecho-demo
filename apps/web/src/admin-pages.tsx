@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ApiError, apiRequest, getUserFacingError } from "./api";
+import { ApiError, apiRequest } from "./api";
 import { useToast } from "./toast";
+import { useI18n } from "./i18n";
 
 type AdminCategory = {
   id: string;
@@ -20,6 +21,7 @@ export function AdminCategoriesPage() {
   const [editingName, setEditingName] = useState("");
   const [busyId, setBusyId] = useState("");
   const { showToast } = useToast();
+  const { t, format, plural, formatDate, errorMessage } = useI18n();
 
   const loadCategories = useCallback(async () => {
     setIsLoading(true);
@@ -30,7 +32,7 @@ export function AdminCategoriesPage() {
       ));
     } catch (error) {
       setLoadError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить категории."));
+      showToast(errorMessage(error, t.toasts.loadCategoriesFailed));
     } finally {
       setIsLoading(false);
     }
@@ -51,10 +53,10 @@ export function AdminCategoriesPage() {
         body: JSON.stringify({ name }),
       });
       setNewName("");
-      showToast("Категория создана.", "success");
+      showToast(t.toasts.categoryCreated, "success");
       await loadCategories();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось создать категорию."));
+      showToast(errorMessage(error, t.toasts.createCategoryFailed));
     } finally {
       setIsCreating(false);
     }
@@ -71,10 +73,10 @@ export function AdminCategoriesPage() {
       });
       setEditingId("");
       setEditingName("");
-      showToast("Категория переименована.", "success");
+      showToast(t.toasts.categoryRenamed, "success");
       await loadCategories();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось переименовать категорию."));
+      showToast(errorMessage(error, t.toasts.renameCategoryFailed));
     } finally {
       setBusyId("");
     }
@@ -88,23 +90,23 @@ export function AdminCategoriesPage() {
         { method: "PATCH" },
       );
       showToast(
-        category.isActive ? "Категория деактивирована." : "Категория снова доступна.",
+        category.isActive ? t.toasts.categoryDeactivated : t.toasts.categoryActivated,
         "success",
       );
       await loadCategories();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось изменить доступность категории."));
+      showToast(errorMessage(error, t.toasts.toggleCategoryFailed));
     } finally {
       setBusyId("");
     }
   }
 
   return (
-    <section className="admin-section" aria-label="Управление категориями" data-testid="admin-categories">
+    <section className="admin-section" aria-label={t.adminCategories.aria} data-testid="admin-categories">
       <div className="orders-toolbar">
         <div>
-          <h2>Категории работ</h2>
-          <p>Заказчики выбирают категорию при создании заказа</p>
+          <h2>{t.adminCategories.title}</h2>
+          <p>{t.adminCategories.description}</p>
         </div>
         <button
           className="button button-quiet"
@@ -113,19 +115,19 @@ export function AdminCategoriesPage() {
           disabled={isLoading}
           data-testid="refresh-categories"
         >
-          Обновить
+          {t.common.refresh}
         </button>
       </div>
 
       <form className="order-form compact-form" onSubmit={createCategory} data-testid="create-category-form">
         <div className="order-form-heading">
-          <div className="eyebrow">НОВАЯ КАТЕГОРИЯ</div>
-          <h2>Добавить направление работ</h2>
-          <p>Название сразу станет доступно заказчикам.</p>
+          <div className="eyebrow">{t.adminCategories.formEyebrow}</div>
+          <h2>{t.adminCategories.formTitle}</h2>
+          <p>{t.adminCategories.formText}</p>
         </div>
         <div className="inline-create-row">
           <label>
-            Название
+            {t.adminCategories.name}
             <input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
@@ -140,7 +142,7 @@ export function AdminCategoriesPage() {
             disabled={isCreating || !newName.trim()}
             data-testid="create-category"
           >
-            {isCreating ? "Создаём…" : "Создать категорию"}
+            {isCreating ? t.adminCategories.creating : t.adminCategories.create}
           </button>
         </div>
       </form>
@@ -153,27 +155,27 @@ export function AdminCategoriesPage() {
             onChange={(event) => setIncludeInactive(event.target.checked)}
             data-testid="category-show-inactive"
           />
-          Показывать неактивные
+          {t.adminCategories.showInactive}
         </label>
-        <span>{categories.length} шт.</span>
+        <span>{plural(categories.length, t.adminCategories.count)}</span>
       </div>
 
       {loadError ? (
         <div className="api-load-error" role="group" data-testid="categories-load-error">
-          <span>Не удалось загрузить категории.</span>
+          <span>{t.adminCategories.loadError}</span>
           <button className="button button-quiet" type="button" onClick={() => void loadCategories()}>
-            Повторить загрузку
+            {t.common.retryLoad}
           </button>
         </div>
       ) : isLoading ? (
         <div className="orders-loading" role="status" data-testid="categories-loading">
-          Загружаем категории…
+          {t.adminCategories.loading}
         </div>
       ) : categories.length === 0 ? (
         <div className="empty-state compact-empty" data-testid="categories-empty">
           <span className="empty-state-icon" aria-hidden="true">✳</span>
-          <h2>Категорий пока нет</h2>
-          <p>Создайте первую категорию, чтобы заказчики могли оформлять заказы.</p>
+          <h2>{t.adminCategories.emptyTitle}</h2>
+          <p>{t.adminCategories.emptyText}</p>
         </div>
       ) : (
         <div className="admin-list" data-testid="categories-list">
@@ -201,12 +203,12 @@ export function AdminCategoriesPage() {
                       <b>{category.name}</b>
                       {!category.isActive && (
                         <span className="admin-status-badge" data-testid={`category-inactive-${category.id}`}>
-                          Неактивна
+                          {t.adminCategories.inactive}
                         </span>
                       )}
                     </div>
                   )}
-                  <small>Создана {formatDate(category.createdAt)}</small>
+                  <small>{format(t.adminCategories.createdOn, { date: formatDate(category.createdAt) })}</small>
                 </div>
                 <div className="admin-list-actions">
                   {isEditing ? (
@@ -218,7 +220,7 @@ export function AdminCategoriesPage() {
                         disabled={isBusy || !editingName.trim()}
                         data-testid={`save-category-${category.id}`}
                       >
-                        Сохранить
+                        {t.adminCategories.save}
                       </button>
                       <button
                         className="button button-quiet"
@@ -230,7 +232,7 @@ export function AdminCategoriesPage() {
                         disabled={isBusy}
                         data-testid={`cancel-category-rename-${category.id}`}
                       >
-                        Отмена
+                        {t.adminCategories.cancel}
                       </button>
                     </>
                   ) : (
@@ -244,7 +246,7 @@ export function AdminCategoriesPage() {
                         }}
                         data-testid={`rename-category-${category.id}`}
                       >
-                        Переименовать
+                        {t.adminCategories.rename}
                       </button>
                       <button
                         className="button button-quiet"
@@ -253,7 +255,7 @@ export function AdminCategoriesPage() {
                         disabled={isBusy}
                         data-testid={`category-active-toggle-${category.id}`}
                       >
-                        {category.isActive ? "Деактивировать" : "Активировать"}
+                        {category.isActive ? t.adminCategories.deactivate : t.adminCategories.activate}
                       </button>
                     </>
                   )}
@@ -293,6 +295,7 @@ export function AdminUsersPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [busyId, setBusyId] = useState("");
   const { showToast } = useToast();
+  const { t, format, plural, formatDate, formatAmount, errorMessage } = useI18n();
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -307,7 +310,7 @@ export function AdminUsersPage() {
       setCustomers(nextCustomers);
     } catch (error) {
       setLoadError(true);
-      showToast(getUserFacingError(error, "Не удалось загрузить пользователей."));
+      showToast(errorMessage(error, t.toasts.loadUsersFailed));
     } finally {
       setIsLoading(false);
     }
@@ -333,10 +336,10 @@ export function AdminUsersPage() {
       setNewEmail("");
       setNewPassword("");
       setIsCreateOpen(false);
-      showToast("Учётная запись исполнителя создана.", "success");
+      showToast(t.toasts.executorCreated, "success");
       await loadUsers();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось создать исполнителя."));
+      showToast(errorMessage(error, t.toasts.createExecutorFailed));
     } finally {
       setIsCreating(false);
     }
@@ -353,10 +356,10 @@ export function AdminUsersPage() {
       });
       setEditingId("");
       setEditingName("");
-      showToast("Имя исполнителя обновлено.", "success");
+      showToast(t.toasts.executorNameUpdated, "success");
       await loadUsers();
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось обновить имя исполнителя."));
+      showToast(errorMessage(error, t.toasts.updateExecutorNameFailed));
     } finally {
       setBusyId("");
     }
@@ -372,9 +375,9 @@ export function AdminUsersPage() {
       });
       setResettingId("");
       setResetPassword("");
-      showToast("Пароль изменён, активные сеансы пользователя завершены.", "success");
+      showToast(t.toasts.passwordReset, "success");
     } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось сбросить пароль."));
+      showToast(errorMessage(error, t.toasts.resetPasswordFailed));
     } finally {
       setBusyId("");
     }
@@ -388,15 +391,15 @@ export function AdminUsersPage() {
         { method: "PATCH" },
       );
       showToast(
-        user.isActive ? "Учётная запись деактивирована." : "Учётная запись активирована.",
+        user.isActive ? t.toasts.userDeactivated : t.toasts.userActivated,
         "success",
       );
       await loadUsers();
     } catch (error) {
       showToast(
         kind === "executor" && user.isActive && error instanceof ApiError && error.status === 409
-          ? "Не удалось деактивировать исполнителя: сначала переназначьте его незавершённые заказы."
-          : getUserFacingError(error, "Не удалось изменить статус учётной записи."),
+          ? t.toasts.executorHasActiveOrders
+          : errorMessage(error, t.toasts.changeUserStatusFailed),
       );
     } finally {
       setBusyId("");
@@ -428,7 +431,7 @@ export function AdminUsersPage() {
               <b>{user.name}</b>
               {!user.isActive && (
                 <span className="admin-status-badge" data-testid={`user-inactive-${user.id}`}>
-                  Неактивен
+                  {t.adminUsers.inactive}
                 </span>
               )}
             </div>
@@ -437,11 +440,11 @@ export function AdminUsersPage() {
           {kind === "executor" && (
             <small>
               {user.hourlyRate === null || user.hourlyRate === undefined
-                ? "Ставка не задана"
-                : `${formatAmount(user.hourlyRate)} / ч`}
+                ? t.adminUsers.rateNotSet
+                : format(t.adminUsers.rate, { amount: formatAmount(user.hourlyRate) })}
             </small>
           )}
-          <small>Создан {formatDate(user.createdAt)}</small>
+          <small>{format(t.adminUsers.createdOn, { date: formatDate(user.createdAt) })}</small>
         </div>
         <div className="admin-list-actions">
           {isEditing ? (
@@ -453,7 +456,7 @@ export function AdminUsersPage() {
                 disabled={isBusy || !editingName.trim()}
                 data-testid={`save-executor-name-${user.id}`}
               >
-                Сохранить
+                {t.adminUsers.save}
               </button>
               <button
                 className="button button-quiet"
@@ -465,7 +468,7 @@ export function AdminUsersPage() {
                 disabled={isBusy}
                 data-testid={`cancel-executor-name-${user.id}`}
               >
-                Отмена
+                {t.adminUsers.cancel}
               </button>
             </>
           ) : isResetting ? (
@@ -477,7 +480,7 @@ export function AdminUsersPage() {
                 onChange={(event) => setResetPassword(event.target.value)}
                 minLength={8}
                 maxLength={128}
-                placeholder="Новый пароль"
+                placeholder={t.adminUsers.newPassword}
                 autoFocus
                 data-testid={`new-password-${user.id}`}
               />
@@ -488,7 +491,7 @@ export function AdminUsersPage() {
                 disabled={isBusy || resetPassword.length < 8}
                 data-testid={`save-user-password-${user.id}`}
               >
-                Сохранить
+                {t.adminUsers.save}
               </button>
               <button
                 className="button button-quiet"
@@ -500,7 +503,7 @@ export function AdminUsersPage() {
                 disabled={isBusy}
                 data-testid={`cancel-user-password-${user.id}`}
               >
-                Отмена
+                {t.adminUsers.cancel}
               </button>
             </>
           ) : (
@@ -517,7 +520,7 @@ export function AdminUsersPage() {
                   }}
                   data-testid={`edit-executor-name-${user.id}`}
                 >
-                  Изменить имя
+                  {t.adminUsers.editName}
                 </button>
               )}
               <button
@@ -532,7 +535,7 @@ export function AdminUsersPage() {
                 }}
                 data-testid={`reset-user-password-${user.id}`}
               >
-                Сбросить пароль
+                {t.adminUsers.resetPassword}
               </button>
               <button
                 className="button button-quiet"
@@ -541,7 +544,7 @@ export function AdminUsersPage() {
                 disabled={isBusy}
                 data-testid={`toggle-user-active-${user.id}`}
               >
-                {user.isActive ? "Деактивировать" : "Активировать"}
+                {user.isActive ? t.adminUsers.deactivate : t.adminUsers.activate}
               </button>
             </>
           )}
@@ -551,18 +554,18 @@ export function AdminUsersPage() {
   }
 
   return (
-    <section className="admin-section" aria-label="Управление пользователями" data-testid="admin-users">
+    <section className="admin-section" aria-label={t.adminUsers.aria} data-testid="admin-users">
       <div className="orders-toolbar">
         <div>
-          <h2>Пользователи</h2>
-          <p>Исполнители и заказчики, доступ к аккаунтам и пароли</p>
+          <h2>{t.adminUsers.title}</h2>
+          <p>{t.adminUsers.description}</p>
         </div>
         <div className="role-toolbar-actions">
           <button className="button button-quiet" type="button" onClick={() => void loadUsers()} disabled={isLoading} data-testid="refresh-users">
-            Обновить
+            {t.common.refresh}
           </button>
           <button className="button button-primary" type="button" onClick={() => setIsCreateOpen((open) => !open)} data-testid="create-user-executor">
-            {isCreateOpen ? "Закрыть" : "+ Исполнитель"}
+            {isCreateOpen ? t.adminUsers.close : t.adminUsers.addExecutor}
           </button>
         </div>
       </div>
@@ -570,24 +573,24 @@ export function AdminUsersPage() {
       {isCreateOpen && (
         <form className="order-form" onSubmit={createExecutor} data-testid="create-user-executor-form">
           <div className="order-form-heading">
-            <div className="eyebrow">КОМАНДА</div>
-            <h2>Новый исполнитель</h2>
-            <p>Учётная запись создаётся с ролью исполнителя. Ставку исполнитель задаёт сам в профиле.</p>
+            <div className="eyebrow">{t.adminUsers.formEyebrow}</div>
+            <h2>{t.adminUsers.formTitle}</h2>
+            <p>{t.adminUsers.formText}</p>
           </div>
           <div className="order-form-grid">
-            <label>Имя
+            <label>{t.adminUsers.name}
               <input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={120} required data-testid="new-executor-name" />
             </label>
-            <label>Электронная почта
+            <label>{t.adminUsers.email}
               <input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} maxLength={254} required data-testid="new-executor-email" />
             </label>
-            <label>Начальный пароль
+            <label>{t.adminUsers.initialPassword}
               <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} maxLength={128} required data-testid="new-executor-password" />
             </label>
           </div>
           <div className="order-form-actions">
             <button className="button button-primary" type="submit" disabled={isCreating} data-testid="submit-new-executor">
-              {isCreating ? "Создаём…" : "Создать исполнителя"}
+              {isCreating ? t.adminUsers.creating : t.adminUsers.create}
             </button>
           </div>
         </form>
@@ -601,36 +604,36 @@ export function AdminUsersPage() {
             onChange={(event) => setIncludeInactive(event.target.checked)}
             data-testid="users-show-inactive"
           />
-          Показывать неактивных
+          {t.adminUsers.showInactive}
         </label>
-        <span>{executors.length + customers.length} чел.</span>
+        <span>{plural(executors.length + customers.length, t.adminUsers.count)}</span>
       </div>
 
       {loadError ? (
         <div className="api-load-error" role="group" data-testid="users-load-error">
-          <span>Не удалось загрузить пользователей.</span>
+          <span>{t.adminUsers.loadError}</span>
           <button className="button button-quiet" type="button" onClick={() => void loadUsers()}>
-            Повторить загрузку
+            {t.common.retryLoad}
           </button>
         </div>
       ) : isLoading ? (
         <div className="orders-loading" role="status" data-testid="users-loading">
-          Загружаем пользователей…
+          {t.adminUsers.loading}
         </div>
       ) : (
         <>
-          <section className="order-group" aria-label="Исполнители" data-testid="executors-list">
-            <h3>Исполнители <span>({executors.length})</span></h3>
+          <section className="order-group" aria-label={t.adminUsers.executors} data-testid="executors-list">
+            <h3>{t.adminUsers.executors} <span>({executors.length})</span></h3>
             {executors.length === 0 ? (
-              <p className="order-group-empty">Исполнителей пока нет.</p>
+              <p className="order-group-empty">{t.adminUsers.noExecutors}</p>
             ) : (
               <div className="admin-list">{executors.map((user) => renderUserRow(user, "executor"))}</div>
             )}
           </section>
-          <section className="order-group" aria-label="Заказчики" data-testid="customers-list">
-            <h3>Заказчики <span>({customers.length})</span></h3>
+          <section className="order-group" aria-label={t.adminUsers.customers} data-testid="customers-list">
+            <h3>{t.adminUsers.customers} <span>({customers.length})</span></h3>
             {customers.length === 0 ? (
-              <p className="order-group-empty">Заказчиков пока нет.</p>
+              <p className="order-group-empty">{t.adminUsers.noCustomers}</p>
             ) : (
               <div className="admin-list">{customers.map((user) => renderUserRow(user, "customer"))}</div>
             )}
@@ -639,15 +642,4 @@ export function AdminUsersPage() {
       )}
     </section>
   );
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeZone: "UTC",
-  }).format(new Date(value));
-}
-
-function formatAmount(value: number | string): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(value));
 }
