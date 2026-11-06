@@ -1,6 +1,6 @@
 export const en = {
   meta: {
-    title: "Delo — work order board",
+    title: "HECHO — work order board",
     description:
       "Create orders, find executors, and keep the whole process under control — from the first description to the finished result.",
   },
@@ -105,7 +105,7 @@ export const en = {
     NETWORK_ERROR: "Could not reach the server. Check your connection and try again.",
   },
   landing: {
-    brandAria: "Delo — go to home page",
+    brandAria: "HECHO — go to home page",
     navAria: "Main navigation",
     howItWorks: "How it works",
     forWhom: "Who it's for",
@@ -165,7 +165,7 @@ export const en = {
     footerLogin: "Sign in to your workspace",
   },
   auth: {
-    brandAria: "Delo — go to home page",
+    brandAria: "HECHO — go to home page",
     back: "Back to home",
     registerEyebrow: "GET STARTED",
     loginEyebrow: "WELCOME BACK",
@@ -183,7 +183,7 @@ export const en = {
     noAccount: "No account yet?",
     signIn: "Sign in",
     signUp: "Create an account",
-    footer: "Delo — work starts with clarity.",
+    footer: "HECHO — work starts with clarity.",
     errorRegister:
       "Could not create the account. Check your details: this address may already be registered.",
     errorLogin: "Could not sign in. Check your email and password.",

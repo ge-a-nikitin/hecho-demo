@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const es: Messages = {
   meta: {
-    title: "Delo — tablero de pedidos",
+    title: "HECHO — tablero de pedidos",
     description:
       "Crea pedidos, encuentra ejecutores y mantén todo el proceso bajo control, desde la primera descripción hasta el resultado final.",
   },
@@ -107,7 +107,7 @@ export const es: Messages = {
     NETWORK_ERROR: "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
   },
   landing: {
-    brandAria: "Delo — ir al inicio",
+    brandAria: "HECHO — ir al inicio",
     navAria: "Navegación principal",
     howItWorks: "Cómo funciona",
     forWhom: "Para quién",
@@ -167,7 +167,7 @@ export const es: Messages = {
     footerLogin: "Iniciar sesión en el escritorio",
   },
   auth: {
-    brandAria: "Delo — ir al inicio",
+    brandAria: "HECHO — ir al inicio",
     back: "Volver al inicio",
     registerEyebrow: "EMPIEZA AHORA",
     loginEyebrow: "BIENVENIDO DE NUEVO",
@@ -185,7 +185,7 @@ export const es: Messages = {
     noAccount: "¿Aún no tienes cuenta?",
     signIn: "Iniciar sesión",
     signUp: "Crear una cuenta",
-    footer: "Delo: el trabajo empieza con claridad.",
+    footer: "HECHO: el trabajo empieza con claridad.",
     errorRegister:
       "No se pudo crear la cuenta. Revisa los datos: es posible que esta dirección ya esté registrada.",
     errorLogin: "No se pudo iniciar sesión. Revisa el correo y la contraseña.",

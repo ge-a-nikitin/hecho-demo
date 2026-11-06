@@ -102,8 +102,8 @@ function LandingPage() {
     <main className="landing" data-testid="landing-page">
       <header className="topbar wrap">
         <Link className="brand" to="/" aria-label={t.landing.brandAria} data-testid="brand-home">
-          <span className="brand-mark" aria-hidden="true">д</span>
-          <span>дело<span className="brand-period">.</span></span>
+          <span className="brand-mark" aria-hidden="true">H</span>
+          <span>HECHO<span className="brand-period">.</span></span>
         </Link>
         <LanguageSwitcher />
         <nav className="topnav" aria-label={t.landing.navAria}>
@@ -197,7 +197,7 @@ function LandingPage() {
 
       <footer className="footer">
         <div className="wrap footer-inner">
-          <Link className="brand" to="/" data-testid="footer-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
+          <Link className="brand" to="/" data-testid="footer-brand"><span className="brand-mark" aria-hidden="true">H</span><span>HECHO<span className="brand-period">.</span></span></Link>
           <span>{t.landing.footerTagline}</span>
           <Link to="/login" data-testid="footer-login">{t.landing.footerLogin} <span aria-hidden="true">↗</span></Link>
         </div>
@@ -283,7 +283,7 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
   return (
     <main className="auth-page" data-testid={isRegister ? "register-page" : "login-page"}>
       <LanguageSwitcher />
-      <Link className="brand auth-brand" to="/" data-testid="auth-brand" aria-label={t.auth.brandAria}><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
+      <Link className="brand auth-brand" to="/" data-testid="auth-brand" aria-label={t.auth.brandAria}><span className="brand-mark" aria-hidden="true">H</span><span>HECHO<span className="brand-period">.</span></span></Link>
       <section className="auth-card">
         <Link className="back-link" to="/" data-testid="auth-back">← {t.auth.back}</Link>
         <div className="eyebrow">{isRegister ? t.auth.registerEyebrow : t.auth.loginEyebrow}</div>
@@ -392,7 +392,7 @@ function PanelPage({
   return (
     <main className="panel-page" data-testid={`${role.toLowerCase()}-panel`}>
       <aside className="panel-sidebar">
-        <Link className="brand" to="/" data-testid="panel-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
+        <Link className="brand" to="/" data-testid="panel-brand"><span className="brand-mark" aria-hidden="true">H</span><span>HECHO<span className="brand-period">.</span></span></Link>
         <div className="panel-role-label">{panel.label.toUpperCase()}</div>
         <nav className="panel-nav" aria-label={t.panel.navAria}>
           <Link className={`panel-nav-item${isOrders ? " active" : ""}`} to={panel.path} data-testid="panel-orders-link"><span aria-hidden="true">▦</span>{t.panel.orders}</Link>

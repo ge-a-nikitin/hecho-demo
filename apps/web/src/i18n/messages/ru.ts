@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const ru: Messages = {
   meta: {
-    title: "дело. — доска заказов",
+    title: "HECHO — доска заказов",
     description:
       "Создавайте заказы, находите исполнителей и держите весь процесс под контролем — от первого описания до готового результата.",
   },
@@ -107,7 +107,7 @@ export const ru: Messages = {
     NETWORK_ERROR: "Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.",
   },
   landing: {
-    brandAria: "Дело — на главную",
+    brandAria: "HECHO — на главную",
     navAria: "Главная навигация",
     howItWorks: "Как это работает",
     forWhom: "Для кого",
@@ -167,7 +167,7 @@ export const ru: Messages = {
     footerLogin: "Войти в кабинет",
   },
   auth: {
-    brandAria: "Дело — на главную",
+    brandAria: "HECHO — на главную",
     back: "На главную",
     registerEyebrow: "НАЧНИТЕ РАБОТУ",
     loginEyebrow: "С ВОЗВРАЩЕНИЕМ",
@@ -185,7 +185,7 @@ export const ru: Messages = {
     noAccount: "Нет аккаунта?",
     signIn: "Войти",
     signUp: "Создать аккаунт",
-    footer: "Дело — работа начинается с ясности.",
+    footer: "HECHO — работа начинается с ясности.",
     errorRegister:
       "Не удалось создать аккаунт. Проверьте данные: возможно, этот адрес уже зарегистрирован.",
     errorLogin: "Не удалось войти. Проверьте электронную почту и пароль.",
