@@ -10,7 +10,7 @@ import {
 } from "react-router-dom";
 import { authClient } from "./auth-client";
 import { apiRequest, getUserFacingError } from "./api";
-import { AdminCategoriesPage } from "./admin-pages";
+import { AdminCategoriesPage, AdminUsersPage } from "./admin-pages";
 import { AdminOrdersPage, ExecutorOrdersPage } from "./role-order-panels";
 import { OrderDetailView } from "./order-detail";
 import { ToastProvider, useToast } from "./toast";
@@ -361,20 +361,23 @@ function PanelPage({
   const relativePath = location.pathname.slice(panel.path.length).replace(/\/+$/u, "") || "/";
   const isProfile = relativePath === "/profile";
   const isCategories = role === "ADMIN" && relativePath === "/categories";
-  const isOrders = !isProfile && !isCategories;
+  const isUsers = role === "ADMIN" && relativePath === "/users";
+  const isOrders = !isProfile && !isCategories && !isUsers;
   const orderMatch = location.pathname.match(new RegExp(`^${panel.path}/orders/([^/]+)$`, "u"));
   const orderId = orderMatch ? decodeRouteSegment(orderMatch[1]) : null;
   const [userName, setUserName] = useState(user.name);
   const [userEmail, setUserEmail] = useState(user.email);
   useEffect(() => setUserName(user.name), [user.name]);
   useEffect(() => setUserEmail(user.email), [user.email]);
-  const title = isProfile ? "Профиль" : isCategories ? "Категории" : panel.title;
-  const eyebrow = isProfile ? "ВАШ АККАУНТ" : isCategories ? "УПРАВЛЕНИЕ" : "РАБОЧЕЕ ПРОСТРАНСТВО";
+  const title = isProfile ? "Профиль" : isCategories ? "Категории" : isUsers ? "Пользователи" : panel.title;
+  const eyebrow = isProfile ? "ВАШ АККАУНТ" : isCategories || isUsers ? "УПРАВЛЕНИЕ" : "РАБОЧЕЕ ПРОСТРАНСТВО";
   const description = isProfile
     ? "Основные данные и параметры учётной записи."
     : isCategories
       ? "Создавайте направления работ и управляйте их доступностью."
-      : panel.description;
+      : isUsers
+        ? "Управляйте исполнителями и заказчиками, их доступом и паролями."
+        : panel.description;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { showToast } = useToast();
 
@@ -404,6 +407,9 @@ function PanelPage({
           {role === "ADMIN" && (
             <Link className={`panel-nav-item${isCategories ? " active" : ""}`} to={`${panel.path}/categories`} data-testid="panel-categories-link"><span aria-hidden="true">▤</span>Категории</Link>
           )}
+          {role === "ADMIN" && (
+            <Link className={`panel-nav-item${isUsers ? " active" : ""}`} to={`${panel.path}/users`} data-testid="panel-users-link"><span aria-hidden="true">◌</span>Пользователи</Link>
+          )}
           <Link className={`panel-nav-item${isProfile ? " active" : ""}`} to={`${panel.path}/profile`} data-testid="panel-profile-link"><span aria-hidden="true">◉</span>Профиль</Link>
         </nav>
         <div className="sidebar-bottom">
@@ -421,6 +427,8 @@ function PanelPage({
           </div>
           {role === "ADMIN" && isCategories ? (
             <AdminCategoriesPage />
+          ) : role === "ADMIN" && isUsers ? (
+            <AdminUsersPage />
           ) : role === "CUSTOMER" && isOrders ? (
             <CustomerOrdersPage />
           ) : role === "EXECUTOR" && isOrders ? (

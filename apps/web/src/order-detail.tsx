@@ -364,6 +364,18 @@ function OrderDetailContent({
                   Выставлен {formatDate(invoice.issuedAt)}
                   {invoice.paidAt ? ` · Оплачен ${formatDate(invoice.paidAt)}` : ""}
                   {invoice.voidReason ? ` · Аннулирован: ${invoice.voidReason}` : ""}
+                  {" · "}
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => void downloadApiFile(
+                      `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/pdf`,
+                      `${invoice.number}.pdf`,
+                    ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать PDF счёта.")))}
+                    data-testid={`download-invoice-pdf-${invoice.id}`}
+                  >
+                    Скачать PDF
+                  </button>
                 </small>
                 {invoice.paymentReports?.map((report) => (
                   <small key={report.id}>

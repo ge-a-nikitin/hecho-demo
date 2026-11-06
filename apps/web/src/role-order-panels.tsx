@@ -300,12 +300,8 @@ export function AdminOrdersPage() {
   const [loadError, setLoadError] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState("");
   const [selectedExecutors, setSelectedExecutors] = useState<Record<string, string>>({});
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isCreatingExecutor, setIsCreatingExecutor] = useState(false);
-  const [executorName, setExecutorName] = useState("");
-  const [executorEmail, setExecutorEmail] = useState("");
-  const [executorPassword, setExecutorPassword] = useState("");
   const [paymentReviewReasons, setPaymentReviewReasons] = useState<Record<string, string>>({});
+  const [voidReasons, setVoidReasons] = useState<Record<string, string>>({});
   const { showToast } = useToast();
 
   const loadData = useCallback(async () => {
@@ -343,86 +339,14 @@ export function AdminOrdersPage() {
     }
   }
 
-  async function createExecutor(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsCreatingExecutor(true);
-    try {
-      await apiRequest("/users/executors", {
-        method: "POST",
-        body: JSON.stringify({
-          name: executorName.trim(),
-          email: executorEmail.trim(),
-          password: executorPassword,
-        }),
-      });
-      setExecutorName("");
-      setExecutorEmail("");
-      setExecutorPassword("");
-      setIsCreateOpen(false);
-      showToast("Учётная запись исполнителя создана.", "success");
-      await loadData();
-    } catch (error) {
-      showToast(getUserFacingError(error, "Не удалось создать исполнителя."));
-    } finally {
-      setIsCreatingExecutor(false);
-    }
-  }
-
   return (
     <section className="customer-orders role-orders" aria-label="Управление заказами" data-testid="admin-orders">
       <div className="orders-toolbar">
         <div><h2>Все заказы</h2><p>Назначайте исполнителей и контролируйте оплату</p></div>
-        <div className="role-toolbar-actions">
-          <button className="button button-quiet" type="button" onClick={() => void loadData()} disabled={isLoading} data-testid="admin-refresh">
-            Обновить
-          </button>
-          <button className="button button-primary" type="button" onClick={() => setIsCreateOpen((open) => !open)} data-testid="create-executor">
-            {isCreateOpen ? "Закрыть" : "+ Исполнитель"}
-          </button>
-        </div>
+        <button className="button button-quiet" type="button" onClick={() => void loadData()} disabled={isLoading} data-testid="admin-refresh">
+          Обновить
+        </button>
       </div>
-
-      {isCreateOpen && (
-        <form className="order-form" onSubmit={createExecutor} data-testid="create-executor-form">
-          <div className="order-form-heading">
-            <div className="eyebrow">КОМАНДА</div>
-            <h2>Новый исполнитель</h2>
-            <p>Учётная запись создаётся с ролью исполнителя. Ставку исполнитель задаёт сам в профиле.</p>
-          </div>
-          <div className="order-form-grid">
-            <label>Имя
-              <input value={executorName} onChange={(event) => setExecutorName(event.target.value)} minLength={1} maxLength={120} required data-testid="executor-name" />
-            </label>
-            <label>Электронная почта
-              <input type="email" value={executorEmail} onChange={(event) => setExecutorEmail(event.target.value)} maxLength={254} required data-testid="executor-email" />
-            </label>
-            <label>Начальный пароль
-              <input type="password" value={executorPassword} onChange={(event) => setExecutorPassword(event.target.value)} minLength={8} maxLength={128} required data-testid="executor-password" />
-            </label>
-          </div>
-          <div className="order-form-actions">
-            <button className="button button-primary" type="submit" disabled={isCreatingExecutor} data-testid="submit-create-executor">
-              {isCreatingExecutor ? "Создаём…" : "Создать исполнителя"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {!isLoading && !loadError && (
-        <div className="executor-directory" data-testid="executor-directory">
-          <h3>Исполнители ({executors.length})</h3>
-          {executors.length === 0 ? (
-            <p>Активных исполнителей пока нет.</p>
-          ) : (
-            <ul>{executors.map((executor) => (
-              <li key={executor.id}>
-                <span><b>{executor.name}</b><small>{executor.email}</small></span>
-                <span>{executor.hourlyRate === null ? "Ставка не задана" : `${formatAmount(executor.hourlyRate)} / ч`}</span>
-              </li>
-            ))}</ul>
-          )}
-        </div>
-      )}
 
       {loadError ? (
         <LoadError retry={() => void loadData()} testId="admin-orders-load-error" />
@@ -506,6 +430,62 @@ export function AdminOrdersPage() {
                       >
                         Выставить счёт
                       </button>
+                    )}
+                    {order.invoices.length > 0 && (
+                      <div className="invoice-admin-actions">
+                        {order.invoices.map((invoice) => (
+                          <div key={invoice.id} className="invoice-admin-action">
+                            <button
+                              className="text-link"
+                              type="button"
+                              onClick={() => void downloadApiFile(
+                                `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/pdf`,
+                                `${invoice.number}.pdf`,
+                              ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать PDF счёта.")))}
+                              data-testid={`download-invoice-pdf-${invoice.id}`}
+                            >
+                              PDF счёта {invoice.number}
+                            </button>
+                            {invoice.status === "ISSUED" && !pendingPaymentReport && (
+                              <form
+                                className="inline-action-form"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  const reason = voidReasons[invoice.id]?.trim();
+                                  if (!reason) return;
+                                  void runOrderAction(
+                                    order,
+                                    () => apiRequest(
+                                      `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(invoice.id)}/void`,
+                                      { method: "POST", body: JSON.stringify({ reason }) },
+                                    ),
+                                    "Счёт аннулирован. Можно выставить новый.",
+                                  );
+                                }}
+                              >
+                                <label>
+                                  Причина аннулирования счёта {invoice.number}
+                                  <input
+                                    required
+                                    maxLength={2000}
+                                    value={voidReasons[invoice.id] ?? ""}
+                                    onChange={(event) => setVoidReasons((values) => ({ ...values, [invoice.id]: event.target.value }))}
+                                    data-testid={`void-invoice-reason-${invoice.id}`}
+                                  />
+                                </label>
+                                <button
+                                  className="button button-quiet"
+                                  type="submit"
+                                  disabled={isBusy || !voidReasons[invoice.id]?.trim()}
+                                  data-testid={`void-invoice-${invoice.id}`}
+                                >
+                                  Аннулировать счёт
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                     {order.status === "INVOICE_PAID" && (
                       <div className="payment-review" data-testid={`complete-order-section-${order.id}`}>
