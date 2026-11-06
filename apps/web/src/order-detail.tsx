@@ -98,7 +98,7 @@ const statusLabels: Record<string, string> = {
   ON_REVIEW: "На проверке",
   NEEDS_REVISION: "Нужны исправления",
   INVOICE_ISSUED: "Выставлен счёт",
-  INVOICE_PAID: "Оплачен",
+  INVOICE_PAID: "Счёт оплачен",
   COMPLETED: "Завершена",
   CANCELLED: "Отменена",
 };

@@ -180,6 +180,13 @@ export class OrdersController {
     return this.orders.cancel(id, body.reason, user);
   }
 
+  @Post(":id/complete")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Complete an order whose invoice has been paid" })
+  complete(@Param("id") id: string, @CurrentUser() user: RequestUser) {
+    return this.orders.complete(id, user);
+  }
+
   @Post(":id/assign")
   @Roles("ADMIN")
   @ApiOperation({ summary: "Assign an order to an executor" })

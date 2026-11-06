@@ -1,7 +1,7 @@
 import "../env.js";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import type { PrismaService } from "../database/prisma.service.js";
 import { OrdersService } from "./orders.service.js";
@@ -104,6 +104,64 @@ describe("OrdersService", () => {
         toStatus: OrderStatus.WAITING_DISTRIBUTION,
       },
     });
+  });
+
+  it("requires a comment when a customer rejects an estimate", async () => {
+    let transactionCalled = false;
+    const service = await createService({
+      $transaction: async () => {
+        transactionCalled = true;
+        return {};
+      },
+    });
+
+    await assert.rejects(
+      service.respondToEstimate(
+        "order-1",
+        "estimate-1",
+        { accepted: false },
+        { id: "customer-1", role: UserRole.CUSTOMER },
+      ),
+      BadRequestException,
+    );
+    assert.equal(transactionCalled, false);
+  });
+
+  it("completes an order only after a paid invoice exists", async () => {
+    let orderUpdate: Record<string, unknown> | undefined;
+    let historyData: Record<string, unknown> | undefined;
+    const service = await createService({
+      $transaction: async (run: (tx: object) => Promise<unknown>) =>
+        run({
+          workOrder: {
+            findUnique: async () => ({ id: "order-1", status: OrderStatus.INVOICE_PAID }),
+            updateMany: async (args: { data: Record<string, unknown> }) => {
+              orderUpdate = args.data;
+              return { count: 1 };
+            },
+            findUniqueOrThrow: async () => ({ id: "order-1", status: OrderStatus.COMPLETED }),
+          },
+          invoice: {
+            findFirst: async () => ({ id: "invoice-1" }),
+          },
+          orderStatusHistory: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              historyData = args.data;
+            },
+          },
+        }),
+    });
+
+    const order = await service.complete("order-1", {
+      id: "admin-1",
+      role: UserRole.ADMIN,
+    });
+
+    assert.equal(order.status, OrderStatus.COMPLETED);
+    assert.equal(orderUpdate?.status, OrderStatus.COMPLETED);
+    assert.ok(orderUpdate?.completedAt instanceof Date);
+    assert.equal(historyData?.fromStatus, OrderStatus.INVOICE_PAID);
+    assert.equal(historyData?.toStatus, OrderStatus.COMPLETED);
   });
 
   async function createService(prisma: Record<string, unknown>) {

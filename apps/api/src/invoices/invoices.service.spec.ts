@@ -81,10 +81,11 @@ describe("InvoicesService payment reports", () => {
     assert.equal(orderStatusUpdateCount, 0);
   });
 
-  it("confirms payment and completes the order only after an administrator reviews a pending receipt", async () => {
+  it("confirms payment and moves the order to INVOICE_PAID without completing it", async () => {
     let invoiceUpdate: Record<string, unknown> | undefined;
     let orderUpdate: Record<string, unknown> | undefined;
     let reportUpdate: Record<string, unknown> | undefined;
+    let historyData: Record<string, unknown> | undefined;
     const service = createService({
       $transaction: async (run: (tx: object) => Promise<unknown>) =>
         run({
@@ -112,7 +113,11 @@ describe("InvoicesService payment reports", () => {
             },
             findUniqueOrThrow: async () => ({ id: "invoice-1", status: InvoiceStatus.PAID }),
           },
-          orderStatusHistory: { createMany: async () => undefined },
+          orderStatusHistory: {
+            create: async (args: { data: Record<string, unknown> }) => {
+              historyData = args.data;
+            },
+          },
         }),
     });
 
@@ -127,7 +132,9 @@ describe("InvoicesService payment reports", () => {
     assert.equal(reportUpdate?.status, PaymentReportStatus.CONFIRMED);
     assert.equal(reportUpdate?.reviewedById, "admin-1");
     assert.equal(invoiceUpdate?.status, InvoiceStatus.PAID);
-    assert.equal(orderUpdate?.status, OrderStatus.COMPLETED);
+    assert.equal(orderUpdate?.status, OrderStatus.INVOICE_PAID);
+    assert.equal(orderUpdate?.completedAt, undefined);
+    assert.equal(historyData?.toStatus, OrderStatus.INVOICE_PAID);
   });
 
   it("does not allow executors to read customer payment receipts", async () => {

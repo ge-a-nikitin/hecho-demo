@@ -9,6 +9,7 @@ import { Prisma } from "../generated/prisma/client.js";
 import {
   AssignmentOutcome,
   EstimateStatus,
+  InvoiceStatus,
   OrderStatus,
   UserRole,
 } from "../generated/prisma/enums.js";
@@ -392,6 +393,10 @@ export class OrdersService {
     dto: RespondToEstimateDto,
     actor: Actor,
   ) {
+    const comment = dto.comment?.trim();
+    if (!dto.accepted && !comment) {
+      throw new BadRequestException("A rejection comment is required");
+    }
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.workOrder.findUnique({ where: { id: orderId } });
       if (!order) throw new NotFoundException("Order not found");
@@ -427,7 +432,7 @@ export class OrdersService {
         where: { id: estimate.id, status: EstimateStatus.PENDING },
         data: {
           status: dto.accepted ? EstimateStatus.ACCEPTED : EstimateStatus.REJECTED,
-          responseComment: dto.comment?.trim() || null,
+          responseComment: comment || null,
           respondedAt: new Date(),
         },
       });
@@ -472,7 +477,7 @@ export class OrdersService {
           changedById: actor.id,
           fromStatus: OrderStatus.ASSIGNED,
           toStatus: nextStatus,
-          note: dto.comment?.trim() || null,
+          note: comment || null,
         },
       });
 
@@ -616,6 +621,44 @@ export class OrdersService {
           fromStatus: OrderStatus.ON_REVIEW,
           toStatus: OrderStatus.ON_REVIEW,
           note: "Work accepted by customer",
+        },
+      });
+      return tx.workOrder.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude });
+    });
+  }
+
+  async complete(orderId: string, actor: Actor) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.workOrder.findUnique({
+        where: { id: orderId },
+        select: { id: true, status: true },
+      });
+      if (!order) throw new NotFoundException("Order not found");
+      if (order.status !== OrderStatus.INVOICE_PAID) {
+        throw new ConflictException("Only an order with a paid invoice can be completed");
+      }
+      const paidInvoice = await tx.invoice.findFirst({
+        where: { orderId, status: InvoiceStatus.PAID },
+        select: { id: true },
+      });
+      if (!paidInvoice) {
+        throw new ConflictException("A paid invoice is required before completing the order");
+      }
+
+      const completedAt = new Date();
+      const update = await tx.workOrder.updateMany({
+        where: { id: orderId, status: OrderStatus.INVOICE_PAID },
+        data: { status: OrderStatus.COMPLETED, completedAt },
+      });
+      if (update.count !== 1) throw new ConflictException("Order has already changed");
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          changedById: actor.id,
+          fromStatus: OrderStatus.INVOICE_PAID,
+          toStatus: OrderStatus.COMPLETED,
+          note: "Order completed by administrator after payment verification",
         },
       });
       return tx.workOrder.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude });

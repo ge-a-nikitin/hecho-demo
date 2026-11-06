@@ -507,6 +507,24 @@ export function AdminOrdersPage() {
                         Выставить счёт
                       </button>
                     )}
+                    {order.status === "INVOICE_PAID" && (
+                      <div className="payment-review" data-testid={`complete-order-section-${order.id}`}>
+                        <p className="form-hint">Оплата подтверждена. Завершите заказ после проверки поступления денег.</p>
+                        <button
+                          className="button button-primary"
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void runOrderAction(
+                            order,
+                            () => apiRequest(`/orders/${encodeURIComponent(order.id)}/complete`, { method: "POST" }),
+                            "Заказ завершён.",
+                          )}
+                          data-testid={`complete-order-${order.id}`}
+                        >
+                          Завершить заказ
+                        </button>
+                      </div>
+                    )}
                     {issuedInvoice && (
                       <div className="payment-review" data-testid={`payment-review-${order.id}`}>
                         {pendingPaymentReport ? (
@@ -533,7 +551,7 @@ export function AdminOrdersPage() {
                                   `/orders/${encodeURIComponent(order.id)}/invoices/${encodeURIComponent(issuedInvoice.id)}/payment-reports/${encodeURIComponent(pendingPaymentReport.id)}/confirm`,
                                   { method: "POST" },
                                 ),
-                                "Оплата подтверждена, заказ завершён.",
+                                "Оплата подтверждена. Заказ перешёл в статус «Счёт оплачен».",
                               )}
                               data-testid={`confirm-payment-${order.id}`}
                             >

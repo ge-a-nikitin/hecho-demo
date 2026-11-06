@@ -683,6 +683,7 @@ function CustomerOrdersPage() {
   const [ordersError, setOrdersError] = useState(false);
   const [categoriesError, setCategoriesError] = useState(false);
   const [revisionComments, setRevisionComments] = useState<Record<string, string>>({});
+  const [estimateRejectComments, setEstimateRejectComments] = useState<Record<string, string>>({});
   const [reportingInvoiceId, setReportingInvoiceId] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -961,18 +962,38 @@ function CustomerOrdersPage() {
                     >
                       Принять оценку
                     </button>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => void runOrderAction(
-                        `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
-                        { accepted: false },
-                        "Оценка отклонена, заказ возвращён в пул.",
-                      )}
-                      data-testid={`reject-estimate-${order.id}`}
+                    <form
+                      className="inline-action-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const comment = estimateRejectComments[order.id]?.trim();
+                        if (!comment) return;
+                        void runOrderAction(
+                          `/orders/${encodeURIComponent(order.id)}/estimates/${encodeURIComponent(pendingEstimate.id)}/respond`,
+                          { accepted: false, comment },
+                          "Оценка отклонена, заказ возвращён в пул.",
+                        );
+                      }}
                     >
-                      Отклонить
-                    </button>
+                      <label>
+                        Причина отклонения
+                        <input
+                          required
+                          maxLength={2000}
+                          value={estimateRejectComments[order.id] ?? ""}
+                          onChange={(event) => setEstimateRejectComments((values) => ({ ...values, [order.id]: event.target.value }))}
+                          data-testid={`estimate-reject-comment-${order.id}`}
+                        />
+                      </label>
+                      <button
+                        className="button button-quiet"
+                        type="submit"
+                        disabled={!estimateRejectComments[order.id]?.trim()}
+                        data-testid={`reject-estimate-${order.id}`}
+                      >
+                        Отклонить
+                      </button>
+                    </form>
                   </div>
                 )}
                 {order.status === "ON_REVIEW" && !order.acceptedAt && (

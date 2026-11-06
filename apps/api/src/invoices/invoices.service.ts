@@ -256,29 +256,18 @@ export class InvoicesService {
 
       const orderUpdate = await tx.workOrder.updateMany({
         where: { id: orderId, status: OrderStatus.INVOICE_ISSUED },
-        data: { status: OrderStatus.COMPLETED, completedAt: now },
+        data: { status: OrderStatus.INVOICE_PAID },
       });
       if (orderUpdate.count !== 1) throw new ConflictException("Order has already changed");
 
-      await tx.orderStatusHistory.createMany({
-        data: [
-          {
-            orderId,
-            changedById: actor.id,
-            fromStatus: OrderStatus.INVOICE_ISSUED,
-            toStatus: OrderStatus.INVOICE_PAID,
-            note: `Payment verified for invoice ${report.invoice.number}`,
-            createdAt: now,
-          },
-          {
-            orderId,
-            changedById: actor.id,
-            fromStatus: OrderStatus.INVOICE_PAID,
-            toStatus: OrderStatus.COMPLETED,
-            note: "Order completed after administrator verified payment",
-            createdAt: new Date(now.getTime() + 1),
-          },
-        ],
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          changedById: actor.id,
+          fromStatus: OrderStatus.INVOICE_ISSUED,
+          toStatus: OrderStatus.INVOICE_PAID,
+          note: `Payment verified for invoice ${report.invoice.number}`,
+        },
       });
 
       return tx.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
