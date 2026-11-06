@@ -410,6 +410,27 @@ h1, h2, h3, p { margin-top: 0; }
 .executor-directory li b, .executor-directory li small { display: block; }
 .executor-directory li b { color: #454c46; font-size: 10px; font-weight: 600; }
 .executor-directory li small { margin-top: 3px; color: #929a91; font-size: 9px; }
+.admin-section { margin-top: 31px; }
+.compact-form { margin-bottom: 17px; }
+.inline-create-row { display: flex; align-items: end; gap: 12px; }
+.inline-create-row label { flex: 1; }
+.inline-create-row .button { min-height: 39px; font-size: 10px; }
+.admin-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; color: #929a91; font-size: 9px; }
+.checkbox-label { display: flex; align-items: center; gap: 7px; color: #667066; font-size: 10px; font-weight: 400; }
+.checkbox-label input { width: 14px; height: 14px; accent-color: var(--green); }
+.admin-list { display: grid; gap: 9px; }
+.admin-list-row { display: flex; align-items: center; gap: 16px; padding: 14px 17px; border: 1px solid #e6ebe4; border-radius: 6px; background: #fff; }
+.admin-list-row-inactive { background: #fbfbf9; }
+.admin-list-row-main { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.admin-list-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.admin-list-title b { color: #3b463d; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.admin-list-row-main small { color: #929a91; font-size: 9px; }
+.admin-list-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.admin-list-actions .button { min-height: 34px; font-size: 10px; }
+.button-compact { min-height: 34px; padding-inline: 14px; font-size: 10px; }
+.inline-edit-input { width: min(100%, 420px); min-height: 35px; padding: 7px 10px; border: 1px solid #cfdccd; border-radius: 5px; background: #fcfdfb; color: #384139; font: 400 11px "Aptos", "Segoe UI", Arial, sans-serif; }
+.admin-status-badge { display: inline-flex; padding: 4px 7px; border-radius: 20px; background: #f4eee6; color: #8c744e; font-size: 8px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+.compact-empty { min-height: 200px; }
 .loading-page, .not-found-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 17px; color: #768076; font-size: 12px; }
 .not-found-page h1 { margin: 0 0 4px; color: #29312a; font: 600 28px "Aptos", "Segoe UI", Arial, sans-serif; }
 
@@ -464,8 +485,9 @@ h1, h2, h3, p { margin-top: 0; }
   .panel-page { display: block; padding-bottom: 64px; }
   .panel-sidebar { position: fixed; z-index: 5; inset: auto 0 0; width: 100%; height: 62px; flex-direction: row; align-items: center; padding: 0 12px; border: 0; border-top: 1px solid #e5eae3; }
   .panel-sidebar > .brand, .panel-role-label, .sidebar-bottom { display: none; }
-  .panel-nav { width: 100%; display: flex; justify-content: center; gap: 8px; margin: 0; }
-  .panel-nav-item { min-width: 105px; justify-content: center; }
+  .panel-nav { width: 100%; display: flex; justify-content: center; gap: 2px; margin: 0; }
+  .panel-nav-item { min-width: 0; flex: 1; justify-content: center; padding-inline: 4px; font-size: 9px; }
+  .panel-nav-item > span { display: none; }
   .panel-topbar { height: 57px; padding-inline: 18px; }
   .panel-inner { padding: 29px 18px; }
   .panel-heading { align-items: flex-start; flex-direction: column; }
@@ -476,6 +498,9 @@ h1, h2, h3, p { margin-top: 0; }
   .order-form-grid { grid-template-columns: 1fr; }
   .order-form-actions { flex-direction: column-reverse; }
   .order-form-actions .button { width: 100%; }
+  .inline-create-row { align-items: stretch; flex-direction: column; }
+  .admin-list-row { align-items: flex-start; flex-direction: column; gap: 11px; }
+  .admin-list-actions { width: 100%; justify-content: flex-start; }
   .empty-state { min-height: 260px; margin-top: 22px; }
   .profile-content { gap: 10px; margin-top: 22px; }
   .profile-card { gap: 17px; padding: 17px; }

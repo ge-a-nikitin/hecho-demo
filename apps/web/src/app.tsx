@@ -10,6 +10,7 @@ import {
 } from "react-router-dom";
 import { authClient } from "./auth-client";
 import { apiRequest, getUserFacingError } from "./api";
+import { AdminCategoriesPage } from "./admin-pages";
 import { AdminOrdersPage, ExecutorOrdersPage } from "./role-order-panels";
 import { OrderDetailView } from "./order-detail";
 import { ToastProvider, useToast } from "./toast";
@@ -355,14 +356,23 @@ function PanelPage({
   const panel = panels[role];
   const location = useLocation();
   const navigate = useNavigate();
-  const isProfile = location.pathname === `${panel.path}/profile`;
+  const relativePath = location.pathname.slice(panel.path.length).replace(/\/+$/u, "") || "/";
+  const isProfile = relativePath === "/profile";
+  const isCategories = role === "ADMIN" && relativePath === "/categories";
+  const isOrders = !isProfile && !isCategories;
   const orderMatch = location.pathname.match(new RegExp(`^${panel.path}/orders/([^/]+)$`, "u"));
   const orderId = orderMatch ? decodeRouteSegment(orderMatch[1]) : null;
   const [userName, setUserName] = useState(user.name);
   const [userEmail, setUserEmail] = useState(user.email);
   useEffect(() => setUserName(user.name), [user.name]);
   useEffect(() => setUserEmail(user.email), [user.email]);
-  const title = isProfile ? "Профиль" : panel.title;
+  const title = isProfile ? "Профиль" : isCategories ? "Категории" : panel.title;
+  const eyebrow = isProfile ? "ВАШ АККАУНТ" : isCategories ? "УПРАВЛЕНИЕ" : "РАБОЧЕЕ ПРОСТРАНСТВО";
+  const description = isProfile
+    ? "Основные данные и параметры учётной записи."
+    : isCategories
+      ? "Создавайте направления работ и управляйте их доступностью."
+      : panel.description;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { showToast } = useToast();
 
@@ -388,7 +398,10 @@ function PanelPage({
         <Link className="brand" to="/" data-testid="panel-brand"><span className="brand-mark" aria-hidden="true">д</span><span>дело<span className="brand-period">.</span></span></Link>
         <div className="panel-role-label">{panel.label.toUpperCase()}</div>
         <nav className="panel-nav" aria-label="Навигация панели">
-          <Link className={`panel-nav-item${isProfile ? "" : " active"}`} to={panel.path} data-testid="panel-orders-link"><span aria-hidden="true">▦</span>Заказы</Link>
+          <Link className={`panel-nav-item${isOrders ? " active" : ""}`} to={panel.path} data-testid="panel-orders-link"><span aria-hidden="true">▦</span>Заказы</Link>
+          {role === "ADMIN" && (
+            <Link className={`panel-nav-item${isCategories ? " active" : ""}`} to={`${panel.path}/categories`} data-testid="panel-categories-link"><span aria-hidden="true">▤</span>Категории</Link>
+          )}
           <Link className={`panel-nav-item${isProfile ? " active" : ""}`} to={`${panel.path}/profile`} data-testid="panel-profile-link"><span aria-hidden="true">◉</span>Профиль</Link>
         </nav>
         <div className="sidebar-bottom">
@@ -402,13 +415,15 @@ function PanelPage({
         <header className="panel-topbar"><span>{panel.label}</span><span className="online-indicator"><i /> Рабочее пространство</span></header>
         <div className="panel-inner">
           <div className="panel-heading">
-            <div><div className="eyebrow">{isProfile ? "ВАШ АККАУНТ" : "РАБОЧЕЕ ПРОСТРАНСТВО"}</div><h1>{title}</h1><p>{isProfile ? "Основные данные и параметры учётной записи." : panel.description}</p></div>
+            <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>
           </div>
-          {role === "CUSTOMER" && !isProfile ? (
+          {role === "ADMIN" && isCategories ? (
+            <AdminCategoriesPage />
+          ) : role === "CUSTOMER" && isOrders ? (
             <CustomerOrdersPage />
-          ) : role === "EXECUTOR" && !isProfile ? (
+          ) : role === "EXECUTOR" && isOrders ? (
             <ExecutorOrdersPage />
-          ) : role === "ADMIN" && !isProfile ? (
+          ) : role === "ADMIN" && isOrders ? (
             <AdminOrdersPage />
           ) : isProfile ? (
             <ProfilePage
