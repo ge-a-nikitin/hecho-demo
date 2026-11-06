@@ -4,7 +4,7 @@ import { login, loginAsAdmin } from "./helpers";
 const apiUrl = process.env.E2E_API_URL ?? "http://localhost:6201/api";
 const baseUrl = process.env.E2E_BASE_URL ?? "http://localhost:6200";
 
-test("administrator downloads, voids, and reissues an invoice", async ({ page, browser }) => {
+test("administrator manages an invoice through payment confirmation and completion", async ({ page, browser }) => {
   test.setTimeout(90_000);
   await loginAsAdmin(page);
 
@@ -104,6 +104,37 @@ test("administrator downloads, voids, and reissues an invoice", async ({ page, b
     await currentCard.getByTestId(`issue-invoice-${order.id}`).click();
     await expect(currentCard.getByTestId(`issue-invoice-${order.id}`)).toHaveCount(0);
     await expect(currentCard.locator(".form-hint").filter({ hasText: "выставлен" })).toBeVisible();
+
+    const orderDetailResponse = await page.request.get(`${apiUrl}/orders/${order.id}`);
+    expect(orderDetailResponse.ok()).toBeTruthy();
+    const orderDetail = await orderDetailResponse.json() as {
+      invoices: { id: string; status: string }[];
+    };
+    const activeInvoice = orderDetail.invoices.find((item) => item.status === "ISSUED");
+    expect(activeInvoice).toBeTruthy();
+
+    const reportResponse = await customerPage.request.post(
+      `${apiUrl}/orders/${order.id}/invoices/${activeInvoice!.id}/payment-reports`,
+      {
+        multipart: {
+          file: {
+            name: `receipt-${suffix}.txt`,
+            mimeType: "text/plain",
+            buffer: Buffer.from("E2E payment receipt"),
+          },
+        },
+      },
+    );
+    expect(reportResponse.ok()).toBeTruthy();
+
+    await page.getByTestId("admin-refresh").click();
+    const paidCard = page.locator("article.order-list-card").filter({ hasText: title });
+    await expect(paidCard.getByTestId(`confirm-payment-${order.id}`)).toBeVisible();
+    await paidCard.getByTestId(`confirm-payment-${order.id}`).click();
+    await expect(paidCard).toContainText("Счёт оплачен");
+
+    await paidCard.getByTestId(`complete-order-${order.id}`).click();
+    await expect(paidCard).toContainText("Завершена");
   } finally {
     await customerContext.close();
     await executorContext.close();
