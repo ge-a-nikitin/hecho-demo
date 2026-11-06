@@ -209,102 +209,106 @@ export class DevToolsService {
     const adminId = fixture.users.find((user) => user.role === UserRole.ADMIN)?.id;
     if (!adminId) throw new BadRequestException("Seed fixture must define an ADMIN user");
 
-    await this.prisma.$transaction(async (tx) => {
-      await this.deleteFixtureRecords(tx, fixture);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.deleteFixtureRecords(tx, fixture);
 
-      for (const user of fixture.users) {
-        await tx.user.create({
-          data: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            emailVerified: true,
-            hourlyRate: user.hourlyRate === undefined ? null : new Prisma.Decimal(user.hourlyRate),
-            createdAt: now,
-            accounts: {
-              create: {
-                id: randomUUID(),
-                accountId: user.id,
-                providerId: "credential",
-                password: seedPasswordHash,
+        for (const user of fixture.users) {
+          await tx.user.create({
+            data: {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              emailVerified: true,
+              hourlyRate: user.hourlyRate === undefined ? null : new Prisma.Decimal(user.hourlyRate),
+              createdAt: now,
+              accounts: {
+                create: {
+                  id: randomUUID(),
+                  accountId: user.id,
+                  providerId: "credential",
+                  password: seedPasswordHash,
+                },
               },
             },
-          },
-        });
-      }
+          });
+        }
 
-      for (const category of fixture.categories) {
-        await tx.category.create({
-          data: { ...category, createdById: adminId, createdAt: now },
-        });
-      }
+        for (const category of fixture.categories) {
+          await tx.category.create({
+            data: { ...category, createdById: adminId, createdAt: now },
+          });
+        }
 
-      for (const order of fixture.orders) {
-        await tx.workOrder.create({
-          data: {
-            id: order.id,
-            title: order.title,
-            description: order.description,
-            status: order.status,
-            customerId: order.customerId,
-            executorId: order.executorId,
-            categoryId: order.categoryId,
-            createdAt: new Date(order.createdAt),
-            dueAt: order.dueAt ? new Date(order.dueAt) : null,
-            submittedAt: order.submittedAt ? new Date(order.submittedAt) : null,
-            acceptedAt: order.acceptedAt ? new Date(order.acceptedAt) : null,
-            completedAt: order.completedAt ? new Date(order.completedAt) : null,
-            approvedHours: order.approvedHours === undefined ? null : new Prisma.Decimal(order.approvedHours),
-            approvedHourlyRate: order.approvedHourlyRate === undefined ? null : new Prisma.Decimal(order.approvedHourlyRate),
-            approvedAmount: order.approvedAmount === undefined ? null : new Prisma.Decimal(order.approvedAmount),
-            statusHistory: {
-              create: {
-                changedById: order.customerId,
-                fromStatus: null,
-                toStatus: order.status,
-                createdAt: new Date(order.createdAt),
+        for (const order of fixture.orders) {
+          await tx.workOrder.create({
+            data: {
+              id: order.id,
+              title: order.title,
+              description: order.description,
+              status: order.status,
+              customerId: order.customerId,
+              executorId: order.executorId,
+              categoryId: order.categoryId,
+              createdAt: new Date(order.createdAt),
+              dueAt: order.dueAt ? new Date(order.dueAt) : null,
+              submittedAt: order.submittedAt ? new Date(order.submittedAt) : null,
+              acceptedAt: order.acceptedAt ? new Date(order.acceptedAt) : null,
+              completedAt: order.completedAt ? new Date(order.completedAt) : null,
+              approvedHours: order.approvedHours === undefined ? null : new Prisma.Decimal(order.approvedHours),
+              approvedHourlyRate: order.approvedHourlyRate === undefined ? null : new Prisma.Decimal(order.approvedHourlyRate),
+              approvedAmount: order.approvedAmount === undefined ? null : new Prisma.Decimal(order.approvedAmount),
+              statusHistory: {
+                create: {
+                  changedById: order.customerId,
+                  fromStatus: null,
+                  toStatus: order.status,
+                  createdAt: new Date(order.createdAt),
+                },
               },
+              assignments: order.executorId
+                ? {
+                    create: {
+                      executorId: order.executorId,
+                      assignedById: adminId,
+                      outcome: AssignmentOutcome.ACTIVE,
+                      assignedAt: new Date(order.createdAt),
+                    },
+                  }
+                : undefined,
             },
-            assignments: order.executorId
-              ? {
-                  create: {
-                    executorId: order.executorId,
-                    assignedById: adminId,
-                    outcome: AssignmentOutcome.ACTIVE,
-                    assignedAt: new Date(order.createdAt),
-                  },
-                }
-              : undefined,
-          },
-        });
-      }
+          });
+        }
 
-      for (const comment of fixture.comments) {
-        await tx.orderComment.create({
-          data: { ...comment, createdAt: new Date(comment.createdAt) },
-        });
-      }
+        for (const comment of fixture.comments) {
+          await tx.orderComment.create({
+            data: { ...comment, createdAt: new Date(comment.createdAt) },
+          });
+        }
 
-      for (const invoice of fixture.invoices) {
-        await tx.invoice.create({
-          data: {
-            id: invoice.id,
-            orderId: invoice.orderId,
-            issuedById: invoice.issuedById,
-            number: invoice.number,
-            status: invoice.status,
-            customerName: invoice.customerName,
-            executorName: invoice.executorName,
-            hours: new Prisma.Decimal(invoice.hours),
-            hourlyRate: new Prisma.Decimal(invoice.hourlyRate),
-            amount: new Prisma.Decimal(invoice.amount),
-            issuedAt: new Date(invoice.issuedAt),
-            paidAt: invoice.paidAt ? new Date(invoice.paidAt) : null,
-          },
-        });
-      }
-    });
+        for (const invoice of fixture.invoices) {
+          await tx.invoice.create({
+            data: {
+              id: invoice.id,
+              orderId: invoice.orderId,
+              issuedById: invoice.issuedById,
+              number: invoice.number,
+              status: invoice.status,
+              customerName: invoice.customerName,
+              executorName: invoice.executorName,
+              hours: new Prisma.Decimal(invoice.hours),
+              hourlyRate: new Prisma.Decimal(invoice.hourlyRate),
+              amount: new Prisma.Decimal(invoice.amount),
+              issuedAt: new Date(invoice.issuedAt),
+              paidAt: invoice.paidAt ? new Date(invoice.paidAt) : null,
+            },
+          });
+        }
+      });
+    } catch (error) {
+      this.throwSeedConflict(error);
+    }
 
     return {
       version: fixture.version,
@@ -315,7 +319,11 @@ export class DevToolsService {
 
   async clearSeed(): Promise<{ version: number; deletedUsers: number; deletedOrders: number }> {
     const fixture = await this.loadFixture();
-    return this.prisma.$transaction((tx) => this.deleteFixtureRecords(tx, fixture));
+    try {
+      return await this.prisma.$transaction((tx) => this.deleteFixtureRecords(tx, fixture));
+    } catch (error) {
+      this.throwSeedConflict(error);
+    }
   }
 
   private async loadFixture(): Promise<SeedFixture> {
@@ -328,10 +336,17 @@ export class DevToolsService {
     fixture: SeedFixture,
   ): Promise<{ version: number; deletedUsers: number; deletedOrders: number }> {
     const orderIds = [...fixture.orders.map(({ id }) => id), ...retiredFixtureOrderIds];
-    const invoiceIds = [...fixture.invoices.map(({ id }) => id), ...retiredFixtureInvoiceIds];
+    const fixtureInvoiceIds = [...fixture.invoices.map(({ id }) => id), ...retiredFixtureInvoiceIds];
     const userIds = fixture.users.map(({ id }) => id);
     const categoryIds = fixture.categories.map(({ id }) => id);
 
+    const orderInvoices = await tx.invoice.findMany({
+      where: { orderId: { in: orderIds } },
+      select: { id: true },
+    });
+    const invoiceIds = [...new Set([...fixtureInvoiceIds, ...orderInvoices.map(({ id }) => id)])];
+
+    await tx.invoicePaymentReport.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
     await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
     const deletedOrders = await tx.workOrder.deleteMany({ where: { id: { in: orderIds } } });
     await tx.category.deleteMany({ where: { id: { in: categoryIds } } });
@@ -339,5 +354,17 @@ export class DevToolsService {
     const deletedUsers = await tx.user.deleteMany({ where: { id: { in: userIds } } });
 
     return { version: fixture.version, deletedUsers: deletedUsers.count, deletedOrders: deletedOrders.count };
+  }
+
+  private throwSeedConflict(error: unknown): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2003" || error.code === "P2014")
+    ) {
+      throw new ConflictException(
+        "Seed records are still referenced by other data; remove those references before clearing the seed",
+      );
+    }
+    throw error;
   }
 }
