@@ -1,0 +1,214 @@
+# HECHO — documentation
+
+[← Project root](../../README.md) · [Русская версия](../ru/README.md) · [Database schema](./database-schema.md)
+
+> **About the project.** HECHO was built entirely in vibe-coding mode and may contain inaccuracies. The author is a QA engineer, not a professional developer; the project's main purpose is to be a lightweight showcase base for the author's QA portfolio.
+
+## Contents
+
+- [Purpose](#purpose)
+- [Agreed functionality](#agreed-functionality)
+- [Technical constraints and preferences](#technical-constraints-and-preferences)
+- [Implementation plan](#implementation-plan)
+- [Open questions](#open-questions)
+- [Running the project locally](#running-the-project-locally)
+
+## Purpose
+
+A single-organization application for accepting orders from registered customers, distributing and performing work, tracking time, and issuing internal invoices.
+
+This document records the agreed requirements, implementation status, and launch instructions. The monorepo foundation, PostgreSQL schema, and core backend API domain scenarios are implemented. The frontend includes a public landing page, authentication, and customer, executor, and administrator panels with profiles and order cards. The API and frontend run in Docker Compose together with PostgreSQL and SeaweedFS. Automated end-to-end checks are maintained in a separate training repository and are not part of this project; stable QA locators and a devtools API are supported here.
+
+## Agreed functionality
+
+### Public home page
+
+- Before signing in, a user sees a public landing page that explains the purpose of the order board and the main order workflow.
+- The landing page provides links to sign in and to customer registration.
+- The landing page is public and does not show order data or internal organization information.
+
+### Roles and access
+
+- **Customer** creates orders and tracks their own orders.
+- **Executor** accepts and performs orders.
+- **Administrator** manages users and all orders.
+- A customer can self-register on the site.
+- Customer registration is open to any visitor; the account is activated immediately after registration.
+- Executor accounts are created by an administrator.
+- The initial administrator account is created by a separate CLI command from `ADMIN_EMAIL` and `ADMIN_PASSWORD`; repeated runs do not change an existing administrator.
+- When creating an executor, the administrator sets an initial password and communicates it outside the application. The administrator does not set the hourly rate: the executor sets and changes it independently in their profile. The administrator resets customer or executor passwords; customer self-service password recovery is deferred until email is connected.
+- Sign-out is available in the sidebar on wide screens and in the top bar on mobile.
+- Accounts are deactivated, not deleted, to preserve order and invoice history.
+- Before deactivating an executor, the administrator must reassign all their unfinished orders.
+- One user has one role. Customer, executor, and administrator sign in through different routes/panels; credentials for one role do not grant access to other roles' panels.
+- A customer sees only the orders they created and related comments and invoices.
+
+### Order creation and distribution
+
+- A customer can choose an executor when creating an order or leave the order unassigned.
+- Unassigned orders are available to the administrator for distribution and to executors in the shared pool.
+- In the shared pool, all executors see the full order description and attachments.
+- An order is locked to the first executor who takes it from the pool.
+- The administrator can also distribute orders.
+- One executor performs an order. The administrator can reassign an order; the history preserves the previous executor.
+- The selected or assigned executor can decline an order; the order returns to the unassigned pool.
+- In a draft, the customer can change all data. After submission, the main order parameters cannot be edited; the customer can add comments.
+- Title, description, and category are required. Due date, attachments/files, and location or address are optional.
+- Work categories are created by the administrator. The customer selects a category when creating an order; the executor sees the category and can filter the order list by it. The executor does not assign categories.
+- Order lists in all panels support search by title and description, filtering by status and category, and pagination of 10 orders per page.
+- The customer, assigned executor, and administrator can leave comments in the order history; comments are visible to all participants.
+
+### Statuses
+
+Agreed order flow:
+
+- **New** — customer draft.
+- After submission, the draft becomes **Waiting for distribution** if no executor is selected, or **Assigned** if one is selected.
+- The administrator can assign an executor to an order awaiting distribution. The executor who first takes an order from the pool claims it; the order becomes **Assigned**.
+- The assigned executor proposes the number of hours and the calculated amount. The customer confirms the proposal; work cannot start before confirmation.
+- After confirmation, the order moves to **In progress**.
+- The executor submits the completed work for review: **On review**.
+- If the customer requests changes, the order moves to **Needs revision**. When the executor starts revisions, the order returns to **In progress**; after revisions, the executor submits the order for review again: **On review**.
+- After the customer accepts the work, the administrator issues an invoice: **Invoice issued**.
+- After accepting the work, the customer reports payment, and the order awaits the administrator's payment review in the **Invoice issued** status. After review, the administrator confirms payment, and the order moves to **Invoice paid**. Completion is a separate administrator action after confirming receipt of funds; only then does the order become **Completed**.
+- An order can be **Cancelled** according to the rules below.
+
+### Order cancellation
+
+- Before work starts, the customer or administrator can cancel the order.
+- Before work starts, a cancellation reason is not required.
+- After work starts, only the administrator can cancel the order; a reason is required.
+- After an invoice is issued, the order cannot be cancelled: an unpaid invoice is voided, after which a new one can be issued. A paid invoice is immutable and cannot be voided; post-payment adjustments are outside the current process.
+
+### Rate, estimate, and time tracking
+
+- The executor sets and changes the hourly rate in their profile; the administrator cannot set or change it. Rates may differ.
+- The assigned executor proposes the number of hours. The amount is calculated automatically: executor's rate × proposed hours.
+- The customer confirms the proposed hours and calculated amount before work starts.
+- If the customer rejects the proposal, they leave a comment, the order returns to the unassigned pool, and the order history records the return from the approval stage.
+- The rate is fixed for the order at the time of the proposal and does not change if the profile rate changes later.
+- The executor enters actual time manually as a single summary entry with a comment.
+- The executor can edit the summary time while the order is **In progress**. Actual time and the comment are visible to the executor, customer, and administrator.
+- Actual time is tracked separately and does not change the invoice amount calculated from the agreed hours.
+
+### Invoice and payment
+
+- After the customer accepts the work, the administrator issues an invoice.
+- The invoice is generated in the application and can be downloaded as a PDF.
+- The customer pays the invoice by bank transfer outside the application.
+- After the transfer, the customer marks the invoice as paid in the application and must attach proof of payment (receipt). A payment notification cannot be submitted without a proof file.
+- Payment proof is stored separately from regular order attachments and is available to the customer and administrators; the executor does not see the payment document.
+- The customer's mark moves the payment to "Pending review", but does not by itself confirm receipt of funds or complete the order.
+- The administrator verifies receipt of funds and the attached document, then manually confirms payment. After confirmation, the invoice becomes paid and the order moves to **Invoice paid**; this still does not complete the order.
+- Completing the order is a separate administrator action in the **Invoice paid** status. It records `completedAt` and moves the order to **Completed**; completion is unavailable without a paid invoice.
+- If the confirmation is incorrect or the payment is not found, the administrator does not confirm payment; the order remains open until the situation is resolved.
+- When rejecting a receipt, the administrator must provide a reason. The customer sees the reason and can upload a new receipt; previous receipts and decisions remain in history.
+- The receipt is uploaded to a separate payment field/section, with the same file upload restrictions (any type, maximum 1 MB), and is not considered a regular work attachment.
+- Automatic payment processing through an external provider is outside the MVP and may be added later.
+- At this stage, the invoice is an internal, non-legal document.
+- The invoice currency is USD.
+- The PDF invoice contains the number, date, customer and executor names, agreed hours, rate, and total amount.
+- Amounts are rounded to 2 decimal places. The invoice number is unique and sequential within a year, format: `INV-YYYY-000001`.
+- The invoice stores snapshots of customer and executor names, hours, rate, and amount at the time of issue; changing a profile or order does not change an already issued invoice. Number sequencing is maintained by a separate counter per year and incremented atomically in a transaction.
+- An unpaid invoice can be voided with a reason and the administrator who performed the action, and then a new one can be issued. A voided invoice and its number are preserved; the number is not reused. An order can have only one active invoice. A paid invoice is immutable; post-payment adjustments are outside the current process.
+
+### Files and notifications
+
+- Files of any type up to 1 MB per file can be attached to an order.
+- Notifications are outside the MVP.
+
+## Technical constraints and preferences
+
+- The current ER diagram and data model constraints are described in [database-schema.md](./database-schema.md).
+- A single TypeScript monorepo with `pnpm workspaces`.
+- Backend: NestJS, REST API, Swagger/OpenAPI.
+- Frontend: a single React + Vite + TypeScript application with `/customer`, `/executor`, and `/admin` panels.
+- Each panel uses separate pages for order lists, profile, and other standalone sections.
+- The order card opens over the list in a modal on wide screens and as a full page on mobile devices. Order details have their own URL: direct navigation, page refresh, and browser navigation must work without losing the list context where available.
+- Interactive UI elements must have stable QA locators (preferably `data-testid` attributes) for external test scenarios. Locators must not depend on CSS classes, DOM structure, or displayed text. Automated e2e tests are maintained in a separate training repository and are not run from this project.
+- Database: PostgreSQL; data access and migrations: Prisma.
+- Authentication: Better Auth with data stored in PostgreSQL. All panels use one session system; separate routes and server-side role checks prevent access to other panels and APIs.
+
+- The devtools API is enabled only by explicit `DEVTOOLS_ENABLED=true` and protected by a separate `x-devtools-api-key` from `DEVTOOLS_API_KEY`. The endpoints allow creating a user with a given role (CUSTOMER/EXECUTOR/ADMIN) by email and password, listing users of a selected role, changing a user's email/password and activity by ID, and loading/removing a fixed test data set. The password and API key are not returned; the submitted password is hashed by Better Auth, and existing user sessions are revoked after an email/password change or deactivation. The seed password is stored only locally in `DEVTOOLS_SEED_PASSWORD`; the JSON fixture stores only data set contents, not secrets. The key is set by the environment administrator, currently via `.env`; if devtools must be deployed to production, they should be enabled only after an explicit decision, with the key and seed password stored in a secure secrets vault and network access restricted.
+- Bulk demo data is deterministic and described by a declarative JSON fixture in `apps/api/src/devtools/fixtures/test-data.json`. Re-running replaces the fixed set; cleanup removes reserved seed records along with invoices, receipts, and other dependent records created for seed orders, and does not affect data unrelated to the seed set. If manually created records reference a seed user or seed category, cleanup returns a conflict requiring those links to be removed first.
+- The API validates DTOs on the server (extra fields are forbidden), the session, user activity, role, permissions for a specific order, and the validity of state transitions; client-side validation is not considered a security boundary. REST API errors are returned with a machine-readable `code` field (`BAD_REQUEST`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `INTERNAL_SERVER_ERROR`, etc.). Unhandled server details are not sent to the client, and validation errors do not contain field values. The interface translates the error code into a human-readable message and shows action errors/results in a dismissible toast at the top of the page.
+- The interface is localized into English (default), Russian, and Spanish. The language switcher is available on the landing page, sign-in and registration pages, panels, and the 404 page, and the choice is saved in `localStorage` under the key `order-desk.language`. The `?lang=en|ru|es` parameter sets the language at open time and takes precedence over the saved choice; an unknown value is ignored. The interface language does not change URLs and does not translate user data (order and category names, names, comments). Interface texts are in `apps/web/src/i18n/messages/{en,ru,es}.ts`, and dates, numbers, monetary amounts, and time units are formatted according to the selected locale.
+- Local file storage: SeaweedFS via an S3-compatible API.
+- Services run in Docker Compose. Default local ports: `6200` frontend, `6201` API, `6202` PostgreSQL, `6203` SeaweedFS S3 API, `6204` SeaweedFS Admin UI; values can be overridden in `.env`.
+
+## Implementation plan
+
+Preferred order — bottom-up, from database to interfaces:
+
+1. **Repository and database foundation (done):** workspace and Docker Compose created; Prisma models and PostgreSQL migrations added for users, categories, orders, status history and assignments, estimates, time tracking, comments, attachments, and invoices. The schema accounts for user deactivation, invoice data snapshots, atomic yearly number sequencing, voiding an unpaid invoice, and issuing a new one without deleting history.
+2. **Backend/API (core scenarios implemented):** NestJS API, Better Auth, server-side role and deactivated-account checks, Swagger/OpenAPI, health endpoint, initial administrator, categories, administrative management of executors and customers, order assignment/reassignment/decline/cancellation, estimate proposals and customer responses, work execution and review, time tracking, and comments are ready. SeaweedFS attachments with a 1 MB limit, PDF invoices with Cyrillic support, sequential yearly numbering, voiding and reissuing an unpaid invoice, customer payment receipt submission with manual administrator review/rejection, transitioning an order to `INVOICE_PAID` after payment confirmation, and a separate administrative order completion are also implemented. Customer rejection of an estimate requires a comment. Devtools API with an enable flag and API key check added: create/list/update users and a repeatable JSON seed with cleanup of seed records and related invoices and receipts. Build, types, and migrations have been verified; integration tests for the full API scenario are still pending.
+
+3. **Frontend (core scenarios implemented):** React, Vite, and TypeScript configured; public landing page, registration/sign-in via Better Auth, session cookie handling, role checks for customer, executor, and administrator panels, navigation, and profile added. In the profile, a user can change name and email after confirming the current password, and change the password with revocation of other sessions; an email change is applied immediately, without confirming the new address, and resets the `emailVerified` flag. The order card opens at its own URL over the list on wide screens and full-screen on mobile devices; it shows participants, statuses and history, estimates, tracked time, files, invoices, receipts, and comments according to API permissions. The customer loads categories and orders, creates an order with optional executor selection, saves a draft, edits and submits it, accepts/rejects the executor's estimate (providing a reason when rejecting), accepts the work or requests revisions, attaches files to the draft, leaves comments, cancels the order before work starts, and submits a receipt for an issued invoice and sees review results. The executor loads available and assigned orders, takes an order from the pool, proposes an estimate, tracks time, declines an assignment, and submits work for review or continues revisions. The administrator views orders, assigns/reassigns them, issues invoices, downloads invoice PDFs, voids an unpaid invoice with a reason and issues a new one, reviews/rejects receipts, confirms payment, and separately completes a paid order. On a separate users page, the administrator sees executors and customers, including inactive ones, creates executors without a rate, edits an executor's name, resets passwords, and activates/deactivates accounts. API errors are shown in the interface; interactive elements are marked with stable `data-testid`. Order lists support search, status and category filters, and pagination; on mobile, sign-out is available in the top bar. Production build and targeted checks have been verified; end-to-end scenarios are maintained in a separate repository.
+4. **Docker Compose (done):** API and frontend builds added; the frontend is served by Nginx with support for direct URL navigation. Compose starts all services, waits for PostgreSQL readiness, applies Prisma migrations before starting the API, and checks its health endpoint. Service ports are configured via `.env`.
+5. **End-to-end checks (outside the repository):** automated e2e checks run in a separate training repository. This project retains API unit tests, the devtools API, and stable `data-testid` for external scenarios; Playwright and the e2e suite are not part of the project.
+
+The Better Auth integration with NestJS and Prisma has been verified by registration, sign-in, and session retrieval; registration creates a user with the `CUSTOMER` role.
+
+## Open questions
+
+- Clarify the display-name format for the administrator created from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+
+## Running the project locally
+
+### Requirements
+
+- Docker Engine with Docker Compose v2 (`docker compose`); Docker Desktop works on Windows and macOS.
+- Git for cloning the repository.
+- Free local ports listed below.
+- Node.js `22.18` or newer and pnpm `12.15` are required only for development and running workspace commands on the host. For a normal Compose run, Node.js/pnpm on the host are not required.
+
+### First run via Docker Compose
+
+1. Clone the repository and go to its root.
+2. Create a local environment file: `cp .env.example .env` (on Windows PowerShell: `Copy-Item .env.example .env`).
+3. Open `.env` and replace all `replace-this-*` values with unique local passwords/secrets. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the first administrator. PostgreSQL passwords must be URL-safe (letters, digits, and `._~-`), because the API uses them in `DATABASE_URL`.
+4. Build the images and start all services: `docker compose up --build -d`. The first run may take a few minutes. The API waits for PostgreSQL and automatically applies all migrations before becoming available.
+5. Create the initial administrator account: `docker compose exec api pnpm --filter @order-desk/api db:seed:admin`. This command is safe to re-run and does not change an existing administrator.
+6. Open the frontend and sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD`; executors can be created from the administrator panel. Customers can register independently.
+
+### Default addresses and ports
+
+| Service | Host address | Purpose |
+|---|---|---|
+| Frontend | `http://localhost:6200` | Application |
+| API | `http://localhost:6201/api` | REST API and Better Auth |
+| Swagger | `http://localhost:6201/api/docs` | API contract and interactive documentation |
+| API health check | `http://localhost:6201/api/health` | Health endpoint |
+| PostgreSQL | `localhost:6202` | Database |
+| SeaweedFS S3 API | `http://localhost:6203` | File storage |
+| SeaweedFS Admin UI | `http://localhost:6204` | Local storage administration |
+
+Ports are bound to `127.0.0.1`, so services are available only from the local machine. Inside the Compose network, the API uses PostgreSQL at `postgres:5432` and SeaweedFS at `seaweedfs:8333`.
+
+### Port and address configuration
+
+If a port is busy, change the corresponding value in `.env` and rebuild/restart Compose:
+
+- `WEB_PORT` — frontend port on the host.
+- `API_PORT` — API port on the host.
+- `POSTGRES_PORT` — PostgreSQL port on the host (update the port in `DATABASE_URL` if you run migrations from the host).
+- `S3_PORT` — S3 API port on the host.
+- `SEAWEEDFS_ADMIN_PORT` — SeaweedFS Admin UI port on the host.
+
+When changing frontend/API ports, update the related origins/URLs in `.env`: `VITE_API_URL` must point to the public API address with `/api`, `BETTER_AUTH_URL` to the same address with `/api/auth`, and `FRONTEND_ORIGIN` to the frontend origin. Then run `docker compose up --build -d` to rebuild the frontend with the new `VITE_API_URL`. For DB/S3 parameters, Docker services use internal network names; `DATABASE_URL` and `S3_ENDPOINT` in the API container are automatically overridden by Compose.
+
+### Everyday commands
+
+- Service status: `docker compose ps`.
+- Logs for all services: `docker compose logs -f`; for one service, e.g. API: `docker compose logs -f api`.
+- Restart after changing configuration/code: `docker compose up --build -d`.
+- Stop without deleting data: `docker compose down`.
+- Full cleanup of the local database and files: `docker compose down -v` **deletes PostgreSQL and SeaweedFS data without the possibility of recovery**.
+
+### Development with applications running on the host
+
+For hot reload, install Node.js and pnpm, then run `pnpm install`. Create `.env` according to the instructions above and start only the infrastructure: `docker compose up -d postgres seaweedfs`. Validate the Prisma schema/client (`pnpm db:validate`, `pnpm db:generate`), apply migrations via `pnpm db:migrate`, then create the administrator with `pnpm db:seed:admin`. In separate terminals, start the API `pnpm --filter @order-desk/api dev` and frontend `pnpm --filter @order-desk/web dev`. In the browser, the frontend is usually available at `http://localhost:6200`, the API at `http://localhost:6201`; `VITE_API_URL` and `FRONTEND_ORIGIN` must match the actual addresses.
+
+### Devtools and test data
+
+For local use of the devtools API, set `DEVTOOLS_ENABLED=true`, set a random `DEVTOOLS_API_KEY` at least 32 bytes long, and `DEVTOOLS_SEED_PASSWORD` in `.env`; requests send the key in the `x-devtools-api-key` header. Endpoints are available via Swagger/Postman: `POST /api/devtools/users`, `GET /api/devtools/users?role=CUSTOMER|EXECUTOR|ADMIN`, `PATCH /api/devtools/users/{id}`, `POST /api/devtools/seed` (replace the fixed set), and `DELETE /api/devtools/seed` (remove it). The seed creates accounts `devtools.admin@example.test`, `devtools.customer@example.test`, and `devtools.executor@example.test` with the password from `DEVTOOLS_SEED_PASSWORD`. Cleanup removes seed users, categories, orders, as well as invoices and payment confirmations related to seed orders. If a seed record is used by manually created data, for example a seed executor is assigned to a regular order, cleanup returns a conflict: reassign or delete such records first. File objects in SeaweedFS are not deleted during cleanup. Do not enable devtools unnecessarily and do not use production keys in a local environment.
