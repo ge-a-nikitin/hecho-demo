@@ -1,7 +1,7 @@
 import "../env.js";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BadRequestException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import type { PrismaService } from "../database/prisma.service.js";
 import { OrdersService } from "./orders.service.js";
@@ -125,6 +125,62 @@ describe("OrdersService", () => {
       BadRequestException,
     );
     assert.equal(transactionCalled, false);
+  });
+
+  for (const status of [OrderStatus.INVOICE_ISSUED, OrderStatus.INVOICE_PAID]) {
+    it(`does not allow cancelling an order in ${status}`, async () => {
+      let updateCalled = false;
+      const service = await createService({
+        $transaction: async (run: (tx: object) => Promise<unknown>) =>
+          run({
+            workOrder: {
+              findUnique: async () => ({
+                id: "order-1",
+                customerId: "customer-1",
+                executorId: null,
+                status,
+              }),
+              updateMany: async () => {
+                updateCalled = true;
+                return { count: 1 };
+              },
+            },
+          }),
+      });
+
+      await assert.rejects(
+        service.cancel("order-1", "No longer needed", {
+          id: "admin-1",
+          role: UserRole.ADMIN,
+        }),
+        ConflictException,
+      );
+      assert.equal(updateCalled, false);
+    });
+  }
+
+  it("does not complete an order before payment is confirmed", async () => {
+    let invoiceQueried = false;
+    const service = await createService({
+      $transaction: async (run: (tx: object) => Promise<unknown>) =>
+        run({
+          workOrder: {
+            findUnique: async () => ({ id: "order-1", status: OrderStatus.ON_REVIEW }),
+          },
+          invoice: {
+            findFirst: async () => {
+              invoiceQueried = true;
+              return null;
+            },
+          },
+        }),
+    });
+
+    await assert.rejects(
+      service.complete("order-1", { id: "admin-1", role: UserRole.ADMIN }),
+      ConflictException,
+    );
+    assert.equal(invoiceQueried, false);
   });
 
   it("completes an order only after a paid invoice exists", async () => {
