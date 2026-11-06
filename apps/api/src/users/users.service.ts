@@ -11,9 +11,35 @@ import { auth } from "../auth/auth.js";
 import { PrismaService } from "../database/prisma.service.js";
 import type { CreateExecutorDto, UpdateExecutorDto, UpdateOwnProfileDto } from "./users.dto.js";
 
+const ownProfileSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  isActive: true,
+  hourlyRate: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  getOwnProfile(id: string) {
+    return this.prisma.user.findUniqueOrThrow({
+      where: { id },
+      select: ownProfileSelect,
+    });
+  }
+
+  listAvailableExecutors() {
+    return this.prisma.user.findMany({
+      where: { role: UserRole.EXECUTOR, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  }
 
   listExecutors(includeInactive: boolean) {
     return this.prisma.user.findMany({
@@ -71,7 +97,6 @@ export class UsersService {
         where: { id: createdUserId },
         data: {
           role: UserRole.EXECUTOR,
-          hourlyRate: new Prisma.Decimal(dto.hourlyRate),
         },
         select: {
           id: true,
@@ -151,7 +176,6 @@ export class UsersService {
         where: { id, role: UserRole.EXECUTOR },
         data: {
           name: dto.name?.trim(),
-          hourlyRate: dto.hourlyRate === undefined ? undefined : new Prisma.Decimal(dto.hourlyRate),
         },
         select: {
           id: true,
@@ -168,6 +192,17 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  async updateOwnHourlyRate(id: string, hourlyRate: number) {
+    const update = await this.prisma.user.updateMany({
+      where: { id, role: UserRole.EXECUTOR, isActive: true },
+      data: { hourlyRate: new Prisma.Decimal(hourlyRate) },
+    });
+    if (update.count !== 1) {
+      throw new NotFoundException("Active executor not found");
+    }
+    return this.getOwnProfile(id);
   }
 
   async resetPassword(id: string, password: string) {

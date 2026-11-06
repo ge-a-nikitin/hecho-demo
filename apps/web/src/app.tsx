@@ -460,7 +460,10 @@ function ProfilePage({
   const [passwordCurrentPassword, setPasswordCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [isLoadingRate, setIsLoadingRate] = useState(user.role === "EXECUTOR");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingRate, setIsSavingRate] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const { showToast } = useToast();
 
@@ -468,6 +471,26 @@ function ProfilePage({
     setName(user.name);
     setEmail(user.email);
   }, [user.name, user.email]);
+
+  useEffect(() => {
+    if (user.role !== "EXECUTOR") return;
+    let cancelled = false;
+    setIsLoadingRate(true);
+    apiRequest<{ hourlyRate: number | string | null }>("/users/me")
+      .then((profile) => {
+        if (cancelled) return;
+        setHourlyRate(profile.hourlyRate === null ? "" : String(profile.hourlyRate));
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) showToast(getUserFacingError(error, "Не удалось загрузить ставку."));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingRate(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast, user.role]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -496,6 +519,29 @@ function ProfilePage({
       showToast(getUserFacingError(error, "Не удалось обновить профиль."));
     } finally {
       setIsSavingProfile(false);
+    }
+  }
+
+  async function saveHourlyRate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const rate = Number(hourlyRate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      showToast("Укажите положительную ставку.");
+      return;
+    }
+
+    setIsSavingRate(true);
+    try {
+      const updated = await apiRequest<{ hourlyRate: number | string }>("/users/me/hourly-rate", {
+        method: "PATCH",
+        body: JSON.stringify({ hourlyRate: rate }),
+      });
+      setHourlyRate(String(updated.hourlyRate));
+      showToast("Почасовая ставка обновлена.", "success");
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось сохранить ставку."));
+    } finally {
+      setIsSavingRate(false);
     }
   }
 
@@ -557,6 +603,43 @@ function ProfilePage({
           </button>
         </form>
       </article>
+      {user.role === "EXECUTOR" && (
+        <article className="profile-card" data-testid="executor-rate-card">
+          <div className="profile-card-heading">
+            <span className="profile-avatar profile-avatar-rate" aria-hidden="true">$</span>
+            <div>
+              <h2>Почасовая ставка</h2>
+              <p>Используется при расчёте новых оценок по назначенным вам заказам.</p>
+            </div>
+          </div>
+          <form className="profile-form" onSubmit={saveHourlyRate} data-testid="hourly-rate-form">
+            <label>
+              Ставка, USD в час
+              <input
+                type="number"
+                min="0.0001"
+                max="1000000"
+                step="0.0001"
+                required
+                placeholder="Например, 45"
+                value={hourlyRate}
+                onChange={(event) => setHourlyRate(event.target.value)}
+                disabled={isLoadingRate || isSavingRate}
+                data-testid="profile-hourly-rate"
+              />
+            </label>
+            <p className="profile-help">Уже предложенные оценки и выставленные счета сохраняют прежнюю ставку.</p>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={isLoadingRate || isSavingRate || !hourlyRate}
+              data-testid="save-hourly-rate"
+            >
+              {isLoadingRate ? "Загружаем…" : isSavingRate ? "Сохраняем…" : "Сохранить ставку"}
+            </button>
+          </form>
+        </article>
+      )}
       <article className="profile-card">
         <div className="profile-card-heading">
           <span className="profile-avatar profile-avatar-password" aria-hidden="true">⌑</span>

@@ -16,12 +16,6 @@ export class CreateExecutorDto {
   @MinLength(8)
   @MaxLength(128)
   password!: string;
-
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0.0001)
-  @Max(1_000_000)
-  hourlyRate!: number;
 }
 
 export class ResetPasswordDto {
@@ -38,13 +32,14 @@ export class UpdateExecutorDto {
   @MaxLength(120)
   @Matches(/\S/)
   name?: string;
+}
 
-  @IsOptional()
+export class UpdateHourlyRateDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0.0001)
   @Max(1_000_000)
-  hourlyRate?: number;
+  hourlyRate!: number;
 }
 
 export class UpdateOwnProfileDto {

@@ -13,7 +13,13 @@ import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import { Roles } from "../auth/roles.decorator.js";
 import { SessionGuard } from "../auth/session.guard.js";
-import { CreateExecutorDto, ResetPasswordDto, UpdateExecutorDto, UpdateOwnProfileDto } from "./users.dto.js";
+import {
+  CreateExecutorDto,
+  ResetPasswordDto,
+  UpdateExecutorDto,
+  UpdateHourlyRateDto,
+  UpdateOwnProfileDto,
+} from "./users.dto.js";
 import { UsersService } from "./users.service.js";
 
 @ApiTags("users")
@@ -24,6 +30,13 @@ import { UsersService } from "./users.service.js";
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
+  @Get("me")
+  @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
+  @ApiOperation({ summary: "Get the current user's profile" })
+  getOwnProfile(@CurrentUser() user: { id: string }) {
+    return this.users.getOwnProfile(user.id);
+  }
+
   @Patch("me/profile")
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({ summary: "Update the current user's name or email after password confirmation" })
@@ -32,6 +45,23 @@ export class UsersController {
     @CurrentUser() user: { id: string },
   ) {
     return this.users.updateOwnProfile(user.id, body);
+  }
+
+  @Patch("me/hourly-rate")
+  @Roles("EXECUTOR")
+  @ApiOperation({ summary: "Set the current executor's hourly rate" })
+  updateOwnHourlyRate(
+    @Body() body: UpdateHourlyRateDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.users.updateOwnHourlyRate(user.id, body.hourlyRate);
+  }
+
+  @Get("executors/available")
+  @Roles("CUSTOMER", "ADMIN")
+  @ApiOperation({ summary: "List active executors available for customer selection" })
+  listAvailableExecutors() {
+    return this.users.listAvailableExecutors();
   }
 
   @Get("executors")
@@ -57,7 +87,7 @@ export class UsersController {
   }
 
   @Patch("executors/:id")
-  @ApiOperation({ summary: "Update executor profile and hourly rate" })
+  @ApiOperation({ summary: "Update an executor's display name" })
   updateExecutor(@Param("id") id: string, @Body() body: UpdateExecutorDto) {
     return this.users.updateExecutor(id, body);
   }

@@ -305,7 +305,6 @@ export function AdminOrdersPage() {
   const [executorName, setExecutorName] = useState("");
   const [executorEmail, setExecutorEmail] = useState("");
   const [executorPassword, setExecutorPassword] = useState("");
-  const [executorRate, setExecutorRate] = useState("");
   const [paymentReviewReasons, setPaymentReviewReasons] = useState<Record<string, string>>({});
   const { showToast } = useToast();
 
@@ -354,13 +353,11 @@ export function AdminOrdersPage() {
           name: executorName.trim(),
           email: executorEmail.trim(),
           password: executorPassword,
-          hourlyRate: Number(executorRate),
         }),
       });
       setExecutorName("");
       setExecutorEmail("");
       setExecutorPassword("");
-      setExecutorRate("");
       setIsCreateOpen(false);
       showToast("Учётная запись исполнителя создана.", "success");
       await loadData();
@@ -390,7 +387,7 @@ export function AdminOrdersPage() {
           <div className="order-form-heading">
             <div className="eyebrow">КОМАНДА</div>
             <h2>Новый исполнитель</h2>
-            <p>Учетная запись создается с ролью исполнителя.</p>
+            <p>Учётная запись создаётся с ролью исполнителя. Ставку исполнитель задаёт сам в профиле.</p>
           </div>
           <div className="order-form-grid">
             <label>Имя
@@ -401,9 +398,6 @@ export function AdminOrdersPage() {
             </label>
             <label>Начальный пароль
               <input type="password" value={executorPassword} onChange={(event) => setExecutorPassword(event.target.value)} minLength={8} maxLength={128} required data-testid="executor-password" />
-            </label>
-            <label>Ставка, в час
-              <input type="number" value={executorRate} onChange={(event) => setExecutorRate(event.target.value)} min="0.0001" max="1000000" step="0.0001" required data-testid="executor-hourly-rate" />
             </label>
           </div>
           <div className="order-form-actions">
