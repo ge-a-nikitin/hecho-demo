@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
-    "db:seed:admin": "tsx prisma/seed-admin.ts"
+    "db:seed:admin": "tsx prisma/seed-admin.ts",
+    "e2e:admin": "tsx prisma/ensure-e2e-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
