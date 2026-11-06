@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest, downloadApiFile, getUserFacingError } from "./api";
 import { useToast } from "./toast";
-import type { ReactNode } from "react";
 
 type OrderStatusHistory = {
   id: string;
@@ -106,10 +105,12 @@ const statusLabels: Record<string, string> = {
 export function OrderDetailView({
   orderId,
   panelPath,
+  role,
   onClose,
 }: {
   orderId: string;
   panelPath: string;
+  role: "CUSTOMER" | "EXECUTOR" | "ADMIN";
   onClose: () => void;
 }) {
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
@@ -175,7 +176,7 @@ export function OrderDetailView({
               <button className="button button-quiet" type="button" onClick={() => void loadOrder()}>Повторить</button>
             </div>
           ) : order ? (
-            <OrderDetailContent order={order} panelPath={panelPath} />
+            <OrderDetailContent order={order} panelPath={panelPath} role={role} onReload={loadOrder} />
           ) : null}
         </div>
       </section>
@@ -183,8 +184,101 @@ export function OrderDetailView({
   );
 }
 
-function OrderDetailContent({ order, panelPath }: { order: WorkOrderDetail; panelPath: string }) {
+function OrderDetailContent({
+  order,
+  panelPath,
+  role,
+  onReload,
+}: {
+  order: WorkOrderDetail;
+  panelPath: string;
+  role: "CUSTOMER" | "EXECUTOR" | "ADMIN";
+  onReload: () => Promise<void>;
+}) {
   const { showToast } = useToast();
+  const [comment, setComment] = useState("");
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const notStarted = order.status === "NEW" || order.status === "WAITING_DISTRIBUTION" || order.status === "ASSIGNED";
+  const canCancel =
+    order.status !== "COMPLETED" &&
+    order.status !== "CANCELLED" &&
+    order.status !== "INVOICE_ISSUED" &&
+    order.status !== "INVOICE_PAID" &&
+    (role === "ADMIN" || (role === "CUSTOMER" && notStarted));
+  const canUploadAttachment =
+    role === "ADMIN" ||
+    (role === "CUSTOMER" && order.status === "NEW") ||
+    (role === "EXECUTOR" && order.executor !== null);
+
+  async function addComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = comment.trim();
+    if (!content) return;
+    setIsCommenting(true);
+    try {
+      await apiRequest(`/orders/${encodeURIComponent(order.id)}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+      setComment("");
+      showToast("Комментарий добавлен.", "success");
+      await onReload();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось добавить комментарий."));
+    } finally {
+      setIsCommenting(false);
+    }
+  }
+
+  async function uploadAttachment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) return;
+    if (file.size > 1_048_576) {
+      showToast("Файл слишком большой. Максимальный размер — 1 МБ.");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      await apiRequest(`/orders/${encodeURIComponent(order.id)}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+      form.reset();
+      showToast("Файл прикреплён к заказу.", "success");
+      await onReload();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось прикрепить файл."));
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function cancelOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const reason = cancelReason.trim();
+    if (!notStarted && !reason) return;
+    setIsCancelling(true);
+    try {
+      await apiRequest(`/orders/${encodeURIComponent(order.id)}/cancel`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      });
+      setCancelReason("");
+      showToast("Заказ отменён.", "success");
+      await onReload();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось отменить заказ."));
+    } finally {
+      setIsCancelling(false);
+    }
+  }
   return (
     <div className="order-detail-body">
       <div className="order-detail-meta">
@@ -225,26 +319,39 @@ function OrderDetailContent({ order, panelPath }: { order: WorkOrderDetail; pane
           </ul>
         </DetailSection>
       )}
-      {order.attachments.length > 0 && (
-        <DetailSection title={`Файлы (${order.attachments.length})`}>
-          <ul className="order-detail-list">
-            {order.attachments.map((attachment) => (
-              <li key={attachment.id}>
-                <button
-                  type="button"
-                  className="text-link"
-                  onClick={() => void downloadApiFile(
-                    `/orders/${encodeURIComponent(order.id)}/attachments/${encodeURIComponent(attachment.id)}`,
-                    attachment.filename,
-                  ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать файл заказа.")))}
-                  data-testid={`download-order-attachment-${attachment.id}`}
-                >
-                  {attachment.filename}
-                </button>
-                <small>{formatBytes(attachment.sizeBytes)} · {formatDate(attachment.createdAt)}</small>
-              </li>
-            ))}
-          </ul>
+      {(order.attachments.length > 0 || canUploadAttachment) && (
+        <DetailSection title={`Файлы${order.attachments.length > 0 ? ` (${order.attachments.length})` : ""}`}>
+          {order.attachments.length > 0 && (
+            <ul className="order-detail-list">
+              {order.attachments.map((attachment) => (
+                <li key={attachment.id}>
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => void downloadApiFile(
+                      `/orders/${encodeURIComponent(order.id)}/attachments/${encodeURIComponent(attachment.id)}`,
+                      attachment.filename,
+                    ).catch((error: unknown) => showToast(getUserFacingError(error, "Не удалось скачать файл заказа.")))}
+                    data-testid={`download-order-attachment-${attachment.id}`}
+                  >
+                    {attachment.filename}
+                  </button>
+                  <small>{formatBytes(attachment.sizeBytes)} · {formatDate(attachment.createdAt)}</small>
+                </li>
+              ))}
+            </ul>
+          )}
+          {canUploadAttachment && (
+            <form className="inline-action-form" onSubmit={(event) => void uploadAttachment(event)} data-testid="attachment-upload-form">
+              <label>
+                Прикрепить файл (не более 1 MB)
+                <input type="file" name="file" required data-testid="order-attachment-file" />
+              </label>
+              <button className="button button-quiet" type="submit" disabled={isUploading} data-testid="upload-order-attachment">
+                {isUploading ? "Загружаем…" : "Прикрепить"}
+              </button>
+            </form>
+          )}
         </DetailSection>
       )}
       {order.invoices.length > 0 && (
@@ -280,16 +387,51 @@ function OrderDetailContent({ order, panelPath }: { order: WorkOrderDetail; pane
           </ul>
         </DetailSection>
       )}
-      {order.comments.length > 0 && (
-        <DetailSection title={`Комментарии (${order.comments.length})`}>
+      <DetailSection title={`Комментарии${order.comments.length > 0 ? ` (${order.comments.length})` : ""}`}>
+        {order.comments.length > 0 && (
           <ul className="order-detail-comments">
-            {order.comments.map((comment) => (
-              <li key={comment.id}>
-                <div><b>{comment.author.name}</b><time>{formatDate(comment.createdAt)}</time></div>
-                <p>{comment.content}</p>
+            {order.comments.map((item) => (
+              <li key={item.id}>
+                <div><b>{item.author.name}</b><time>{formatDate(item.createdAt)}</time></div>
+                <p>{item.content}</p>
               </li>
             ))}
           </ul>
+        )}
+        <form className="inline-action-form" onSubmit={(event) => void addComment(event)} data-testid="order-comment-form">
+          <label>
+            Новый комментарий
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              maxLength={10_000}
+              rows={2}
+              required
+              data-testid="order-comment-input"
+            />
+          </label>
+          <button className="button button-quiet" type="submit" disabled={isCommenting || !comment.trim()} data-testid="submit-order-comment">
+            {isCommenting ? "Отправляем…" : "Добавить комментарий"}
+          </button>
+        </form>
+      </DetailSection>
+      {canCancel && (
+        <DetailSection title="Отмена заказа">
+          <form className="inline-action-form" onSubmit={(event) => void cancelOrder(event)} data-testid="cancel-order-form">
+            <label>
+              {notStarted ? "Причина (необязательно)" : "Причина отмены"}
+              <input
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                maxLength={2000}
+                required={!notStarted}
+                data-testid="cancel-order-reason"
+              />
+            </label>
+            <button className="button button-quiet" type="submit" disabled={isCancelling || (!notStarted && !cancelReason.trim())} data-testid="cancel-order-submit">
+              {isCancelling ? "Отменяем…" : "Отменить заказ"}
+            </button>
+          </form>
         </DetailSection>
       )}
       {order.statusHistory.length > 0 && (

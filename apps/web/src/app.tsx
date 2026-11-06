@@ -28,6 +28,7 @@ type WorkOrder = {
   description: string;
   status: string;
   category: Category;
+  executor?: { id: string; name: string } | null;
   createdAt: string;
   dueAt: string | null;
   location: string | null;
@@ -52,6 +53,7 @@ type CreateOrderInput = {
   title: string;
   description: string;
   categoryId: string;
+  executorId?: string;
   dueAt?: string;
   location?: string;
 };
@@ -440,6 +442,7 @@ function PanelPage({
         <OrderDetailView
           orderId={orderId}
           panelPath={panel.path}
+          role={role}
           onClose={() => navigate(panel.path)}
         />
       )}
@@ -678,6 +681,7 @@ function ProfilePage({
 function CustomerOrdersPage() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [executors, setExecutors] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [ordersError, setOrdersError] = useState(false);
@@ -690,8 +694,18 @@ function CustomerOrdersPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [executorId, setExecutorId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [location, setLocation] = useState("");
+  const [editingOrderId, setEditingOrderId] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editExecutorId, setEditExecutorId] = useState("");
+  const [editDueAt, setEditDueAt] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [savingDraftId, setSavingDraftId] = useState("");
+  const [submittingDraftId, setSubmittingDraftId] = useState("");
   const { showToast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -722,12 +736,22 @@ function CustomerOrdersPage() {
     }
   }, [showToast]);
 
+  const loadExecutors = useCallback(async () => {
+    try {
+      setExecutors(await apiRequest<{ id: string; name: string }[]>("/users/executors/available"));
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось загрузить список исполнителей."));
+    }
+  }, [showToast]);
+
   useEffect(() => {
-    void Promise.all([loadOrders(), loadCategories()]);
-  }, [loadOrders, loadCategories]);
+    void Promise.all([loadOrders(), loadCategories(), loadExecutors()]);
+  }, [loadOrders, loadCategories, loadExecutors]);
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const shouldSubmit = submitter instanceof HTMLElement && submitter.dataset.mode === "send";
     setIsSubmitting(true);
 
     try {
@@ -735,6 +759,7 @@ function CustomerOrdersPage() {
         title: title.trim(),
         description: description.trim(),
         categoryId,
+        ...(executorId ? { executorId } : {}),
         ...(dueAt ? { dueAt: new Date(`${dueAt}T00:00:00.000Z`).toISOString() } : {}),
         ...(location.trim() ? { location: location.trim() } : {}),
       };
@@ -746,18 +771,28 @@ function CustomerOrdersPage() {
       setIsCreateOpen(false);
       setTitle("");
       setDescription("");
+      setExecutorId("");
       setDueAt("");
       setLocation("");
 
-      try {
-        await apiRequest<WorkOrder>(`/orders/${encodeURIComponent(draft.id)}/submit`, {
-          method: "POST",
-        });
-        showToast("Заказ создан и отправлен на распределение.", "success");
-      } catch (error) {
-        showToast(
-          `Черновик создан, но отправить его не удалось. ${getUserFacingError(error, "Попробуйте отправить его позже.")}`,
-        );
+      if (shouldSubmit) {
+        try {
+          await apiRequest<WorkOrder>(`/orders/${encodeURIComponent(draft.id)}/submit`, {
+            method: "POST",
+          });
+          showToast(
+            draft.executor
+              ? "Заказ создан и отправлен выбранному исполнителю."
+              : "Заказ создан и отправлен на распределение.",
+            "success",
+          );
+        } catch (error) {
+          showToast(
+            `Черновик создан, но отправить его не удалось. ${getUserFacingError(error, "Откройте черновик и отправьте его позже.")}`,
+          );
+        }
+      } else {
+        showToast("Черновик сохранён. Его можно отредактировать и отправить позже.", "success");
       }
 
       await loadOrders();
@@ -765,6 +800,59 @@ function CustomerOrdersPage() {
       showToast(getUserFacingError(error, "Не удалось создать заказ."));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function startEditingDraft(order: WorkOrder) {
+    setEditingOrderId(order.id);
+    setEditTitle(order.title);
+    setEditDescription(order.description);
+    setEditCategoryId(order.category.id);
+    setEditExecutorId(order.executor?.id ?? "");
+    setEditDueAt(order.dueAt ? order.dueAt.slice(0, 10) : "");
+    setEditLocation(order.location ?? "");
+  }
+
+  async function saveDraft(event: FormEvent<HTMLFormElement>, order: WorkOrder) {
+    event.preventDefault();
+    setSavingDraftId(order.id);
+    try {
+      await apiRequest(`/orders/${encodeURIComponent(order.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          categoryId: editCategoryId,
+          executorId: editExecutorId || null,
+          dueAt: editDueAt ? new Date(`${editDueAt}T00:00:00.000Z`).toISOString() : null,
+          location: editLocation.trim() || null,
+        }),
+      });
+      setEditingOrderId("");
+      showToast("Черновик обновлён.", "success");
+      await loadOrders();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось сохранить черновик."));
+    } finally {
+      setSavingDraftId("");
+    }
+  }
+
+  async function submitDraft(order: WorkOrder) {
+    setSubmittingDraftId(order.id);
+    try {
+      await apiRequest(`/orders/${encodeURIComponent(order.id)}/submit`, { method: "POST" });
+      showToast(
+        order.executor
+          ? "Заказ отправлен выбранному исполнителю."
+          : "Заказ отправлен на распределение.",
+        "success",
+      );
+      await loadOrders();
+    } catch (error) {
+      showToast(getUserFacingError(error, "Не удалось отправить черновик."));
+    } finally {
+      setSubmittingDraftId("");
     }
   }
 
@@ -820,7 +908,7 @@ function CustomerOrdersPage() {
           <div className="order-form-heading">
             <div className="eyebrow">НОВЫЙ ЗАПРОС</div>
             <h2>Опишите, что нужно сделать</h2>
-            <p>После создания заказ сразу станет доступен для распределения.</p>
+            <p>Сохраните черновик или сразу отправьте заказ выбранному исполнителю либо в общий пул.</p>
           </div>
           <label>
             Название
@@ -872,6 +960,19 @@ function CustomerOrdersPage() {
             </label>
           </div>
           <label>
+            Исполнитель <span className="optional-label">необязательно</span>
+            <select
+              value={executorId}
+              onChange={(event) => setExecutorId(event.target.value)}
+              data-testid="order-executor"
+            >
+              <option value="">Не назначать — заказ попадёт в общий пул</option>
+              {executors.map((executor) => (
+                <option key={executor.id} value={executor.id}>{executor.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
             Место выполнения <span className="optional-label">необязательно</span>
             <input
               value={location}
@@ -893,8 +994,18 @@ function CustomerOrdersPage() {
               Отмена
             </button>
             <button
+              className="button button-quiet"
+              type="submit"
+              data-mode="draft"
+              disabled={isSubmitting || isLoadingCategories || categories.length === 0}
+              data-testid="save-draft"
+            >
+              {isSubmitting ? "Сохраняем…" : "Сохранить черновик"}
+            </button>
+            <button
               className="button button-primary"
               type="submit"
+              data-mode="send"
               disabled={isSubmitting || isLoadingCategories || categories.length === 0}
               data-testid="submit-create-order"
             >
@@ -942,9 +1053,129 @@ function CustomerOrdersPage() {
                 </Link>
                 <div className="order-list-footer">
                   <span>Создан {formatDate(order.createdAt)}</span>
+                  {order.executor && <span>Исполнитель: {order.executor.name}</span>}
                   {order.dueAt && <span>Срок {formatDate(order.dueAt)}</span>}
                   {order.location && <span>{order.location}</span>}
                 </div>
+                {order.status === "NEW" && (
+                  editingOrderId === order.id ? (
+                    <form className="order-form draft-edit-form" onSubmit={(event) => void saveDraft(event, order)} data-testid={`edit-order-form-${order.id}`}>
+                      <div className="order-form-heading">
+                        <div className="eyebrow">ЧЕРНОВИК</div>
+                        <h2>Редактирование заказа</h2>
+                      </div>
+                      <label>
+                        Название
+                        <input
+                          value={editTitle}
+                          onChange={(event) => setEditTitle(event.target.value)}
+                          maxLength={200}
+                          required
+                          data-testid={`edit-title-${order.id}`}
+                        />
+                      </label>
+                      <label>
+                        Описание задачи
+                        <textarea
+                          value={editDescription}
+                          onChange={(event) => setEditDescription(event.target.value)}
+                          maxLength={20_000}
+                          rows={4}
+                          required
+                          data-testid={`edit-description-${order.id}`}
+                        />
+                      </label>
+                      <div className="order-form-grid">
+                        <label>
+                          Категория
+                          <select
+                            value={editCategoryId}
+                            onChange={(event) => setEditCategoryId(event.target.value)}
+                            required
+                            data-testid={`edit-category-${order.id}`}
+                          >
+                            {categories.map((category) => (
+                              <option key={category.id} value={category.id}>{category.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Желаемый срок
+                          <input
+                            type="date"
+                            value={editDueAt}
+                            onChange={(event) => setEditDueAt(event.target.value)}
+                            data-testid={`edit-due-date-${order.id}`}
+                          />
+                        </label>
+                      </div>
+                      <label>
+                        Исполнитель <span className="optional-label">необязательно</span>
+                        <select
+                          value={editExecutorId}
+                          onChange={(event) => setEditExecutorId(event.target.value)}
+                          data-testid={`edit-executor-${order.id}`}
+                        >
+                          <option value="">Не назначать — заказ попадёт в общий пул</option>
+                          {executors.map((executor) => (
+                            <option key={executor.id} value={executor.id}>{executor.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Место выполнения <span className="optional-label">необязательно</span>
+                        <input
+                          value={editLocation}
+                          onChange={(event) => setEditLocation(event.target.value)}
+                          maxLength={500}
+                          data-testid={`edit-location-${order.id}`}
+                        />
+                      </label>
+                      <div className="order-form-actions">
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          onClick={() => setEditingOrderId("")}
+                          data-testid={`cancel-edit-${order.id}`}
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          className="button button-primary"
+                          type="submit"
+                          disabled={savingDraftId === order.id}
+                          data-testid={`save-draft-${order.id}`}
+                        >
+                          {savingDraftId === order.id ? "Сохраняем…" : "Сохранить изменения"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="customer-order-actions" data-testid={`draft-actions-${order.id}`}>
+                      <button
+                        className="button button-quiet"
+                        type="button"
+                        onClick={() => startEditingDraft(order)}
+                        data-testid={`edit-order-${order.id}`}
+                      >
+                        Редактировать
+                      </button>
+                      <button
+                        className="button button-primary"
+                        type="button"
+                        disabled={submittingDraftId === order.id}
+                        onClick={() => void submitDraft(order)}
+                        data-testid={`submit-draft-${order.id}`}
+                      >
+                        {submittingDraftId === order.id
+                          ? "Отправляем…"
+                          : order.executor
+                            ? "Отправить исполнителю"
+                            : "Отправить на распределение"}
+                      </button>
+                    </div>
+                  )
+                )}
                 {pendingEstimate && (
                   <div className="customer-order-actions" data-testid={`estimate-response-${order.id}`}>
                     <p className="form-hint">
