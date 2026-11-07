@@ -202,6 +202,7 @@ When changing frontend/API ports, update the related origins/URLs in `.env`: `VI
 - Service status: `docker compose ps`.
 - Logs for all services: `docker compose logs -f`; for one service, e.g. API: `docker compose logs -f api`.
 - Restart after changing configuration/code: `docker compose up --build -d`.
+- Start after a host reboot: containers are declared with `restart: "no"`, so they do not start automatically with the system — bring the stack up manually with `docker compose up -d`. Docker also does not restart containers after a crash; if you need crash recovery and start on boot, restore `restart: unless-stopped` in `docker-compose.yml`.
 - Stop without deleting data: `docker compose down`.
 - Full cleanup of the local database and files: `docker compose down -v` **deletes PostgreSQL and SeaweedFS data without the possibility of recovery**.
 

@@ -1,3 +1,5 @@
+# Containers use restart: "no" on purpose: the stack must be started manually
+# with `docker compose up -d` and never comes up automatically on host reboot.
 services:
   web:
     build:
@@ -5,7 +7,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:6201/api}
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "127.0.0.1:${WEB_PORT:-6200}:8080"
     depends_on:
@@ -16,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    restart: unless-stopped
+    restart: "no"
     env_file:
       - .env
     environment:
@@ -43,7 +45,7 @@ services:
 
   postgres:
     image: postgres:17-alpine
-    restart: unless-stopped
+    restart: "no"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -67,7 +69,7 @@ services:
       - -master.port=9333
       - -admin.user=${SEAWEEDFS_ADMIN_USER:?Set SEAWEEDFS_ADMIN_USER in .env}
       - -admin.password=${SEAWEEDFS_ADMIN_PASSWORD:?Set SEAWEEDFS_ADMIN_PASSWORD in .env}
-    restart: unless-stopped
+    restart: "no"
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}

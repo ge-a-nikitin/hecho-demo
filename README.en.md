@@ -76,6 +76,8 @@ flowchart LR
 5. Create the initial administrator: `docker compose exec api pnpm --filter @order-desk/api db:seed:admin`. The command is safe to re-run.
 6. Open `http://localhost:6200` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. The administrator creates executors; customers register independently.
 
+The containers use `restart: "no"`, so they do not start automatically after a host reboot: bring the stack up manually with `docker compose up -d`.
+
 | Service | Default address |
 |---|---|
 | Frontend | `http://localhost:6200` |
