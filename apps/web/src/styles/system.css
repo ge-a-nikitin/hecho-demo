@@ -1,0 +1,233 @@
+/*
+ * Shared controls and states: buttons, links, form messages, language switcher,
+ * empty/loading pages. Used by the landing page and every panel role.
+ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-body);
+  text-align: center;
+  white-space: nowrap;
+  transition:
+    background-color var(--response-fast) var(--ease-out),
+    color var(--response-fast) var(--ease-out),
+    box-shadow var(--response-fast) var(--ease-out),
+    transform var(--response-tap) var(--ease-out);
+}
+
+/* Feedback lives on the press, not on hover: touch devices get the same reply. */
+.button:active:not(:disabled) { transform: scale(0.97); }
+.button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.button-primary {
+  background: var(--green);
+  color: #fff;
+  box-shadow: var(--shadow-1);
+}
+.button-primary:hover:not(:disabled) { background: var(--green-deep); }
+
+.button-dark {
+  background: #232c25;
+  color: #fff;
+  box-shadow: var(--shadow-1);
+}
+.button-dark:hover:not(:disabled) { background: #161d18; }
+
+.button-small {
+  min-height: 2.25rem;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+}
+
+.button-quiet {
+  min-height: 2.5rem;
+  padding: 0 var(--space-1);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+}
+.button-quiet:hover:not(:disabled) { color: var(--green); background: transparent; }
+.button-quiet:active:not(:disabled) { transform: scale(0.97); }
+.button-quiet span { color: var(--green); font-weight: 700; }
+
+.button-compact {
+  min-height: 2.125rem;
+  padding-inline: var(--space-4);
+  font-size: var(--text-2xs);
+}
+
+.text-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-align: left;
+  transition: color var(--response-fast) var(--ease-out);
+}
+.text-link:hover { color: var(--green-deep); text-decoration: underline; }
+.text-link:active { transform: scale(0.98); }
+.text-link span { margin-left: var(--space-2); }
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-tight);
+}
+
+.form-hint {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-tight);
+}
+
+.optional-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 400;
+}
+
+/* Language switcher ------------------------------------------------------ */
+
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.language-option {
+  min-height: 1.75rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  transition: background-color var(--response-fast) var(--ease-out),
+    color var(--response-fast) var(--ease-out);
+}
+
+.language-option:hover { color: var(--ink-soft); }
+
+/* The active pill is a physical piece of the material: it lifts on selection. */
+.language-option.active {
+  background: #fff;
+  color: var(--green);
+  box-shadow: var(--shadow-1);
+}
+
+/* Narrow screens switch to short codes so the three options still fit. */
+.language-option-code { display: none; }
+
+@media (max-width: 600px) {
+  .language-option { padding: 0 7px; font-size: var(--text-2xs); }
+  .language-option-name { display: none; }
+  .language-option-code { display: inline; }
+}
+
+/* Empty, loading and error states --------------------------------------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 15rem;
+  margin-top: var(--space-7);
+  padding: var(--space-7);
+  border: 1px dashed #d8e1d6;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+
+.empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--green-tint);
+  color: #4c7a57;
+  font-size: var(--text-lg);
+}
+
+.empty-state h2 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+
+.empty-state p {
+  max-width: 24rem;
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+}
+
+.empty-state .button { margin-top: var(--space-5); }
+
+.orders-loading,
+.api-load-error,
+.order-group-empty,
+.executor-directory > p {
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--material-card);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.api-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.api-load-error p { margin: 0; color: var(--danger); }
+.api-load-error .button { min-height: 2.125rem; }
+
+.loading-page,
+.not-found-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 100vh;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.not-found-page h1 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-title);
+}

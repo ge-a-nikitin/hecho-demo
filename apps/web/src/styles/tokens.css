@@ -1,0 +1,165 @@
+/*
+ * Design tokens + base layer.
+ * Every value here is deliberate: sizes come from a 4px-derived spacing scale,
+ * type is expressed in rem so the layout follows the user's text size, and
+ * motion is named by response, not by duration.
+ */
+
+:root {
+  /* Typography ------------------------------------------------------------ */
+  --font-sans: system-ui, -apple-system, "SF Pro Text", "SF Pro Display",
+    "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Type scale — 12px is the floor for interface text. */
+  --text-2xs: 0.75rem;    /* 12px — meta, chips */
+  --text-xs: 0.8125rem;   /* 13px — labels, secondary UI */
+  --text-sm: 0.875rem;    /* 14px — dense controls */
+  --text-base: 0.9375rem; /* 15px — body */
+  --text-md: 1.0625rem;   /* 17px — reading copy, iOS body */
+  --text-lg: 1.25rem;     /* 20px — card titles */
+  --text-xl: 1.5rem;      /* 24px — page titles */
+  --text-2xl: 2rem;       /* 32px — section headings */
+  --text-3xl: 2.5rem;     /* 40px */
+  --text-display: clamp(2.75rem, 6vw, 4.25rem);
+
+  /* Tracking is size-specific: negative as type grows, slightly positive when small. */
+  --tracking-display: -0.022em;
+  --tracking-title: -0.014em;
+  --tracking-body: 0em;
+  --tracking-label: 0.02em;
+
+  /* Leading tracks size inversely. */
+  --leading-display: 1.04;
+  --leading-title: 1.2;
+  --leading-body: 1.55;
+  --leading-tight: 1.35;
+
+  /* Spacing -------------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.5rem;
+  --space-9: 3.5rem;
+  --space-10: 5rem;
+
+  /* Radii ---------------------------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Elevation — three honest steps, no barely-visible shadows. */
+  --shadow-1: 0 1px 2px rgba(18, 30, 20, 0.06), 0 2px 8px rgba(18, 30, 20, 0.05);
+  --shadow-2: 0 10px 28px rgba(18, 30, 20, 0.1), 0 2px 6px rgba(18, 30, 20, 0.06);
+  --shadow-3: 0 32px 80px rgba(10, 18, 12, 0.22), 0 8px 24px rgba(10, 18, 12, 0.12);
+
+  /* Materials — translucency encodes hierarchy, never stacked light on light. */
+  --material-chrome: rgba(255, 255, 255, 0.74);
+  --material-chrome-strong: rgba(250, 251, 249, 0.86);
+  --material-sheet: rgba(250, 251, 249, 0.92);
+  --material-card: #ffffff;
+  --blur-chrome: 24px;
+  --blur-sheet: 32px;
+  --scrim: rgba(18, 26, 20, 0.44);
+  --hairline: rgba(30, 48, 33, 0.1);
+  --hairline-strong: rgba(30, 48, 33, 0.16);
+
+  /* Color ---------------------------------------------------------------- */
+  --ink: #1f2621;
+  --ink-soft: #3b473d;
+  --text-secondary: #5a645a;
+  --text-tertiary: #6b746a;
+  --green: #2e694d;
+  --green-deep: #1f4d37;
+  --green-tint: #eaf1ea;
+  --paper: #f7f8f6;
+  --paper-deep: #eef2ed;
+  --line: #e4e8e2;
+  --danger: #a13d36;
+  --warning: #7d613d;
+
+  /* Motion — named by response (how fast it settles), not by duration. */
+  --response-tap: 0.12s;
+  --response-fast: 0.2s;
+  --response-base: 0.32s;
+  --response-slow: 0.48s;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-settle: cubic-bezier(0.32, 0.72, 0, 1);
+
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+}
+
+h1, h2, h3, h4, p { margin-top: 0; }
+
+h1, h2, h3 {
+  color: var(--ink);
+  line-height: var(--leading-title);
+  letter-spacing: var(--tracking-title);
+  text-wrap: balance;
+}
+
+a { color: inherit; text-decoration: none; }
+
+button, input, select, textarea { font: inherit; letter-spacing: inherit; }
+
+/* Every tappable surface responds on pointer-down, so touch-action must not
+   wait for the legacy 300ms delay. */
+button, a, input, select, textarea, label { touch-action: manipulation; }
+
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 3px solid #7fb294;
+  outline-offset: 2px;
+}
+
+.wrap { width: min(1180px, calc(100% - 64px)); margin-inline: auto; }
+
+/* Small caps label used across landing, panel and sheet. */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5f9a72;
+}

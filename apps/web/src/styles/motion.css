@@ -1,0 +1,90 @@
+/*
+ * System-level fallbacks. Each block is a gentler equivalent, not an absence of
+ * feedback: motion becomes a cross-fade, materials become solid, contrast gets
+ * defined borders.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The toast keeps a short opacity fade: it is the only cue that something
+     arrived or left, so it must not be removed outright. */
+  .toast-bubble {
+    transition: opacity 160ms ease !important;
+    transform: translate3d(-50%, 0, 0) !important;
+  }
+  .toast-bubble[data-state="entering"],
+  .toast-bubble[data-state="leaving"] {
+    opacity: 0;
+    transform: translate3d(-50%, 0, 0) !important;
+  }
+
+  /* No tilt, no lift: static equivalents of every hover/settle motion. */
+  .task-card,
+  .task-card:hover { transform: none; }
+  .step-card:hover { transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .topbar,
+  .topnav,
+  .panel-sidebar,
+  .panel-topbar,
+  .auth-card,
+  .floating-note,
+  .toast-bubble,
+  .order-detail-dialog,
+  .order-detail-header {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .order-detail-backdrop { background: rgba(16, 24, 18, 0.62); }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-secondary: #354034;
+    --text-tertiary: #3d483d;
+    --hairline: rgba(18, 32, 20, 0.55);
+    --hairline-strong: rgba(18, 32, 20, 0.7);
+    --shadow-1: 0 0 0 1px rgba(18, 32, 20, 0.45);
+    --shadow-2: 0 0 0 1px rgba(18, 32, 20, 0.45);
+    --shadow-3: 0 0 0 1px rgba(18, 32, 20, 0.6), 0 16px 40px rgba(10, 18, 12, 0.4);
+  }
+
+  .order-detail-dialog,
+  .order-detail-header,
+  .topbar,
+  .panel-sidebar,
+  .panel-topbar,
+  .auth-card,
+  .toast-bubble {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgba(18, 32, 20, 0.6);
+  }
+
+  .order-status,
+  .admin-status-badge,
+  .task-status { outline: 1px solid currentColor; outline-offset: -1px; }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline-width: 3px;
+    outline-color: #1f4d37;
+  }
+}

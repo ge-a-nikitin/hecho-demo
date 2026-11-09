@@ -16,12 +16,15 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
           type="button"
           className={`language-option${option === language ? " active" : ""}`}
           aria-pressed={option === language}
+          aria-label={languageNames[option]}
           onClick={() => setLanguage(option)}
           data-testid={`language-${option}`}
         >
-          {languageNames[option]}
+          <span className="language-option-name">{languageNames[option]}</span>
+          <span className="language-option-code" aria-hidden="true">{option.toUpperCase()}</span>
         </button>
       ))}
+
     </div>
   );
 }

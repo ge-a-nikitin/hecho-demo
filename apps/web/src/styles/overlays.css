@@ -1,0 +1,206 @@
+/*
+ * Overlays: the order sheet (centred dialog on desktop, draggable bottom sheet
+ * on touch) and the toast. Both are materials: translucent, blurred, and
+ * animated from a live value by JS, so a gesture can interrupt them.
+ */
+
+.order-detail-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--scrim);
+  will-change: opacity;
+}
+
+.order-detail-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(52rem, 100%);
+  max-height: min(54rem, calc(100dvh - 3rem));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-xl);
+  background: var(--material-sheet);
+  backdrop-filter: blur(var(--blur-sheet)) saturate(170%);
+  -webkit-backdrop-filter: blur(var(--blur-sheet)) saturate(170%);
+  box-shadow: var(--shadow-3);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
+/* The grabber only exists where dragging exists. */
+.order-sheet-grabber { display: none; }
+
+.order-detail-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  background: rgba(250, 251, 249, 0.86);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.order-detail-header h2 {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+  overflow-wrap: anywhere;
+}
+
+.order-detail-close {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  line-height: 1;
+  transition:
+    background-color var(--response-fast) var(--ease-out),
+    color var(--response-fast) var(--ease-out),
+    transform var(--response-tap) var(--ease-out);
+}
+.order-detail-close:hover { background: #fff; color: var(--ink); }
+.order-detail-close:active { transform: scale(0.94); }
+
+.order-detail-content {
+  min-height: 10rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Touch layout: a sheet that can be thrown away. */
+@media (max-width: 640px) {
+  .order-detail-backdrop { align-items: end; padding: 0; }
+
+  .order-detail-dialog {
+    width: 100%;
+    max-height: 92dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-width: 1px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .order-sheet-grabber {
+    display: grid;
+    place-items: center;
+    height: 1.5rem;
+    flex: 0 0 1.5rem;
+    /* The handle owns the gesture, so it may not scroll the page. */
+    touch-action: none;
+    cursor: grab;
+  }
+  .order-sheet-grabber::before {
+    width: 2.5rem;
+    height: 5px;
+    border-radius: var(--radius-pill);
+    background: #c6cec4;
+    content: "";
+    transition: background-color var(--response-fast) var(--ease-out);
+  }
+  .order-sheet-grabber:active { cursor: grabbing; }
+  .order-sheet-grabber:active::before { background: #a9b4a7; }
+
+  .order-detail-header {
+    padding: var(--space-4);
+    /* Dragging from the header is the primary dismiss gesture. */
+    touch-action: none;
+    cursor: grab;
+  }
+  .order-detail-header h2 { font-size: var(--text-md); }
+  .order-detail-dialog[data-dragging="true"] .order-detail-header { cursor: grabbing; }
+}
+
+/* Toast ----------------------------------------------------------------- */
+
+.toast-bubble {
+  position: fixed;
+  z-index: 1000;
+  top: calc(env(safe-area-inset-top) + var(--space-4));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(36rem, calc(100vw - 2rem));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md);
+  background: var(--material-chrome-strong);
+  backdrop-filter: blur(var(--blur-chrome)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-chrome)) saturate(180%);
+  box-shadow: var(--shadow-2);
+  transform: translate3d(-50%, 0, 0);
+  transition:
+    opacity var(--response-base) var(--ease-settle),
+    transform var(--response-base) var(--ease-settle);
+}
+
+/* Arriving and leaving share the same properties, so a re-show while leaving
+   retargets the transition instead of restarting it. */
+.toast-bubble[data-state="entering"] { opacity: 0; transform: translate3d(-50%, -0.75rem, 0); }
+.toast-bubble[data-state="leaving"] { opacity: 0; transform: translate3d(-50%, -0.5rem, 0); }
+
+.toast-bubble-error { color: #82362f; box-shadow: var(--shadow-2), inset 0 0 0 1px rgba(160, 61, 54, 0.14); }
+.toast-bubble-success { color: #2f5c39; box-shadow: var(--shadow-2), inset 0 0 0 1px rgba(46, 105, 77, 0.14); }
+
+.toast-bubble-icon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+  border-radius: 50%;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+}
+.toast-bubble-error .toast-bubble-icon { background: #f7e6e3; color: #8f4139; }
+.toast-bubble-success .toast-bubble-icon { background: #e2f0e2; color: #356a41; }
+
+.toast-bubble p {
+  flex: 1;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.toast-bubble button {
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--text-lg);
+  line-height: 1;
+  opacity: 0.7;
+  transition:
+    background-color var(--response-fast) var(--ease-out),
+    opacity var(--response-fast) var(--ease-out),
+    transform var(--response-tap) var(--ease-out);
+}
+.toast-bubble button:hover { background: rgba(0, 0, 0, 0.06); opacity: 1; }
+.toast-bubble button:active { transform: scale(0.92); }
+
+

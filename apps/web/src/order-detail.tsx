@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest, downloadApiFile } from "./api";
+import { createSheetMotion, type SheetMotion } from "./motion/sheet";
 import { useToast } from "./toast";
 import { useI18n } from "./i18n";
+
+const FOCUSABLE =
+  'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 
 type OrderStatusHistory = {
   id: string;
@@ -124,35 +129,149 @@ export function OrderDetailView({
     void loadOrder();
   }, [loadOrder]);
 
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const motionRef = useRef<SheetMotion | null>(null);
+  const isClosingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const requestClose = useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    const motion = motionRef.current;
+    if (!motion) {
+      onCloseRef.current();
+      return;
+    }
+    // The exit animation runs from wherever the sheet currently is, so a close
+    // requested mid-gesture continues instead of jumping.
+    void motion.exit().then(() => onCloseRef.current());
+  }, []);
+
+  const requestCloseRef = useRef(requestClose);
+  useEffect(() => {
+    requestCloseRef.current = requestClose;
+  }, [requestClose]);
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    const scrim = backdropRef.current;
+    if (!sheet || !scrim) return;
+
+    const motion = createSheetMotion({
+      sheet,
+      scrim,
+      onDismissed: () => onCloseRef.current(),
+    });
+    motionRef.current = motion;
+    motion.enter();
+
+    const detach = headerRef.current ? motion.attachDragSurface(headerRef.current) : undefined;
+    return () => {
+      detach?.();
+      motion.destroy();
+      motionRef.current = null;
+    };
+  }, []);
+
+  // Modal behaviour the platform does not give us for free: freeze the page,
+  // move focus in, keep it in, and give it back.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const { body, documentElement } = document;
+    const previousOverflow = documentElement.style.overflow;
+    const previousPadding = body.style.paddingRight;
+    const scrollbar = window.innerWidth - documentElement.clientWidth;
+
+    documentElement.style.overflow = "hidden";
+    if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
+
+    const frame = requestAnimationFrame(() => {
+      sheetRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      documentElement.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPadding;
+      previouslyFocused?.focus?.({ preventScroll: true });
+    };
+  }, []);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const items = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (item) => item.offsetParent !== null,
+      );
+      if (items.length === 0) {
+        event.preventDefault();
+        sheet.focus();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+
+      if (!sheet.contains(active)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
 
   return (
     <div
       className="order-detail-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+      ref={backdropRef}
+      onPointerDown={(event) => {
+        // Tapping the scrim dismisses, and it answers on pointer-down.
+        if (event.target === event.currentTarget) requestClose();
       }}
       data-testid="order-detail-backdrop"
     >
       <section
         className="order-detail-dialog"
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="order-detail-title"
+        tabIndex={-1}
         data-testid="order-detail"
       >
-        <header className="order-detail-header">
+        <div className="order-sheet-grabber" aria-hidden="true" />
+        <header className="order-detail-header" ref={headerRef}>
           <div>
             <div className="eyebrow">{t.orderDetail.eyebrow}</div>
             <h2 id="order-detail-title">{order?.title ?? t.orderDetail.titleFallback}</h2>
           </div>
-          <button type="button" className="order-detail-close" onClick={onClose} aria-label={t.orderDetail.closeAria} data-testid="close-order-detail">
+          <button type="button" className="order-detail-close" onClick={requestClose} aria-label={t.orderDetail.closeAria} data-testid="close-order-detail">
             ×
           </button>
         </header>
