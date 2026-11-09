@@ -1,6 +1,7 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { hideDisabledDevTools } from "./common/swagger-document.js";
 import { toNodeHandler } from "better-auth/node";
 import { json, urlencoded } from "express";
 import { ApiExceptionFilter } from "./api-exception.filter.js";
@@ -38,6 +39,7 @@ export async function bootstrap(): Promise<void> {
     .addCookieAuth("better-auth.session_token")
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
+  hideDisabledDevTools(document, process.env.DEVTOOLS_ENABLED === "true");
   SwaggerModule.setup("api/docs", app, document);
 
   const port = Number(process.env.PORT ?? 6201);

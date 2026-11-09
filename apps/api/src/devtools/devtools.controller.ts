@@ -18,7 +18,12 @@ import { DevToolsGuard } from "./devtools.guard.js";
 import { DevToolsService } from "./devtools.service.js";
 
 @ApiTags("devtools")
-@ApiHeader({ name: "x-devtools-api-key", required: true })
+@ApiHeader({
+  name: "x-devtools-api-key",
+  required: true,
+  description:
+    "Value of DEVTOOLS_API_KEY. The whole devtools group answers 404 until DEVTOOLS_ENABLED=true and 401 without this key.",
+})
 @UseGuards(DevToolsGuard)
 @Controller("devtools")
 export class DevToolsController {
@@ -58,6 +63,12 @@ export class DevToolsController {
   @HttpCode(200)
   @ApiOperation({
     summary: "Delete all data, purge stored files and recreate the administrator from ADMIN_EMAIL/ADMIN_PASSWORD",
+    description:
+      "Irreversible. Deletes every user with accounts and sessions, categories, orders with attachments, comments, " +
+      "estimates, assignments, status history and time entries, invoices with payment reports, and the invoice " +
+      "numbering; then recreates the single administrator from ADMIN_EMAIL/ADMIN_PASSWORD in the same transaction. " +
+      "All sessions are revoked and invoice numbering restarts at 1. After the commit every SeaweedFS object is " +
+      "deleted unless purgeFiles is false; storage failures leave the database reset and are reported in files.error.",
   })
   reset(@Body() body: ResetDevToolsDataDto) {
     return this.devTools.reset({ purgeFiles: body.purgeFiles ?? true });

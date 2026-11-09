@@ -114,7 +114,7 @@ docker-compose.yml   PostgreSQL, SeaweedFS, API, and frontend
 
 - Interactive elements use stable `data-testid` attributes that do not depend on CSS or DOM structure.
 - The API contract is available in Swagger: `http://localhost:6201/api/docs`.
-- A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`; the administrator from `.env` is recreated.
+- A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`; the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
 - API unit tests: `pnpm --filter @order-desk/api test`.
 - Type checks and build: `pnpm typecheck`, `pnpm build`.
 - End-to-end e2e scenarios are maintained in a separate training repository and are not part of this project.
