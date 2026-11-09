@@ -14,7 +14,6 @@ import { UserRole } from "../generated/prisma/enums.js";
 export class CreateDevToolUserDto {
   @ApiProperty({
     enum: UserRole,
-    enumName: "UserRole",
     description: "Role of the created account",
     example: UserRole.CUSTOMER,
   })

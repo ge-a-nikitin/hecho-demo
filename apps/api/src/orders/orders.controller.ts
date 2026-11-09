@@ -7,7 +7,7 @@ import {
   Post,
   UseGuards,
 } from "@nestjs/common";
-import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import { Roles } from "../auth/roles.decorator.js";
 import { SessionGuard } from "../auth/session.guard.js";
@@ -28,6 +28,18 @@ import { OrdersService } from "./orders.service.js";
 
 type RequestUser = { id: string; role: UserRole };
 
+const ORDER_ID_PARAM = {
+  name: "id",
+  description: "Order id from GET /api/orders",
+  example: "cm8x2k4c50003qwer1234asdf",
+};
+
+const ESTIMATE_ID_PARAM = {
+  name: "estimateId",
+  description: "Estimate id from the estimates array of GET /api/orders/:id",
+  example: "cm8x2k4c50004qwer1234asdf",
+};
+
 @ApiTags("orders")
 @ApiCookieAuth("better-auth.session_token")
 @UseGuards(SessionGuard)
@@ -45,6 +57,7 @@ export class OrdersController {
   @Get(":id")
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({ summary: "Get an order visible to the current user" })
+  @ApiParam(ORDER_ID_PARAM)
   get(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.get(id, user);
   }
@@ -59,6 +72,7 @@ export class OrdersController {
   @Patch(":id")
   @Roles("CUSTOMER")
   @ApiOperation({ summary: "Edit an order draft" })
+  @ApiParam(ORDER_ID_PARAM)
   updateDraft(
     @Param("id") id: string,
     @Body() body: UpdateDraftOrderDto,
@@ -70,6 +84,7 @@ export class OrdersController {
   @Post(":id/submit")
   @Roles("CUSTOMER")
   @ApiOperation({ summary: "Submit an order draft for assignment" })
+  @ApiParam(ORDER_ID_PARAM)
   submit(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.submit(id, user);
   }
@@ -77,6 +92,7 @@ export class OrdersController {
   @Post(":id/claim")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Atomically claim an order from the pool" })
+  @ApiParam(ORDER_ID_PARAM)
   claim(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.claim(id, user);
   }
@@ -84,6 +100,7 @@ export class OrdersController {
   @Post(":id/decline")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Decline an assigned order before work starts" })
+  @ApiParam(ORDER_ID_PARAM)
   decline(
     @Param("id") id: string,
     @Body() body: DeclineAssignmentDto,
@@ -95,6 +112,7 @@ export class OrdersController {
   @Post(":id/estimate")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Propose hours and price for an assigned order" })
+  @ApiParam(ORDER_ID_PARAM)
   proposeEstimate(
     @Param("id") id: string,
     @Body() body: ProposeEstimateDto,
@@ -106,6 +124,8 @@ export class OrdersController {
   @Post(":id/estimates/:estimateId/respond")
   @Roles("CUSTOMER")
   @ApiOperation({ summary: "Accept or reject an executor estimate" })
+  @ApiParam(ORDER_ID_PARAM)
+  @ApiParam(ESTIMATE_ID_PARAM)
   respondToEstimate(
     @Param("id") orderId: string,
     @Param("estimateId") estimateId: string,
@@ -118,6 +138,7 @@ export class OrdersController {
   @Post(":id/time")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Record or update total work time" })
+  @ApiParam(ORDER_ID_PARAM)
   saveWorkTime(
     @Param("id") id: string,
     @Body() body: WorkTimeDto,
@@ -129,6 +150,7 @@ export class OrdersController {
   @Post(":id/submit-review")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Submit completed work for customer review" })
+  @ApiParam(ORDER_ID_PARAM)
   submitForReview(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.submitForReview(id, user);
   }
@@ -136,6 +158,7 @@ export class OrdersController {
   @Post(":id/request-revision")
   @Roles("CUSTOMER")
   @ApiOperation({ summary: "Return submitted work for revisions" })
+  @ApiParam(ORDER_ID_PARAM)
   requestRevision(
     @Param("id") id: string,
     @Body() body: RevisionRequestDto,
@@ -147,6 +170,7 @@ export class OrdersController {
   @Post(":id/resume-revisions")
   @Roles("EXECUTOR")
   @ApiOperation({ summary: "Resume work on requested revisions" })
+  @ApiParam(ORDER_ID_PARAM)
   resumeRevisions(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.resumeRevisions(id, user);
   }
@@ -154,6 +178,7 @@ export class OrdersController {
   @Post(":id/accept")
   @Roles("CUSTOMER")
   @ApiOperation({ summary: "Accept submitted work" })
+  @ApiParam(ORDER_ID_PARAM)
   acceptWork(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.acceptWork(id, user);
   }
@@ -161,6 +186,7 @@ export class OrdersController {
   @Post(":id/comments")
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({ summary: "Add a comment to an order" })
+  @ApiParam(ORDER_ID_PARAM)
   addComment(
     @Param("id") id: string,
     @Body() body: CreateOrderCommentDto,
@@ -172,6 +198,7 @@ export class OrdersController {
   @Post(":id/cancel")
   @Roles("CUSTOMER", "ADMIN")
   @ApiOperation({ summary: "Cancel an order according to its current state" })
+  @ApiParam(ORDER_ID_PARAM)
   cancel(
     @Param("id") id: string,
     @Body() body: CancelOrderDto,
@@ -183,6 +210,7 @@ export class OrdersController {
   @Post(":id/complete")
   @Roles("ADMIN")
   @ApiOperation({ summary: "Complete an order whose invoice has been paid" })
+  @ApiParam(ORDER_ID_PARAM)
   complete(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.orders.complete(id, user);
   }
@@ -190,6 +218,7 @@ export class OrdersController {
   @Post(":id/assign")
   @Roles("ADMIN")
   @ApiOperation({ summary: "Assign an order to an executor" })
+  @ApiParam(ORDER_ID_PARAM)
   assign(
     @Param("id") id: string,
     @Body() body: AssignOrderDto,

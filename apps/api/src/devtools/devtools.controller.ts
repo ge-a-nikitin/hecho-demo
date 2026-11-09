@@ -11,7 +11,7 @@ import {
   Delete,
   UseGuards,
 } from "@nestjs/common";
-import { ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "../generated/prisma/enums.js";
 import { CreateDevToolUserDto, ResetDevToolsDataDto, UpdateDevToolUserDto } from "./devtools.dto.js";
 import { DevToolsGuard } from "./devtools.guard.js";
@@ -36,13 +36,29 @@ export class DevToolsController {
   }
 
   @Get("users")
-  @ApiOperation({ summary: "List users for a selected role" })
+  @ApiOperation({
+    summary: "List users for a selected role",
+    description:
+      "Filtering is exact and case-sensitive: only CUSTOMER, EXECUTOR and ADMIN are accepted, " +
+      "any other value (for example \"admin\") is rejected with 400.",
+  })
+  @ApiQuery({
+    name: "role",
+    enum: UserRole,
+    required: true,
+    description: "Role to list: CUSTOMER, EXECUTOR or ADMIN",
+  })
   listUsers(@Query("role", new ParseEnumPipe(UserRole)) role: UserRole) {
     return this.devTools.listUsers(role);
   }
 
   @Patch("users/:id")
   @ApiOperation({ summary: "Update a user's email/password or active state" })
+  @ApiParam({
+    name: "id",
+    description: "Account id from GET /api/devtools/users?role=ADMIN",
+    example: "cm8x2k4c50000qwer1234asdf",
+  })
   updateUser(@Param("id") id: string, @Body() body: UpdateDevToolUserDto) {
     return this.devTools.updateUser(id, body);
   }

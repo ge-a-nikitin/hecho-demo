@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator.js";
 import { Roles } from "../auth/roles.decorator.js";
 import { SessionGuard } from "../auth/session.guard.js";
@@ -21,6 +21,26 @@ import {
   UpdateOwnProfileDto,
 } from "./users.dto.js";
 import { UsersService } from "./users.service.js";
+
+const ACCOUNT_ID_PARAM = {
+  name: "id",
+  description: "Account id from GET /api/users/executors or GET /api/users/customers",
+  example: "cm8x2k4c50001qwer1234asdf",
+};
+
+const INCLUDE_INACTIVE_QUERY = {
+  name: "includeInactive",
+  required: false,
+  type: Boolean,
+  description: "Also return deactivated accounts (true/false, default false)",
+};
+
+const ACTIVE_QUERY = {
+  name: "active",
+  required: true,
+  type: Boolean,
+  description: "true activates the account, false deactivates it and revokes its sessions",
+};
 
 @ApiTags("users")
 @ApiCookieAuth("better-auth.session_token")
@@ -66,6 +86,7 @@ export class UsersController {
 
   @Get("executors")
   @ApiOperation({ summary: "List executor accounts" })
+  @ApiQuery(INCLUDE_INACTIVE_QUERY)
   listExecutors(
     @Query("includeInactive", new ParseBoolPipe({ optional: true })) includeInactive?: boolean,
   ) {
@@ -74,6 +95,7 @@ export class UsersController {
 
   @Get("customers")
   @ApiOperation({ summary: "List customer accounts" })
+  @ApiQuery(INCLUDE_INACTIVE_QUERY)
   listCustomers(
     @Query("includeInactive", new ParseBoolPipe({ optional: true })) includeInactive?: boolean,
   ) {
@@ -88,24 +110,29 @@ export class UsersController {
 
   @Patch("executors/:id")
   @ApiOperation({ summary: "Update an executor's display name" })
+  @ApiParam(ACCOUNT_ID_PARAM)
   updateExecutor(@Param("id") id: string, @Body() body: UpdateExecutorDto) {
     return this.users.updateExecutor(id, body);
   }
 
   @Post("executors/:id/reset-password")
   @ApiOperation({ summary: "Set a new executor password and revoke sessions" })
+  @ApiParam(ACCOUNT_ID_PARAM)
   resetPassword(@Param("id") id: string, @Body() body: ResetPasswordDto) {
     return this.users.resetPassword(id, body.password);
   }
 
   @Post(":id/reset-password")
   @ApiOperation({ summary: "Reset a customer or executor password and revoke sessions" })
+  @ApiParam(ACCOUNT_ID_PARAM)
   resetEndUserPassword(@Param("id") id: string, @Body() body: ResetPasswordDto) {
     return this.users.resetPassword(id, body.password);
   }
 
   @Patch(":id/active")
   @ApiOperation({ summary: "Activate or deactivate a customer or executor" })
+  @ApiParam(ACCOUNT_ID_PARAM)
+  @ApiQuery(ACTIVE_QUERY)
   setActive(
     @Param("id") id: string,
     @Query("active", ParseBoolPipe) active: boolean,

@@ -6,6 +6,16 @@
     "deleteOutDir": true,
     "webpack": false,
     "assets": ["devtools/fixtures/*.json"],
-    "watchAssets": true
+    "watchAssets": true,
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "esmCompatible": true
+        }
+      }
+    ]
   }
 }

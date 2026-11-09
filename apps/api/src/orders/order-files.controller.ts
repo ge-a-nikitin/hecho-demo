@@ -14,6 +14,7 @@ import {
   ApiConsumes,
   ApiCookieAuth,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from "@nestjs/swagger";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -23,6 +24,18 @@ import type { UserRole } from "../generated/prisma/enums.js";
 import { OrderFilesService, type UploadedOrderFile } from "./order-files.service.js";
 
 type RequestUser = { id: string; role: UserRole };
+
+const ORDER_ID_PARAM = {
+  name: "orderId",
+  description: "Order id from GET /api/orders",
+  example: "cm8x2k4c50003qwer1234asdf",
+};
+
+const ATTACHMENT_ID_PARAM = {
+  name: "attachmentId",
+  description: "Attachment id from the attachments array of GET /api/orders/:id",
+  example: "cm8x2k4c50007qwer1234asdf",
+};
 
 @ApiTags("order-files")
 @ApiCookieAuth("better-auth.session_token")
@@ -34,11 +47,18 @@ export class OrderFilesController {
   @Post()
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({ summary: "Upload an order attachment (maximum 1 MB)" })
+  @ApiParam(ORDER_ID_PARAM)
   @ApiConsumes("multipart/form-data")
   @ApiBody({
     schema: {
       type: "object",
-      properties: { file: { type: "string", format: "binary" } },
+      properties: {
+        file: {
+          type: "string",
+          format: "binary",
+          description: "Photo, drawing or document, maximum 1 MB; the file is stored in SeaweedFS",
+        },
+      },
       required: ["file"],
     },
   })
@@ -54,6 +74,8 @@ export class OrderFilesController {
   @Get(":attachmentId")
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({ summary: "Download an order attachment" })
+  @ApiParam(ORDER_ID_PARAM)
+  @ApiParam(ATTACHMENT_ID_PARAM)
   async download(
     @Param("orderId") orderId: string,
     @Param("attachmentId") attachmentId: string,
