@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
@@ -40,3 +41,17 @@ export class UpdateDevToolUserDto {
   @IsBoolean()
   isActive?: boolean;
 }
+
+/**
+ * The confirmation phrase is validated server-side so a mistyped curl request or
+ * an accidental repeat in Swagger cannot wipe the database.
+ */
+export class ResetDevToolsDataDto {
+  @IsIn(["reset-all-data"])
+  confirm!: "reset-all-data";
+
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsBoolean()
+  purgeFiles?: boolean;
+}
+

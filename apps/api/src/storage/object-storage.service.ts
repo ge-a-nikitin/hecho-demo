@@ -1,4 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import type { UploadedOrderFile } from "../orders/order-files.service.js";
@@ -47,6 +54,40 @@ export class ObjectStorageService {
       Bucket: this.bucket,
       Key: objectKey,
     }));
+  }
+
+  /**
+   * Removes every object in the bucket in batches of 1000, including files that
+   * lost their database row earlier. Errors are counted instead of thrown so the
+   * caller can report a partial purge after the database has already been reset.
+   */
+  async deleteAll(): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+    let continuationToken: string | undefined;
+
+    do {
+      const page = await this.client.send(new ListObjectsV2Command({
+        Bucket: this.bucket,
+        MaxKeys: 1000,
+        ContinuationToken: continuationToken,
+      }));
+      const keys = (page.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
+
+      for (let index = 0; index < keys.length; index += 1000) {
+        const batch = keys.slice(index, index + 1000);
+        const result = await this.client.send(new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: { Objects: batch.map((key) => ({ Key: key })), Quiet: false },
+        }));
+        deleted += result.Deleted?.length ?? 0;
+        failed += result.Errors?.length ?? 0;
+      }
+
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return { deleted, failed };
   }
 }
 

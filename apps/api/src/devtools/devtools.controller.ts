@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Patch,
   ParseEnumPipe,
@@ -12,7 +13,7 @@ import {
 } from "@nestjs/common";
 import { ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { UserRole } from "../generated/prisma/enums.js";
-import { CreateDevToolUserDto, UpdateDevToolUserDto } from "./devtools.dto.js";
+import { CreateDevToolUserDto, ResetDevToolsDataDto, UpdateDevToolUserDto } from "./devtools.dto.js";
 import { DevToolsGuard } from "./devtools.guard.js";
 import { DevToolsService } from "./devtools.service.js";
 
@@ -51,5 +52,14 @@ export class DevToolsController {
   @ApiOperation({ summary: "Remove only records owned by the development data fixture" })
   clearSeed() {
     return this.devTools.clearSeed();
+  }
+
+  @Post("reset")
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Delete all data, purge stored files and recreate the administrator from ADMIN_EMAIL/ADMIN_PASSWORD",
+  })
+  reset(@Body() body: ResetDevToolsDataDto) {
+    return this.devTools.reset({ purgeFiles: body.purgeFiles ?? true });
   }
 }

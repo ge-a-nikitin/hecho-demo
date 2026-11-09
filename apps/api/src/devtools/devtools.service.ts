@@ -10,6 +10,8 @@ import { Prisma } from "../generated/prisma/client.js";
 import { AssignmentOutcome, InvoiceStatus, OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import { auth } from "../auth/auth.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { ObjectStorageService } from "../storage/object-storage.service.js";
+import { readAdminCredentials, resetAllData, type ResetReport } from "./reset.js";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -75,7 +77,28 @@ const retiredFixtureInvoiceIds = ["devtools-seed-v1-invoice-paid"];
 
 @Injectable()
 export class DevToolsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: ObjectStorageService,
+  ) {}
+
+  /**
+   * Destructive: deletes all data and recreates the administrator from
+   * ADMIN_EMAIL/ADMIN_PASSWORD. Existing sessions are revoked with the users.
+   */
+  async reset(input: { purgeFiles: boolean }): Promise<ResetReport> {
+    let admin;
+    try {
+      admin = readAdminCredentials();
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : "Administrator credentials are not configured");
+    }
+
+    return resetAllData(this.prisma, {
+      admin,
+      storage: input.purgeFiles ? this.storage : undefined,
+    });
+  }
 
   async createUser(role: UserRole, inputEmail: string, password: string): Promise<{ id: string }> {
     const email = inputEmail.trim().toLowerCase();
