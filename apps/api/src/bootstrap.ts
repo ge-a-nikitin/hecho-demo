@@ -13,6 +13,16 @@ export async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const expressApp = app.getHttpAdapter().getInstance();
 
+  // TLS terminates at the Cloudflare edge, and both cloudflared and the web nginx
+  // forward the protocol and the client address, so Express must trust the proxy
+  // chain; otherwise secure cookies and request IPs are wrong.
+  const trustProxy = process.env.TRUST_PROXY?.trim();
+  if (trustProxy === "true") {
+    expressApp.set("trust proxy", true);
+  } else if (trustProxy && /^\d+$/u.test(trustProxy)) {
+    expressApp.set("trust proxy", Number(trustProxy));
+  }
+
   app.setGlobalPrefix("api");
   app.enableCors({
     origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:6200",

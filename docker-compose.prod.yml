@@ -1,0 +1,31 @@
+# Production overlay for a home VM behind a Cloudflare Tunnel.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# The base file stays development-friendly (restart: "no", ports on 127.0.0.1);
+# this overlay makes the stack survive reboots and derives the public URLs from
+# DOMAIN. TLS terminates at the Cloudflare edge and cloudflared runs as a systemd
+# service on the host, so there is no proxy container here: nginx from the web
+# image is the single origin entry point and forwards /api/* to the API.
+services:
+  web:
+    restart: unless-stopped
+    build:
+      args:
+        # Relative on purpose: the bundle calls the same origin, so the build does
+        # not depend on the domain and the session cookies stay first-party.
+        VITE_API_URL: /api
+
+  api:
+    restart: unless-stopped
+    environment:
+      FRONTEND_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
+      BETTER_AUTH_URL: https://${DOMAIN:?Set DOMAIN in .env}/api/auth
+      # Cloudflare edge -> cloudflared -> nginx are all proxies in front of the API.
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+
+  postgres:
+    restart: unless-stopped
+
+  seaweedfs:
+    restart: unless-stopped
