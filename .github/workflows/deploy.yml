@@ -1,0 +1,66 @@
+name: Deploy
+
+# The repository is public, so the self-hosted runner only trusts code pushed to
+# main and manual runs. Never add pull_request here: a fork must not execute on
+# the VM.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to the home VM
+    runs-on: [self-hosted, linux, order-desk]
+    environment: production
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Render .env from the tracked config and PROD_ENV_SECRETS
+        env:
+          PROD_ENV_SECRETS: ${{ secrets.PROD_ENV_SECRETS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cat deploy/prod.env > .env
+          printf '%s\n' "$PROD_ENV_SECRETS" >> .env
+          chmod 600 .env
+          if [ -n "$(git status --porcelain -- .env)" ]; then
+            echo "::error::.env must stay untracked and git-ignored"
+            exit 1
+          fi
+
+      - name: Build and start the stack
+        run: |
+          set -euo pipefail
+          docker compose up -d --build --remove-orphans
+
+      - name: Wait for the SPA and the API health check
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8080/ \
+              && curl -fsS -o /dev/null http://127.0.0.1:8080/api/health; then
+              echo "Stack is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose ps
+          docker compose logs --tail 100 api web
+          echo "::error::The stack did not become healthy in time"
+          exit 1
+
+      - name: Remove dangling images
+        if: always()
+        run: docker image prune -f
