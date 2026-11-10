@@ -107,6 +107,7 @@ flowchart LR
 apps/web/            React SPA: лендинг, авторизация, панели ролей
 apps/api/            NestJS API, Prisma-схема и миграции, тесты
 docs/                двуязычная документация проекта
+.github/ISSUE_TEMPLATE/  форма баг-репорта для GitHub Issues
 docker-compose.yml   PostgreSQL, SeaweedFS, API и frontend
 ```
 
@@ -117,6 +118,7 @@ docker-compose.yml   PostgreSQL, SeaweedFS, API и frontend
 - Для подготовки данных есть devtools API; по умолчанию он выключен и защищён отдельным ключом. Полный сброс проекта (данные, пользователи, сессии и файлы) выполняется ручкой `POST /api/devtools/reset` или командой `pnpm db:reset`; администратор из `.env` создаётся заново. Пока `DEVTOOLS_ENABLED` не равен `true`, ручки отвечают `404` и не показываются в Swagger.
 - Unit-тесты API: `pnpm --filter @order-desk/api test`.
 - Проверки типов и сборка: `pnpm typecheck`, `pnpm build`.
+- Баг-репорты создаются через форму `.github/ISSUE_TEMPLATE/bug-report.yml`: прекондиции, шаги воспроизведения, ожидаемый и фактический результат. Пустые issues отключены, поэтому «New Issue» сразу открывает эту форму.
 - Сквозные e2e-сценарии поддерживаются в отдельном учебном репозитории и не входят в этот проект.
 
 ## Связанные репозитории и артефакты

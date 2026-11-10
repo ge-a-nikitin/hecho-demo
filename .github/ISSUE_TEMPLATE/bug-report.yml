@@ -1,0 +1,43 @@
+name: 🐛 Баг-репорт (Bug Report)
+description: Создать структурированный отчет об ошибке
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: preconditions
+    attributes:
+      label: 📋 Прекондиции (Preconditions)
+      placeholder: |
+        Опишите начальные условия: роль и учетная запись, состояние заказа,
+        язык интерфейса, браузер и версия, окружение (Docker Compose локально)...
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 🚶‍♂️ Шаги воспроизведения (Steps to reproduce)
+      placeholder: |
+        1. Открыть страницу...
+        2. Нажать кнопку...
+        3. Ввести данные...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: 🎯 Ожидаемый результат (Expected result)
+      placeholder: Что должно было произойти?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-result
+    attributes:
+      label: ❌ Фактический результат (Actual result)
+      placeholder: |
+        Что произошло на самом деле? Приложите скриншот, текст ошибки,
+        HTTP-статус и ответ API, если проблема воспроизводится через Swagger.
+    validations:
+      required: true

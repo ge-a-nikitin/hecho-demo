@@ -107,6 +107,7 @@ All ports are bound to `127.0.0.1` and are available only from the local machine
 apps/web/            React SPA: landing page, authentication, role panels
 apps/api/            NestJS API, Prisma schema and migrations, tests
 docs/                bilingual project documentation
+.github/ISSUE_TEMPLATE/  bug report form for GitHub Issues
 docker-compose.yml   PostgreSQL, SeaweedFS, API, and frontend
 ```
 
@@ -117,6 +118,7 @@ docker-compose.yml   PostgreSQL, SeaweedFS, API, and frontend
 - A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`; the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
 - API unit tests: `pnpm --filter @order-desk/api test`.
 - Type checks and build: `pnpm typecheck`, `pnpm build`.
+- Bug reports are filed through the `.github/ISSUE_TEMPLATE/bug-report.yml` form: preconditions, steps to reproduce, expected and actual result. Blank issues are disabled, so "New Issue" opens this form directly.
 - End-to-end e2e scenarios are maintained in a separate training repository and are not part of this project.
 
 ## Related repositories and artifacts
