@@ -90,6 +90,8 @@ flowchart LR
 
 Все порты привязаны к `127.0.0.1` и доступны только с локальной машины. Подробности о настройке портов, разработке с hot reload и devtools API — в [инструкции по запуску](./docs/ru/README.md#запуск-проекта-локально).
 
+Для публикации используется домашняя ВМ с `docker-compose.prod.yml` и туннелем Cloudflare: TLS завершается на границе Cloudflare, служба `cloudflared` ходит в локальный nginx, а frontend и API (`/api`, `/api/docs`) доступны через один домен без открытых входящих портов. Порядок действий, схема хранения секретов и эксплуатация описаны в разделе [«Развёртывание на домашней ВМ»](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel).
+
 ## Документация
 
 | Раздел | Русский | English |
@@ -99,6 +101,7 @@ flowchart LR
 | Технические ограничения | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) |
 | План и статус реализации | [План](./docs/ru/README.md#план-реализации) | [Plan](./docs/en/README.md#implementation-plan) |
 | Запуск и эксплуатация | [Запуск](./docs/ru/README.md#запуск-проекта-локально) | [Setup](./docs/en/README.md#running-the-project-locally) |
+| Развёртывание на домашней ВМ | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) |
 | Схема базы данных | [Схема БД](./docs/ru/database-schema.md) | [Database schema](./docs/en/database-schema.md) |
 
 ## Структура репозитория
@@ -109,6 +112,9 @@ apps/api/            NestJS API, Prisma-схема и миграции, тест
 docs/                двуязычная документация проекта
 .github/ISSUE_TEMPLATE/  форма баг-репорта для GitHub Issues
 docker-compose.yml   PostgreSQL, SeaweedFS, API и frontend
+docker-compose.prod.yml  продовый override: автоперезапуск и адреса от DOMAIN
+deploy/prod.env      продовая конфигурация без секретов
+.github/workflows/   деплой на домашнюю ВМ через self-hosted runner
 ```
 
 ## QA и тестирование

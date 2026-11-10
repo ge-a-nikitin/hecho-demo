@@ -13,6 +13,7 @@
 - [Implementation plan](#implementation-plan)
 - [Open questions](#open-questions)
 - [Running the project locally](#running-the-project-locally)
+- [Deploying to a home VM (Cloudflare Tunnel)](#deploying-to-a-home-vm-cloudflare-tunnel)
 
 ## Purpose
 
@@ -166,6 +167,7 @@ The Better Auth integration with NestJS and Prisma has been verified by registra
 
 - Clarify the display-name format for the administrator created from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Describe response schemas in Swagger: parameters, request bodies and allowed enum values are documented, while response bodies are returned without typed schemas. A complete contract needs response DTOs or dedicated serializers.
+- Configure CSP and rate limiting for `/api/auth/*` in Cloudflare (Transform Rules and WAF Rate limiting). A strict CSP needs separate handling for Swagger UI, so the decision is deferred until publication. Restricting Swagger through Cloudflare Access is not set up yet either.
 
 ## Running the project locally
 
@@ -230,3 +232,110 @@ For hot reload, install Node.js and pnpm, then run `pnpm install`. Create `.env`
 For local use of the devtools API, set `DEVTOOLS_ENABLED=true`, set a random `DEVTOOLS_API_KEY` at least 32 bytes long, and `DEVTOOLS_SEED_PASSWORD` in `.env`; requests send the key in the `x-devtools-api-key` header. While the flag is not `true`, the whole devtools group answers `404` as if the endpoints did not exist and is hidden from Swagger; once enabled they appear in `/api/docs` with described request bodies and answer `401` without a valid key. In Swagger UI the key is entered in the `x-devtools-api-key` field of each operation. The role value is case-sensitive: only `CUSTOMER`, `EXECUTOR`, and `ADMIN` are accepted, and Swagger offers a dropdown with these values for the `role` parameter and the `role` request body field. Endpoints are available via Swagger/Postman: `POST /api/devtools/users`, `GET /api/devtools/users?role=CUSTOMER|EXECUTOR|ADMIN`, `PATCH /api/devtools/users/{id}`, `POST /api/devtools/seed` (replace the fixed set), and `DELETE /api/devtools/seed` (remove it). The seed creates accounts `devtools.admin@example.test`, `devtools.customer@example.test`, and `devtools.executor@example.test` with the password from `DEVTOOLS_SEED_PASSWORD`. Cleanup removes seed users, categories, orders, as well as invoices and payment confirmations related to seed orders. If a seed record is used by manually created data, for example a seed executor is assigned to a regular order, cleanup returns a conflict: reassign or delete such records first. File objects in SeaweedFS are not deleted when the seed set is cleared; only a full reset removes them. Do not enable devtools unnecessarily and do not use production keys in a local environment.
 
 A full project reset runs through `POST /api/devtools/reset` with the body `{"confirm":"reset-all-data"}`. The request deletes all users with their accounts and sessions, categories, orders with comments, estimates, assignments, status history, time entries and attachments, invoices with payment reports, and the invoice numbering; in the same transaction it recreates the single administrator from `ADMIN_EMAIL`/`ADMIN_PASSWORD`. The required `confirm` field guards against accidental calls: without it or with another value the API returns `400`, and a wrong key returns `401`; if `ADMIN_EMAIL` or `ADMIN_PASSWORD` is missing, the reset is rejected before any data is deleted. Every session is revoked, so sign in again with the password from `.env`, and invoice numbering restarts at 1. After the commit the SeaweedFS bucket is purged completely, including orphaned objects (`"purgeFiles": false` keeps the files); if the storage is unreachable, the database still stays reset and the response contains `files.error`, so the objects must be removed manually. `pnpm db:reset` performs the same operation without a running API: it reads `DATABASE_URL`, `S3_*` and `ADMIN_*` from `.env` and exits with a non-zero code when files could not be deleted. The response contains the created administrator, the number of deleted records per type, and the file purge outcome.
+
+## Deploying to a home VM (Cloudflare Tunnel)
+
+Production uses the same `docker-compose.yml` plus the `docker-compose.prod.yml` overlay. There is no proxy container: TLS terminates at the Cloudflare edge, the `cloudflared` tunnel runs as a systemd service on the same VM and connects to `127.0.0.1:8080`, and the only application entry point is nginx from the `web` image — it serves the SPA assets and proxies `/api/*` to the `api:6201` container. No inbound router ports are needed, because the tunnel establishes an outbound connection itself.
+
+```text
+browser → Cloudflare (TLS, cache, WAF) → cloudflared on the VM → nginx:8080 → api:6201 or SPA assets
+```
+
+### What you need
+
+- A VM (a QEMU virtual machine on a home computer is fine) with Docker Engine and Docker Compose v2, git and curl; 2+ GB of RAM and space for the `postgres_data` and `seaweedfs_data` volumes.
+- A domain whose zone is delegated to Cloudflare and shows the Active status.
+- A tunnel token from Cloudflare Zero Trust.
+
+### Environment and secret layout
+
+Configuration is split in two so that secrets never reach git:
+
+| Where | What | Why |
+|---|---|---|
+| `deploy/prod.env` (tracked) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `ADMIN_EMAIL`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Not secrets: changes show up in diffs and get reviewed |
+| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (multi-line) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Encrypted, available only to workflows of that environment, masked as `***` in logs |
+| `/etc/cloudflared/` on the VM | the tunnel token | Not part of the application and never stored in the repository |
+| `.env` on the VM (created by the deploy, mode `600`) | `deploy/prod.env` concatenated with `PROD_ENV_SECRETS` | The only format `docker compose` reads |
+
+`deploy/prod.env` contains `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`, so the short `docker compose ...` commands are enough on the VM. For a local check the overlay is passed explicitly: `docker compose -f docker-compose.yml -f docker-compose.prod.yml config`.
+
+An honest boundary: with this approach secrets exist in plaintext in `.env` on the VM disk and in the environment of the container processes. They are protected by mode `600` and a dedicated VM user; the runner itself has access to the Docker socket, which effectively means root on the VM, so access to the VM and its disk must be restricted separately (disk encryption, for example).
+
+### One-time VM setup
+
+1. Install Docker Engine with Compose v2, git and curl; clone the repository into the directory the runner will work from.
+2. Connect the tunnel (Cloudflare issues the token when the tunnel is created):
+
+   ```bash
+   sudo cloudflared service install <TUNNEL_TOKEN>
+   sudo systemctl enable --now cloudflared
+   systemctl status cloudflared
+   ```
+
+3. In Cloudflare Zero Trust create a Public Hostname `hecho-demo.spb.su` with an empty path and the service `HTTP://localhost:8080`. The tunnel creates the DNS record itself, so delete conflicting A/CNAME records beforehand. Enable Always Use HTTPS in the zone settings (HSTS is optional).
+4. Register a self-hosted runner (Settings → Actions → Runners) and install it as a service:
+
+   ```bash
+   mkdir -p ~/actions-runner && cd ~/actions-runner
+   curl -fsSLO <actions-runner-linux-x64.tar.gz link from the runner page>
+   tar xzf actions-runner-linux-x64.tar.gz
+   ./config.sh --url https://github.com/<owner>/<repo> --token <runner-token> --labels order-desk --unattended
+   sudo ./svc.sh install "$USER" && sudo ./svc.sh start
+   ```
+
+   The repository is public, so the workflow deliberately runs only on `push` to `main` and on manual `workflow_dispatch`. Never add the `pull_request` event: code from a fork would then execute on the VM.
+
+### Deployment
+
+On every push to `main` (or a manual run) `.github/workflows/deploy.yml`:
+
+1. checks out the repository;
+2. renders `.env` from `deploy/prod.env` and the `PROD_ENV_SECRETS` secret with mode `600` and verifies the file stays untracked;
+3. runs `docker compose up -d --build --remove-orphans`;
+4. waits for `http://127.0.0.1:8080/` and `http://127.0.0.1:8080/api/health` (up to 200 seconds) and prints `docker compose ps` plus the `api`/`web` logs on failure;
+5. prunes dangling images.
+
+Manual update on the VM: `git pull && docker compose up -d --build`.
+
+### First start
+
+1. Fill in `deploy/prod.env` (`ADMIN_EMAIL` must be the real administrator address) and add the `PROD_ENV_SECRETS` secret to the `production` environment; generate secrets with `openssl rand -base64 32` and keep the PostgreSQL password URL-safe.
+2. Run the workflow and wait for a green result.
+3. Create the administrator once, manually:
+
+   ```bash
+   docker compose exec api pnpm --filter @order-desk/api db:seed:admin
+   ```
+
+   The deploy does not create an administrator: `ADMIN_EMAIL`/`ADMIN_PASSWORD` are used only by the seed command and the full reset.
+4. Verify production: `curl -I https://hecho-demo.spb.su`, `curl https://hecho-demo.spb.su/api/health`, open `https://hecho-demo.spb.su/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
+
+### Rotating secrets
+
+The general flow: change the value in GitHub → run the deploy again. The workflow rewrites `.env` and recreates the containers. Special cases:
+
+| Secret | What to keep in mind |
+|---|---|
+| `BETTER_AUTH_SECRET` | Every session is invalidated, so users must sign in again. |
+| `ADMIN_PASSWORD` | Affects only `db:seed:admin` and the full reset; the password of an existing administrator does not change. |
+| `POSTGRES_PASSWORD` | The password of an already initialised database does not change by itself: run `docker compose exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "ALTER USER <POSTGRES_USER> WITH PASSWORD '<new password>'"`, then update the secret and deploy. |
+| `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Volume data survives; after the deploy check a file upload and sign-in to the SeaweedFS admin UI. |
+
+### Operations
+
+- Status: `docker compose ps`. Application logs: `docker compose logs -f`, API only: `docker compose logs -f api`, tunnel: `journalctl -u cloudflared -f`.
+- VM reboot: containers with `restart: unless-stopped` come back automatically, as do the `cloudflared` and runner services. In local mode without the overlay the containers still do not restart.
+- Database backup: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Files live in the `seaweedfs_data` volume; copy it with `seaweedfs` stopped, or through `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
+- Domain change: edit `DOMAIN` in `deploy/prod.env`, add the new Public Hostname to the tunnel and deploy. `FRONTEND_ORIGIN` and `BETTER_AUTH_URL` are derived from `DOMAIN`, and the frontend is built with the relative `VITE_API_URL=/api`, so no rebuild for a specific domain is needed. Users must sign in again, because the old cookies belong to the previous domain.
+- `TRUST_PROXY=true` (not a number): three hops sit in front of the API — Cloudflare, cloudflared and nginx — and the origin is not reachable directly. Without it the protocol is seen as `http` (cookies lose `Secure`) and the client IP is wrong.
+- After `docker compose restart api` nginx may answer `502`, because the container received a new address. `docker compose restart web` fixes it; the regular `up -d --build` recreates the whole network and does not hit this problem.
+- Devtools are disabled in production (`DEVTOOLS_ENABLED=false`): the endpoints answer `404` and are hidden from Swagger, including the full data reset.
+- Only `127.0.0.1:8080` is published for the tunnel; the `api`, `postgres` and `seaweedfs` ports stay on `127.0.0.1` for debugging.
+
+### Production limitations
+
+- Swagger is public — this is a project decision. For restricted access, put a Cloudflare Access application over `/api/docs*`: no tunnel routes need to change.
+- No CSP and no rate limiting for `/api/auth/*`: both are configured in Cloudflare (Transform Rules and WAF Rate limiting), not in the repository. Note that Swagger UI is incompatible with a strict CSP.
+- `docker compose down -v` deletes the PostgreSQL and SeaweedFS data; back up with `pg_dump` and volume copies instead of deleting the stack.
+- There is no separate CI workflow yet: type checks, the build and the API unit tests run locally (`pnpm typecheck`, `pnpm build`, `pnpm --filter @order-desk/api test`) and will move to Actions together with broader test coverage.

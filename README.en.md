@@ -90,6 +90,8 @@ The containers use `restart: "no"`, so they do not start automatically after a h
 
 All ports are bound to `127.0.0.1` and are available only from the local machine. For port configuration, hot-reload development, and the devtools API, see the [setup guide](./docs/en/README.md#running-the-project-locally).
 
+For publishing, a home VM runs `docker-compose.prod.yml` behind a Cloudflare tunnel: TLS terminates at the Cloudflare edge, the `cloudflared` service connects to the local nginx, and one domain serves the frontend and the API (`/api`, `/api/docs`) without any inbound ports. The steps, secret layout, and operations are described in [Deploying to a home VM](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel).
+
 ## Documentation
 
 | Section | English | Русский |
@@ -99,6 +101,7 @@ All ports are bound to `127.0.0.1` and are available only from the local machine
 | Technical constraints | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) |
 | Implementation plan | [Plan](./docs/en/README.md#implementation-plan) | [План](./docs/ru/README.md#план-реализации) |
 | Setup and operations | [Setup](./docs/en/README.md#running-the-project-locally) | [Запуск](./docs/ru/README.md#запуск-проекта-локально) |
+| Home VM deployment | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) |
 | Database schema | [Database schema](./docs/en/database-schema.md) | [Схема БД](./docs/ru/database-schema.md) |
 
 ## Repository structure
@@ -109,6 +112,9 @@ apps/api/            NestJS API, Prisma schema and migrations, tests
 docs/                bilingual project documentation
 .github/ISSUE_TEMPLATE/  bug report form for GitHub Issues
 docker-compose.yml   PostgreSQL, SeaweedFS, API, and frontend
+docker-compose.prod.yml  production overlay: auto-restart and URLs derived from DOMAIN
+deploy/prod.env      production configuration without secrets
+.github/workflows/   deployment to the home VM through a self-hosted runner
 ```
 
 ## QA and testing

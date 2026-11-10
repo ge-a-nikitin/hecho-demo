@@ -13,6 +13,7 @@
 - [План реализации](#план-реализации)
 - [Открытые вопросы](#открытые-вопросы)
 - [Запуск проекта локально](#запуск-проекта-локально)
+- [Развёртывание на домашней ВМ (Cloudflare Tunnel)](#развёртывание-на-домашней-вм-cloudflare-tunnel)
 
 ## Назначение
 
@@ -164,6 +165,7 @@
 
 - Уточнить формат имени отображения администратора, создаваемого из `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Описать схемы ответов в Swagger: сейчас документируются параметры, тела запросов и допустимые значения перечислений, а тела ответов возвращаются без типизированных схем. Для полного контракта понадобятся response DTO или отдельные сериализаторы ответов.
+- Настроить CSP и rate limiting для `/api/auth/*` средствами Cloudflare (Transform Rules и WAF Rate limiting). Строгая CSP требует отдельной настройки Swagger UI, поэтому решение отложено до публикации. Закрытие Swagger через Cloudflare Access тоже пока не настроено.
 
 ## Запуск проекта локально
 
@@ -228,3 +230,110 @@
 Для локальной необходимости использовать devtools API установите `DEVTOOLS_ENABLED=true`, задайте случайный `DEVTOOLS_API_KEY` длиной не менее 32 байт и `DEVTOOLS_SEED_PASSWORD` в `.env`; запросы отправляют ключ в заголовке `x-devtools-api-key`. Пока флаг не равен `true`, вся группа devtools отвечает `404`, как будто ручек нет, и скрыта из Swagger; после включения они появляются в `/api/docs` вместе с описанными телами запросов, а без корректного ключа возвращают `401`. В Swagger UI ключ вводится в поле `x-devtools-api-key` каждой ручки. Значение роли чувствительно к регистру: допустимы только `CUSTOMER`, `EXECUTOR`, `ADMIN`, и в Swagger у параметра `role` и у поля `role` в теле запроса есть выпадающий список этих значений. Ручки доступны через Swagger/Postman: `POST /api/devtools/users`, `GET /api/devtools/users?role=CUSTOMER|EXECUTOR|ADMIN`, `PATCH /api/devtools/users/{id}`, `POST /api/devtools/seed` (заменить фиксированный набор) и `DELETE /api/devtools/seed` (удалить его). Seed создаёт аккаунты `devtools.admin@example.test`, `devtools.customer@example.test`, `devtools.executor@example.test` с паролем из `DEVTOOLS_SEED_PASSWORD`. Очистка удаляет seed-пользователей, категории, заказы, а также счета и подтверждения оплаты, относящиеся к seed-заказам. Если seed-запись используется вручную созданными данными, например seed-исполнитель назначен на обычный заказ, очистка возвращает конфликт: сначала переназначьте или удалите такие записи. Объекты файлов в SeaweedFS при очистке seed-набора не удаляются; их удаляет только полный сброс. Не включайте devtools без необходимости и не используйте production-ключи в локальной среде.
 
 Полный сброс проекта выполняет `POST /api/devtools/reset` с телом `{"confirm":"reset-all-data"}`. Запрос удаляет всех пользователей вместе с аккаунтами и сессиями, категории, заказы с комментариями, оценками, назначениями, историей статусов, учётом времени и вложениями, счета с подтверждениями оплаты и нумерацию счетов, после чего в той же транзакции создаёт единственного администратора из `ADMIN_EMAIL`/`ADMIN_PASSWORD`. Обязательное поле `confirm` защищает от случайного вызова: без него или с другим значением API возвращает `400`, а при неверном ключе — `401`; если `ADMIN_EMAIL` или `ADMIN_PASSWORD` не заданы, сброс отклоняется до удаления данных. Все сессии отзываются, поэтому войти нужно заново паролем из `.env`, а нумерация счетов начинается с 1. После коммита бакет SeaweedFS очищается полностью, включая осиротевшие объекты (`"purgeFiles": false` оставляет файлы); если хранилище недоступно, база остаётся сброшенной, а в ответе будет `files.error` — объекты нужно удалить вручную. Ту же операцию без запущенного API выполняет команда `pnpm db:reset`: она берёт `DATABASE_URL`, `S3_*` и `ADMIN_*` из `.env` и завершается с ненулевым кодом, если файлы удалить не удалось. Ответ содержит созданного администратора, количество удалённых записей по типам и результат очистки файлов.
+
+## Развёртывание на домашней ВМ (Cloudflare Tunnel)
+
+Продовый запуск использует тот же `docker-compose.yml` и overlay `docker-compose.prod.yml`. Отдельного прокси-контейнера нет: TLS завершается на границе Cloudflare, туннель `cloudflared` работает службой systemd на той же ВМ и ходит в `127.0.0.1:8080`, а единственная точка входа приложения — nginx из образа `web`: он отдаёт статику SPA и проксирует `/api/*` в контейнер `api:6201`. Входящие порты на роутере открывать не нужно — туннель сам устанавливает исходящее соединение.
+
+```text
+браузер → Cloudflare (TLS, кеш, WAF) → cloudflared на ВМ → nginx:8080 → api:6201 или статика SPA
+```
+
+### Что нужно
+
+- ВМ (подойдёт QEMU-виртуалка на домашнем компьютере) с Docker Engine и Docker Compose v2, git и curl; 2+ ГБ RAM и место под volumes `postgres_data` и `seaweedfs_data`.
+- Домен, зона которого делегирована на Cloudflare и находится в статусе Active.
+- Токен туннеля из Cloudflare Zero Trust.
+
+### Схема окружения и секретов
+
+Конфигурация разделена на две части, чтобы секреты не попадали в git:
+
+| Где | Что лежит | Зачем |
+|---|---|---|
+| `deploy/prod.env` (в git) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `ADMIN_EMAIL`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Не секреты: изменения видны в диффах и проходят ревью |
+| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (многострочный) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Шифруется, доступно только workflow этого environment, маскируется в логах как `***` |
+| `/etc/cloudflared/` на ВМ | токен туннеля | Не относится к приложению и не хранится в репозитории |
+| `.env` на ВМ (создаётся деплоем, права `600`) | склейка `deploy/prod.env` и `PROD_ENV_SECRETS` | Единственный формат, который читает `docker compose` |
+
+`deploy/prod.env` содержит `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`, поэтому на ВМ достаточно коротких команд `docker compose ...`. Для локальной проверки overlay подключается явно: `docker compose -f docker-compose.yml -f docker-compose.prod.yml config`.
+
+Честная граница: при таком способе секреты существуют в открытом виде в `.env` на диске ВМ и в переменных процессов контейнеров. Их защищают права `600` и отдельный пользователь ВМ; сам runner имеет доступ к Docker socket, то есть фактически к root на ВМ, поэтому доступ к ВМ и её диску нужно ограничивать отдельно (например, шифрованием диска).
+
+### Однократная подготовка ВМ
+
+1. Установите Docker Engine с Compose v2, git и curl; клонируйте репозиторий в каталог, от которого будет работать runner.
+2. Подключите туннель (токен выдаёт Cloudflare при создании туннеля):
+
+   ```bash
+   sudo cloudflared service install <TUNNEL_TOKEN>
+   sudo systemctl enable --now cloudflared
+   systemctl status cloudflared
+   ```
+
+3. В Cloudflare Zero Trust создайте Public Hostname `hecho-demo.spb.su` с пустым путём и сервисом `HTTP://localhost:8080`. DNS-запись создаёт сам туннель, поэтому конфликтующие A/CNAME удалите заранее. В настройках зоны включите Always Use HTTPS (HSTS — по желанию).
+4. Зарегистрируйте self-hosted runner (Settings → Actions → Runners) и установите его службой:
+
+   ```bash
+   mkdir -p ~/actions-runner && cd ~/actions-runner
+   curl -fsSLO <ссылка на actions-runner-linux-x64.tar.gz со страницы runner'а>
+   tar xzf actions-runner-linux-x64.tar.gz
+   ./config.sh --url https://github.com/<owner>/<repo> --token <runner-token> --labels order-desk --unattended
+   sudo ./svc.sh install "$USER" && sudo ./svc.sh start
+   ```
+
+   Репозиторий публичный, поэтому workflow намеренно запускается только на `push` в `main` и вручную через `workflow_dispatch`. Событие `pull_request` добавлять нельзя: код из форка выполнялся бы на ВМ.
+
+### Деплой
+
+Workflow `.github/workflows/deploy.yml` при каждом push в `main` (или ручном запуске):
+
+1. делает checkout;
+2. собирает `.env` из `deploy/prod.env` и секрета `PROD_ENV_SECRETS` с правами `600` и проверяет, что файл остаётся неотслеживаемым;
+3. выполняет `docker compose up -d --build --remove-orphans`;
+4. ждёт `http://127.0.0.1:8080/` и `http://127.0.0.1:8080/api/health` (до 200 с), при неудаче печатает `docker compose ps` и логи `api`/`web`;
+5. удаляет висячие образы.
+
+Обновление вручную на ВМ: `git pull && docker compose up -d --build`.
+
+### Первый запуск
+
+1. Заполните `deploy/prod.env` (`ADMIN_EMAIL` — реальный адрес администратора) и добавьте секрет `PROD_ENV_SECRETS` в environment `production`; секреты удобно генерировать через `openssl rand -base64 32`, пароль PostgreSQL должен быть URL-safe.
+2. Запустите workflow и дождитесь зелёного статуса.
+3. Один раз создайте администратора вручную:
+
+   ```bash
+   docker compose exec api pnpm --filter @order-desk/api db:seed:admin
+   ```
+
+   Деплой администратора не создаёт: `ADMIN_EMAIL`/`ADMIN_PASSWORD` используются только командами seed и полного сброса.
+4. Проверьте прод: `curl -I https://hecho-demo.spb.su`, `curl https://hecho-demo.spb.su/api/health`, откройте `https://hecho-demo.spb.su/api/docs` и войдите в интерфейс под администратором. Загрузите файл в заказ — это проверяет и cookie-сессию, и SeaweedFS.
+
+### Ротация секретов
+
+Общий порядок: измените значение в GitHub → запустите деплой заново. Workflow перезапишет `.env` и пересоздаст контейнеры. Особые случаи:
+
+| Секрет | Что учесть |
+|---|---|
+| `BETTER_AUTH_SECRET` | Все сессии инвалидируются — пользователям нужно войти заново. |
+| `ADMIN_PASSWORD` | Влияет только на `db:seed:admin` и полный сброс; пароль существующего администратора не меняется. |
+| `POSTGRES_PASSWORD` | Пароль уже инициализированной базы сам не изменится: выполните `docker compose exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "ALTER USER <POSTGRES_USER> WITH PASSWORD '<новый пароль>'"`, после чего обновите секрет и задеплойте. |
+| `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Данные в volumes сохраняются; после деплоя проверьте загрузку файла и вход в админку SeaweedFS. |
+
+### Эксплуатация
+
+- Статус: `docker compose ps`; логи приложения — `docker compose logs -f`, только API — `docker compose logs -f api`, туннель — `journalctl -u cloudflared -f`.
+- Перезагрузка ВМ: контейнеры с `restart: unless-stopped`, а также службы `cloudflared` и runner'а поднимаются автоматически. В локальном режиме без overlay контейнеры по-прежнему не перезапускаются.
+- Бэкап базы: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Файлы лежат в volume `seaweedfs_data`; его копируют, остановив `seaweedfs`, или через `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
+- Смена домена: измените `DOMAIN` в `deploy/prod.env`, добавьте новый Public Hostname в туннель и задеплойте. `FRONTEND_ORIGIN` и `BETTER_AUTH_URL` вычисляются из `DOMAIN`, а frontend собирается с относительным `VITE_API_URL=/api`, поэтому пересобирать код под домен не нужно. Пользователям придётся войти заново: старые cookie привязаны к прежнему домену.
+- `TRUST_PROXY=true` (не число): перед API три перехода — Cloudflare, cloudflared и nginx, а origin недоступен напрямую. Без этого протокол определяется как `http` (cookie без `Secure`) и IP клиента оказывается неверным.
+- После `docker compose restart api` nginx может отвечать `502`: контейнер получил новый адрес. Помогает `docker compose restart web`; штатный `up -d --build` пересоздаёт сеть целиком и этой проблемы не даёт.
+- Devtools в проде выключены (`DEVTOOLS_ENABLED=false`): группа ручек отвечает `404` и скрыта из Swagger, включая полный сброс данных.
+- Публикуется только `127.0.0.1:8080` для туннеля; порты `api`, `postgres` и `seaweedfs` остаются на `127.0.0.1` для отладки.
+
+### Ограничения продовой конфигурации
+
+- Swagger опубликован открыто — это решение проекта. Если нужен закрытый доступ, накройте путь `/api/docs*` приложением Cloudflare Access: маршруты туннеля менять не нужно.
+- Нет CSP и rate limiting на `/api/auth/*`: это настраивается средствами Cloudflare (Transform Rules и WAF Rate limiting), а не в репозитории. Учитывайте, что Swagger UI несовместим со строгой CSP.
+- `docker compose down -v` удаляет данные PostgreSQL и SeaweedFS; для бэкапа используйте `pg_dump` и копирование volumes, а не удаление стека.
+- Отдельного CI-workflow пока нет: проверки типов, сборка и unit-тесты API запускаются локально (`pnpm typecheck`, `pnpm build`, `pnpm --filter @order-desk/api test`) и будут добавлены в Actions вместе с расширением тестов.
