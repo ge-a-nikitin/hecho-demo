@@ -242,7 +242,7 @@
 ### Что нужно
 
 - ВМ (подойдёт QEMU-виртуалка на домашнем компьютере) с Docker Engine и Docker Compose v2, git и curl; 2+ ГБ RAM и место под volumes `postgres_data` и `seaweedfs_data`.
-- Домен, зона которого делегирована на Cloudflare и находится в статусе Active.
+- Домен, зона которого делегирована на Cloudflare и находится в статусе Active: приложение публикуется на `hecho-demo.hius2.fyi`, поэтому зона `hius2.fyi` должна быть Active.
 - Токен туннеля из Cloudflare Zero Trust.
 
 ### Схема окружения и секретов
@@ -271,7 +271,7 @@
    systemctl status cloudflared
    ```
 
-3. В Cloudflare Zero Trust создайте Public Hostname `hecho-demo.spb.su` с пустым путём и сервисом `HTTP://localhost:8080`. DNS-запись создаёт сам туннель, поэтому конфликтующие A/CNAME удалите заранее. В настройках зоны включите Always Use HTTPS (HSTS — по желанию).
+3. В Cloudflare Zero Trust создайте Public Hostname `hecho-demo.hius2.fyi` с пустым путём и сервисом `HTTP://localhost:8080`. DNS-запись создаёт сам туннель, поэтому конфликтующие A/CNAME удалите заранее. В настройках зоны включите Always Use HTTPS (HSTS — по желанию).
 4. Зарегистрируйте self-hosted runner (Settings → Actions → Runners) и установите его службой:
 
    ```bash
@@ -307,7 +307,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
    ```
 
    Деплой администратора не создаёт: `ADMIN_EMAIL`/`ADMIN_PASSWORD` используются только командами seed и полного сброса.
-4. Проверьте прод: `curl -I https://hecho-demo.spb.su`, `curl https://hecho-demo.spb.su/api/health`, откройте `https://hecho-demo.spb.su/api/docs` и войдите в интерфейс под администратором. Загрузите файл в заказ — это проверяет и cookie-сессию, и SeaweedFS.
+4. Проверьте прод: `curl -I https://hecho-demo.hius2.fyi`, `curl https://hecho-demo.hius2.fyi/api/health`, откройте `https://hecho-demo.hius2.fyi/api/docs` и войдите в интерфейс под администратором. Загрузите файл в заказ — это проверяет и cookie-сессию, и SeaweedFS.
 
 ### Ротация секретов
 

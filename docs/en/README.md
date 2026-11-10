@@ -244,7 +244,7 @@ browser → Cloudflare (TLS, cache, WAF) → cloudflared on the VM → nginx:808
 ### What you need
 
 - A VM (a QEMU virtual machine on a home computer is fine) with Docker Engine and Docker Compose v2, git and curl; 2+ GB of RAM and space for the `postgres_data` and `seaweedfs_data` volumes.
-- A domain whose zone is delegated to Cloudflare and shows the Active status.
+- A domain whose zone is delegated to Cloudflare and shows the Active status: the application is published on `hecho-demo.hius2.fyi`, so the `hius2.fyi` zone must be Active.
 - A tunnel token from Cloudflare Zero Trust.
 
 ### Environment and secret layout
@@ -273,7 +273,7 @@ An honest boundary: with this approach secrets exist in plaintext in `.env` on t
    systemctl status cloudflared
    ```
 
-3. In Cloudflare Zero Trust create a Public Hostname `hecho-demo.spb.su` with an empty path and the service `HTTP://localhost:8080`. The tunnel creates the DNS record itself, so delete conflicting A/CNAME records beforehand. Enable Always Use HTTPS in the zone settings (HSTS is optional).
+3. In Cloudflare Zero Trust create a Public Hostname `hecho-demo.hius2.fyi` with an empty path and the service `HTTP://localhost:8080`. The tunnel creates the DNS record itself, so delete conflicting A/CNAME records beforehand. Enable Always Use HTTPS in the zone settings (HSTS is optional).
 4. Register a self-hosted runner (Settings → Actions → Runners) and install it as a service:
 
    ```bash
@@ -309,7 +309,7 @@ Manual update on the VM: `git pull && docker compose up -d --build`.
    ```
 
    The deploy does not create an administrator: `ADMIN_EMAIL`/`ADMIN_PASSWORD` are used only by the seed command and the full reset.
-4. Verify production: `curl -I https://hecho-demo.spb.su`, `curl https://hecho-demo.spb.su/api/health`, open `https://hecho-demo.spb.su/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
+4. Verify production: `curl -I https://hecho-demo.hius2.fyi`, `curl https://hecho-demo.hius2.fyi/api/health`, open `https://hecho-demo.hius2.fyi/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
 
 ### Rotating secrets
 
