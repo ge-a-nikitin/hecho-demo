@@ -1,6 +1,9 @@
 import { apiCases } from "./cases/api.js";
+import { authCases } from "./cases/auth.js";
+import { categoriesCases } from "./cases/categories.js";
 import { devtoolsCases } from "./cases/devtools.js";
 import { invoicesCases } from "./cases/invoices.js";
+import { ordersFilesCases } from "./cases/orders-files.js";
 import { ordersCases } from "./cases/orders.js";
 import { ordersIntegrationCases } from "./cases/orders-integration.js";
 import { toolingCases } from "./cases/tooling.js";
@@ -16,7 +19,10 @@ import type { QaseCase } from "./types.js";
  */
 export const qaseCases = [
   ...apiCases,
+  ...authCases,
   ...ordersCases,
+  ...ordersFilesCases,
+  ...categoriesCases,
   ...invoicesCases,
   ...usersCases,
   ...devtoolsCases,
