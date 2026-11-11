@@ -1,6 +1,6 @@
 /**
  * In-memory stand-in for the Prisma client, limited to the operations the order
- * flows use.
+ * and invoice flows use.
  *
  * The suites assert what a call left in the database - the returned order, the
  * recorded status history, the rows that survived a refused transition - instead
@@ -13,6 +13,8 @@
  * Only the relations a case asserts are materialised under `include`; every other
  * included relation stays absent, so a case seeds just the tables it looks at.
  */
+
+import { PaymentReportStatus } from "../generated/prisma/enums.js";
 
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
@@ -51,6 +53,15 @@ const tableNames: readonly TableName[] = [
   "invoice",
   "invoicePaymentReport",
 ];
+
+/**
+ * Column defaults the services rely on instead of sending them in `create`.
+ * Only tables whose defaults a case observes are listed; anything else a case
+ * needs must be seeded explicitly.
+ */
+const defaults: Partial<Record<TableName, () => Row>> = {
+  invoicePaymentReport: () => ({ status: PaymentReportStatus.PENDING, submittedAt: new Date() }),
+};
 
 export function createFakeDatabase(
   seed: Partial<Record<TableName, Row[]>> = {},
@@ -113,7 +124,8 @@ function tableApi(
   name: TableName,
   options: FakeDatabaseOptions,
 ) {
-  const read = (where?: Where): Row[] => tables()[name].filter((row) => matches(row, where));
+  const read = (where?: Where): Row[] =>
+    tables()[name].filter((row) => matches(name, row, where, tables()));
   const fail = (operation: FakeDatabaseOperation): void => {
     if (options.failOn?.table === name && options.failOn.operation === operation) {
       throw new Error(`The fake database rejected ${name}.${operation}`);
@@ -125,22 +137,22 @@ function tableApi(
       fail("findMany");
       return read(where)
         .sort(comparator(orderBy))
-        .map((row) => withRelations(row, include, tables()));
+        .map((row) => withRelations(name, row, include, tables()));
     },
     findFirst: async ({ where, include }: Query = {}) => {
       const row = read(where)[0];
-      return row ? withRelations(row, include, tables()) : null;
+      return row ? withRelations(name, row, include, tables()) : null;
     },
     findUnique: async ({ where, include, select }: Query = {}) => {
       const row = read(where)[0];
-      return row ? only(withRelations(row, include, tables()), select) : null;
+      return row ? only(withRelations(name, row, include, tables()), select) : null;
     },
     findUniqueOrThrow: async (query: Query = {}) => {
       const row = read(query.where)[0];
       if (!row) {
         throw new Error(`The fake database has no ${name} row for ${JSON.stringify(query)}`);
       }
-      return only(withRelations(row, query.include, tables()), query.select);
+      return only(withRelations(name, row, query.include, tables()), query.select);
     },
     updateMany: async ({ where, data = {} }: Query = {}) => {
       fail("updateMany");
@@ -152,11 +164,11 @@ function tableApi(
       }
       return { count: rows.length };
     },
-    create: async ({ data = {} }: Query = {}) => {
+    create: async ({ data = {}, select }: Query = {}) => {
       fail("create");
-      const row: Row = { id: `${name}-${tables()[name].length + 1}`, ...data };
+      const row: Row = { id: `${name}-${tables()[name].length + 1}`, ...defaults[name]?.(), ...data };
       tables()[name].push(row);
-      return row;
+      return only(row, select);
     },
     deleteMany: async ({ where }: Query = {}) => {
       fail("deleteMany");
@@ -168,21 +180,29 @@ function tableApi(
   };
 }
 
-/** Prisma `where` semantics for the operators the services actually use. */
-function matches(row: Row, where?: Where): boolean {
+/** Prisma `where` semantics for the operators and relation filters the services use. */
+function matches(name: TableName, row: Row, where: Where | undefined, tables: Record<TableName, Row[]>): boolean {
   if (!where) return true;
 
   return Object.entries(where).every(([field, condition]) => {
     if (field === "OR") {
-      return (condition as Where[]).some((clause) => matches(row, clause));
+      return (condition as Where[]).some((clause) => matches(name, row, clause, tables));
     }
     if (field === "AND") {
-      return (condition as Where[]).every((clause) => matches(row, clause));
+      return (condition as Where[]).every((clause) => matches(name, row, clause, tables));
     }
     if (field === "NOT") {
-      return !matches(row, condition as Where);
+      return !matches(name, row, condition as Where, tables);
     }
     if (condition !== null && typeof condition === "object") {
+      const relation = relations[name]?.[field];
+      if (relation) {
+        const clause = condition as Where;
+        return tables[relation.table]
+          .filter((candidate) => candidate[relation.targetField] === row[relation.localField])
+          .some((candidate) => matches(relation.table, candidate, clause, tables));
+      }
+
       const operator = condition as { in?: unknown[]; not?: unknown };
       if (operator.in) return operator.in.includes(row[field]);
       if ("not" in operator) return row[field] !== operator.not;
@@ -212,27 +232,51 @@ function compareValues(left: unknown, right: unknown): number {
 }
 
 /**
- * Materialises the relations a case asserts. Nested invoices carry their payment
- * reports only when the caller included them, which is what lets a case prove
- * that an executor never receives receipt metadata.
+ * Materialises the relations a case asserts. Only relations listed here are
+ * attached, so a case seeds just the tables it looks at and a missing entry means
+ * the payload has no such key - which is how a case proves that, for example, an
+ * executor never receives payment reports.
  */
-function withRelations(row: Row, include: Where | undefined, tables: Record<TableName, Row[]>): Row {
-  const result: Row = { ...row };
-  const invoices = include?.invoices as { include?: { paymentReports?: unknown } } | undefined;
+type Relation = { table: TableName; localField: string; targetField: string; many: boolean };
 
-  if (invoices) {
-    result.invoices = tables.invoice
-      .filter((invoice) => invoice.orderId === row.id)
-      .map((invoice) =>
-        invoices.include?.paymentReports
-          ? {
-              ...invoice,
-              paymentReports: tables.invoicePaymentReport.filter(
-                (report) => report.invoiceId === invoice.id,
-              ),
-            }
-          : { ...invoice },
-      );
+const relations: Partial<Record<TableName, Record<string, Relation>>> = {
+  workOrder: {
+    invoices: { table: "invoice", localField: "id", targetField: "orderId", many: true },
+  },
+  invoice: {
+    order: { table: "workOrder", localField: "orderId", targetField: "id", many: false },
+    paymentReports: {
+      table: "invoicePaymentReport",
+      localField: "id",
+      targetField: "invoiceId",
+      many: true,
+    },
+  },
+  invoicePaymentReport: {
+    invoice: { table: "invoice", localField: "invoiceId", targetField: "id", many: false },
+  },
+};
+
+function withRelations(
+  name: TableName,
+  row: Row,
+  include: Where | undefined,
+  tables: Record<TableName, Row[]>,
+): Row {
+  const result: Row = { ...row };
+
+  for (const [relation, value] of Object.entries(include ?? {})) {
+    const spec = relations[name]?.[relation];
+    if (!spec) continue;
+
+    const child = value as { include?: Where; select?: Record<string, boolean> };
+    const related = tables[spec.table].filter(
+      (candidate) => candidate[spec.targetField] === row[spec.localField],
+    );
+    const attach = (candidate: Row): Row =>
+      only(withRelations(spec.table, candidate, child.include, tables), child.select);
+
+    result[relation] = spec.many ? related.map(attach) : related[0] === undefined ? null : attach(related[0]);
   }
 
   return result;

@@ -24,14 +24,15 @@ export const invoicesCases = [
       {
         action: "Call `reportPayment` with a 7-byte `receipt.txt` upload as the owning customer.",
         expected:
-          "The file is written to the generated object key, and the created `InvoicePaymentReport` is " +
-          "`PENDING` with `submittedById: customer-1` and that object key.",
+          "The file is written to the generated object key, and the stored `InvoicePaymentReport` is " +
+          "`PENDING` with `submittedById: customer-1`, that object key, `contentType: text/plain` and " +
+          "`sizeBytes: 7`.",
       },
       {
-        action: "Check the side effects of the same call on the invoice and the order.",
+        action: "Check the state of the invoice and the order after the same call.",
         expected:
-          "No invoice update and no order status update is issued: the invoice stays `ISSUED` and the " +
-          "order stays `INVOICE_ISSUED`.",
+          "The invoice is still `ISSUED` and the order still `INVOICE_ISSUED` with no `completedAt`, so " +
+          "an upload cannot close the job.",
       },
     ],
   },
@@ -53,14 +54,41 @@ export const invoicesCases = [
       {
         action: "Call `confirmPaymentReport` as an administrator.",
         expected:
-          "The returned invoice is `PAID`, the report update sets `status: CONFIRMED` and " +
-          "`reviewedById: admin-1`.",
+          "The returned invoice is `PAID`, the stored report is `CONFIRMED` with `reviewedById: admin-1` " +
+          "and a review date, and the invoice row is `PAID` with a `paidAt` date.",
       },
       {
-        action: "Inspect the order update and the history written by the same call.",
+        action: "Inspect the order and the history written by the same call.",
         expected:
-          "The order becomes `INVOICE_PAID` with no `completedAt`, and one history row records " +
-          "`toStatus: INVOICE_PAID`.",
+          "The order is stored as `INVOICE_PAID` with no `completedAt`, and one history row records " +
+          "`INVOICE_ISSUED` to `INVOICE_PAID` with the invoice number in its note.",
+      },
+    ],
+  },
+  {
+    key: "invoices.payment-reports.duplicate-guard",
+    suite: paymentSuite,
+    title: "refuses a second receipt while one is awaiting review",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "An administrator reviews one receipt per invoice, so a second pending report would make the " +
+      "decision ambiguous and both uploads would race for the same confirmation. The guard runs inside " +
+      "the transaction, after the upload, which is why the refused file has to leave the bucket again " +
+      "instead of lingering as an orphan.",
+    preconditions:
+      "An invoice in `ISSUED` for an order in `INVOICE_ISSUED` that already carries one `PENDING` report.",
+    steps: [
+      {
+        action: "Call `reportPayment` again as the owning customer.",
+        expected: "The call rejects with `ConflictException`.",
+      },
+      {
+        action: "Inspect the stored reports and the object storage.",
+        expected: "Exactly one report row remains, and the newly uploaded object is deleted again.",
       },
     ],
   },
