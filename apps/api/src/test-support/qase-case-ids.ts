@@ -13,6 +13,7 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "api.error-responses.unique-violation": 5,
   "api.documentation.hides-devtools": 6,
   "api.documentation.keeps-devtools": 7,
+  "auth.config.mounts-handler": 133,
   "auth.config.lazy": 131,
   "auth.session-guard.rejects-anonymous": 69,
   "auth.session-guard.rejects-deactivated-account": 70,

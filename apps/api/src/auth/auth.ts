@@ -62,6 +62,9 @@ export const auth = new Proxy({} as Auth, {
 
     return typeof value === "function" ? value.bind(built) : value;
   },
+  // `toNodeHandler` mounts `auth.handler` only when `"handler" in auth` is true,
+  // so the proxy has to answer the same probes as the instance it stands for.
+  has: (_target, property) => property in authInstance(),
 });
 
 export type AuthSession = NonNullable<Awaited<ReturnType<Auth["api"]["getSession"]>>>;

@@ -41,4 +41,7 @@ export const prisma = new Proxy({} as PrismaService, {
 
     return typeof value === "function" ? value.bind(instance) : value;
   },
+  // Adapters probe the client - `"$transaction" in db`, for instance - so the
+  // proxy answers the same questions as the client it stands for.
+  has: (_target, property) => property in clientInstance(),
 });
