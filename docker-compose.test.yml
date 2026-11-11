@@ -1,0 +1,74 @@
+# Ephemeral stack for the API integration suite.
+#
+# `pnpm --filter @order-desk/api test:integration` starts this stack from the
+# Vitest global setup, waits for the API healthcheck and tears it down with
+# `down -v` afterwards. The project name, ports and credentials differ from
+# docker-compose.yml on purpose: the suite truncates the database with
+# POST /api/devtools/reset, so it must never reach development or production data.
+name: order-desk-test
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 6201
+      DATABASE_URL: postgresql://order_desk:order_desk_test@postgres:5432/order_desk_test?schema=public
+      BETTER_AUTH_URL: http://127.0.0.1:7101/api/auth
+      BETTER_AUTH_SECRET: integration-test-secret-at-least-32-characters
+      FRONTEND_ORIGIN: http://127.0.0.1:7100
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: integration-admin-password
+      DEVTOOLS_ENABLED: "true"
+      DEVTOOLS_API_KEY: integration-devtools-key-at-least-32
+      DEVTOOLS_SEED_PASSWORD: integration-seed-password
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_ACCESS_KEY: order-desk
+      S3_SECRET_KEY: integration-s3-password
+      S3_BUCKET: order-files
+    ports:
+      - "127.0.0.1:7101:6201"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:6201/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: order_desk
+      POSTGRES_PASSWORD: order_desk_test
+      POSTGRES_DB: order_desk_test
+    ports:
+      - "127.0.0.1:7102:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_desk -d order_desk_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    command:
+      - mini
+      - -dir=/data
+      - -s3.port=8333
+      - -master.port=9333
+      - -admin.user=admin
+      - -admin.password=integration-seaweedfs-password
+    environment:
+      AWS_ACCESS_KEY_ID: order-desk
+      AWS_SECRET_ACCESS_KEY: integration-s3-password
+      S3_BUCKET: order-files
