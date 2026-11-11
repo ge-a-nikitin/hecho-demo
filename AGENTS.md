@@ -43,6 +43,7 @@
 - After changing a case entry, run `pnpm qase:sync --dry-run`, review the plan, then `pnpm qase:sync`, so descriptions, steps, tags, and case IDs reach TestOps. `qase-case-ids.ts` is generated and written only by the sync; never edit it by hand.
 - When a test disappears, remove its catalogue entry and run `pnpm qase:sync` in the same change. Do not leave the catalogue ahead of or behind the suites: an offline parity test fails when a case ID survives its entry.
 - Never delete a case in TestOps by hand. The sync identifies cases by their `order-desk:<key>` tag, so a renamed or moved case keeps its ID and history; a key that leaves the catalogue has its case moved to `Archive / <original top level suite>` instead of being deleted, and a key that comes back brings the same case home.
+- Results are reported from `main` only: `.github/workflows/qase.yml` runs after a merge, fails when `qase:sync --dry-run` plans anything, reports both suites, and comments the run links on the merged pull request. Pull requests never receive the Qase token, so an offline run must stay green without it.
 
 ## Verification and completion
 
