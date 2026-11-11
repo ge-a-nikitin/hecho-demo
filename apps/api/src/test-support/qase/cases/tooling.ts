@@ -1,6 +1,7 @@
 import type { QaseCase } from "../types.js";
 
 const manifestSuite = ["Tooling", "Qase manifest"] as const;
+const syncSuite = ["Tooling", "Qase sync"] as const;
 
 export const toolingCases = [
   {
@@ -112,6 +113,105 @@ export const toolingCases = [
         expected:
           "Every manifest key appears in exactly one spec file, and no spec references a key that is absent " +
           "from the manifest.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-sync.adoption",
+    suite: syncSuite,
+    title: "adopts an existing case by its order-desk tag so a rename keeps its ID",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "other",
+    behavior: "positive",
+    description:
+      "TestOps stores results against numeric case IDs, so replacing a case whenever its title or suite " +
+      "changes would detach the whole history of that behaviour from the case that now describes it. The " +
+      "sync therefore treats the `order-desk:<key>` tag as the identity: a case found by tag is reused, and " +
+      "the rename or move is applied to it as an ordinary update.",
+    steps: [
+      {
+        action: "Plan a sync where the remote case still has the old title and sits in the old suite.",
+        expected: "The plan matches the remote case ID to the manifest key instead of asking for a new case.",
+      },
+      {
+        action: "Inspect the planned archive moves.",
+        expected: "The matched case is not archived, because its key is still in the catalogue.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-sync.archive",
+    suite: syncSuite,
+    title: "moves a retired case into the Archive suite instead of deleting it",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "other",
+    behavior: "negative",
+    description:
+      "Removing a test usually removes the behaviour from the manifest too, but the case still documents " +
+      "what the product used to guarantee and it may be the container of historical results. TestOps has no " +
+      "case archive in its API, so the sync emulates one by moving the case under `Archive / <original top " +
+      "level suite>`, which keeps it out of the active tree without destroying anything.",
+    steps: [
+      {
+        action: "Plan a sync where a tagged remote case no longer appears in the catalogue.",
+        expected:
+          "The plan asks to move that case to `Archive / <original top level suite>` rather than to delete it.",
+      },
+      {
+        action: "Plan the same sync again with the case already inside `Archive`.",
+        expected: "No further move is planned, so repeated syncs stay idempotent.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-sync.restore",
+    suite: syncSuite,
+    title: "brings an archived case back to its suite when its key returns",
+    severity: "major",
+    priority: "low",
+    layer: "unit",
+    type: "other",
+    behavior: "positive",
+    description:
+      "A retired behaviour often comes back, and with it comes the case that already documented it. " +
+      "Because archiving only moves the case, the tag survives, so the returning key finds its old case and " +
+      "the sync moves it home: the restored case keeps the ID, and therefore the history, of the archived one.",
+    steps: [
+      {
+        action: "Plan a sync where the remote case sits in `Archive / Orders` and its key is back in the catalogue.",
+        expected: "The plan matches that case to the key instead of creating a second case for the same behaviour.",
+      },
+      {
+        action: "Compare the planned target suite with the manifest suite.",
+        expected: "The matched case is patched back into the manifest suite, not left in `Archive`.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-sync.conflicts",
+    suite: syncSuite,
+    title: "refuses to guess when two cases carry the same catalogue tag",
+    severity: "critical",
+    priority: "medium",
+    layer: "unit",
+    type: "other",
+    behavior: "negative",
+    description:
+      "The tag is the identity, so two cases carrying the same tag make the identity ambiguous: patching " +
+      "one of them would silently leave the other as a stale copy that never receives results. The plan " +
+      "reports the conflict and the sync stops before writing anything, which leaves the decision to a human.",
+    steps: [
+      {
+        action: "Plan a sync in which two remote cases carry the tag of one manifest key.",
+        expected: "The plan reports a conflict naming the key and both case IDs.",
+      },
+      {
+        action: "Run the sync with that plan.",
+        expected: "The sync throws before creating, updating or archiving anything.",
       },
     ],
   },
