@@ -1,0 +1,95 @@
+name: Checks
+
+# Pull-request checks run on GitHub-hosted runners only. The self-hosted runner
+# has Docker socket access to the production VM, and this repository is public, so
+# untrusted pull-request code must never reach it; deployment keeps its own
+# workflow and its own runner.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Nothing here reaches a database: the value only satisfies `prisma generate`,
+  # which reads DATABASE_URL from prisma.config.ts, and the unit suite overrides it
+  # with its own placeholder in vitest.config.ts.
+  DATABASE_URL: postgresql://checks:checks@127.0.0.1:5432/checks
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The generated Prisma client is git-ignored, so every job builds it first.
+      - name: Generate the Prisma client
+        run: pnpm db:generate
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm --filter @order-desk/api test
+
+      - name: Build
+        run: pnpm build
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The global setup builds and starts docker-compose.test.yml, waits for
+      # /api/health and removes the stack with its volumes afterwards.
+      - name: Integration tests
+        run: pnpm --filter @order-desk/api test:integration
+
+      - name: Show the stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 200
+
+      - name: Remove the stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v --remove-orphans
