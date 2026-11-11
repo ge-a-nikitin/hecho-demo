@@ -1,0 +1,14 @@
+{
+  "mode": "off",
+  "fallback": "off",
+  "testops": {
+    "api": {
+      "host": "qase.io"
+    },
+    "project": "HECHO",
+    "run": {
+      "title": "Order Desk API · automated run",
+      "complete": true
+    }
+  }
+}

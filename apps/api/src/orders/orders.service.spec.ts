@@ -1,13 +1,14 @@
 import "../env.js";
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import type { PrismaService } from "../database/prisma.service.js";
 import { OrdersService } from "./orders.service.js";
 
 describe("Orders", () => {
   describe("Lifecycle", () => {
-    it("limits executor order lists to assigned orders and the unassigned pool", async () => {
+    it(qc("orders.lifecycle.executor-list-scope", "limits executor order lists to assigned orders and the unassigned pool"), async () => {
       let query: Record<string, unknown> | undefined;
       const service = await createService({
         workOrder: {
@@ -33,7 +34,7 @@ describe("Orders", () => {
       expect(include.invoices?.include?.paymentReports).toBeUndefined();
     });
 
-    it("rejects customers who try to access another customer's order", async () => {
+    it(qc("orders.lifecycle.foreign-order-access", "rejects customers who try to access another customer's order"), async () => {
       const service = await createService({
         workOrder: {
           findUnique: async () => ({
@@ -50,7 +51,7 @@ describe("Orders", () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it("submits unassigned drafts to the distribution pool and records the transition", async () => {
+    it(qc("orders.lifecycle.submit-to-pool", "submits unassigned drafts to the distribution pool and records the transition"), async () => {
       let updateArgs: Record<string, unknown> | undefined;
       let historyArgs: unknown;
       const order = {
@@ -104,7 +105,7 @@ describe("Orders", () => {
       });
     });
 
-    it("requires a comment when a customer rejects an estimate", async () => {
+    it(qc("orders.lifecycle.reject-estimate-comment", "requires a comment when a customer rejects an estimate"), async () => {
       let transactionCalled = false;
       const service = await createService({
         $transaction: async () => {
@@ -125,7 +126,7 @@ describe("Orders", () => {
     });
 
     it.each([OrderStatus.INVOICE_ISSUED, OrderStatus.INVOICE_PAID])(
-      "does not allow cancelling an order in %s",
+      qc("orders.lifecycle.cancel-after-invoice", "does not allow cancelling an order in %s"),
       async (status) => {
         let updateCalled = false;
         const service = await createService({
@@ -156,7 +157,7 @@ describe("Orders", () => {
       },
     );
 
-    it("does not complete an order before payment is confirmed", async () => {
+    it(qc("orders.lifecycle.complete-requires-payment", "does not complete an order before payment is confirmed"), async () => {
       let invoiceQueried = false;
       const service = await createService({
         $transaction: async (run: (tx: object) => Promise<unknown>) =>
@@ -179,7 +180,7 @@ describe("Orders", () => {
       expect(invoiceQueried).toBe(false);
     });
 
-    it("completes an order only after a paid invoice exists", async () => {
+    it(qc("orders.lifecycle.complete-after-payment", "completes an order only after a paid invoice exists"), async () => {
       let orderUpdate: Record<string, unknown> | undefined;
       let historyData: Record<string, unknown> | undefined;
       const service = await createService({

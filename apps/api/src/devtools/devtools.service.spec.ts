@@ -1,6 +1,7 @@
 import "../env.js";
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { Prisma } from "../generated/prisma/client.js";
 import type { PrismaService } from "../database/prisma.service.js";
 import type { ObjectStorageService } from "../storage/object-storage.service.js";
@@ -10,7 +11,7 @@ const storage = {} as ObjectStorageService;
 
 describe("DevTools", () => {
   describe("Seed cleanup", () => {
-    it("clears payment reports and invoices before deleting seed orders and users", async () => {
+    it(qc("devtools.seed-cleanup.order", "clears payment reports and invoices before deleting seed orders and users"), async () => {
       const calls: string[] = [];
       let deletedInvoiceIds: string[] = [];
       let deletedReportInvoiceIds: string[] = [];
@@ -89,7 +90,7 @@ describe("DevTools", () => {
       expect(deletedOrderIds).toContain("devtools-seed-v1-order-completed");
     });
 
-    it("reports a conflict when seed records are still referenced elsewhere", async () => {
+    it(qc("devtools.seed-cleanup.conflict", "reports a conflict when seed records are still referenced elsewhere"), async () => {
       const prisma = {
         $transaction: async () => {
           throw new Prisma.PrismaClientKnownRequestError("foreign key constraint failed", {
@@ -105,7 +106,7 @@ describe("DevTools", () => {
   });
 
   describe("Reset", () => {
-    it("wipes every table in dependency order and recreates the administrator from the environment", async () => {
+    it(qc("devtools.reset.full", "wipes every table in dependency order and recreates the administrator from the environment"), async () => {
       const previous = { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD };
       process.env.ADMIN_EMAIL = " Admin@Example.Test ";
       process.env.ADMIN_PASSWORD = "reset-password-123";
@@ -164,7 +165,7 @@ describe("DevTools", () => {
       }
     });
 
-    it("keeps stored files when the purge is not requested", async () => {
+    it(qc("devtools.reset.keeps-files", "keeps stored files when the purge is not requested"), async () => {
       const previous = { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD };
       process.env.ADMIN_EMAIL = "admin@example.test";
       process.env.ADMIN_PASSWORD = "reset-password-123";
@@ -194,7 +195,7 @@ describe("DevTools", () => {
       }
     });
 
-    it("refuses to reset when the administrator credentials are not configured", async () => {
+    it(qc("devtools.reset.requires-admin", "refuses to reset when the administrator credentials are not configured"), async () => {
       const previous = { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD };
       process.env.ADMIN_EMAIL = "admin@example.test";
       delete process.env.ADMIN_PASSWORD;

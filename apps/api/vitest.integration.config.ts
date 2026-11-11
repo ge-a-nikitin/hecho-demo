@@ -1,4 +1,10 @@
+import { resolve } from "node:path";
+import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vitest/config";
+
+// Same contract as vitest.config.ts: Qase credentials come from the
+// repository-root .env, never from the checked-in qase.config.json.
+loadEnv({ path: resolve(import.meta.dirname, "../../.env"), quiet: true });
 
 /**
  * Integration tests drive the real HTTP API of the ephemeral stack defined in
