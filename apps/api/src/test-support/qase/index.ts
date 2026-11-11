@@ -1,0 +1,37 @@
+import { apiCases } from "./cases/api.js";
+import { devtoolsCases } from "./cases/devtools.js";
+import { invoicesCases } from "./cases/invoices.js";
+import { ordersCases } from "./cases/orders.js";
+import { ordersIntegrationCases } from "./cases/orders-integration.js";
+import { toolingCases } from "./cases/tooling.js";
+import { usersCases } from "./cases/users.js";
+import type { QaseCase } from "./types.js";
+
+/**
+ * The full TestOps catalogue, one module per product area so that a change to
+ * the order lifecycle never has to touch the devtools cases.
+ *
+ * Order matters only for readability of the generated ID file and for the
+ * TestOps report: entries stay grouped by the suite tree below.
+ */
+export const qaseCases = [
+  ...apiCases,
+  ...ordersCases,
+  ...invoicesCases,
+  ...usersCases,
+  ...devtoolsCases,
+  ...ordersIntegrationCases,
+  ...toolingCases,
+] as const satisfies readonly QaseCase[];
+
+export type QaseCaseKey = (typeof qaseCases)[number]["key"];
+
+export type {
+  QaseBehavior,
+  QaseCase,
+  QaseCaseType,
+  QaseLayer,
+  QasePriority,
+  QaseSeverity,
+  QaseStep,
+} from "./types.js";

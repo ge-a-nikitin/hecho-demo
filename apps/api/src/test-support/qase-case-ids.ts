@@ -58,4 +58,6 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "tooling.qase-manifest.unique-keys": 50,
   "tooling.qase-manifest.suite-paths": 51,
   "tooling.qase-manifest.generated-ids": 52,
+  "tooling.qase-manifest.case-content": 60,
+  "tooling.qase-manifest.spec-coverage": 61,
 };
