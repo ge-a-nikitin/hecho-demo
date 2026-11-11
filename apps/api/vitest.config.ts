@@ -16,6 +16,16 @@ export default defineConfig({
   test: {
     include: ["src/**/*.spec.ts"],
     environment: "node",
+    // The suite stays offline, but a few modules build a Prisma client and a
+    // Better Auth instance while they are imported, and both refuse to construct
+    // without their settings. Placeholders keep the run self-contained — no local
+    // .env is required — and no real credential from the environment can leak
+    // into a unit run.
+    env: {
+      DATABASE_URL: "postgresql://unit-test:unit-test@127.0.0.1:5432/unit-test",
+      BETTER_AUTH_URL: "http://127.0.0.1:6201/api/auth",
+      BETTER_AUTH_SECRET: "unit-test-secret-at-least-32-characters",
+    },
     // The Qase reporter is only wired up when a run explicitly targets Qase,
     // so local runs and pull-request checks stay offline.
     reporters:
