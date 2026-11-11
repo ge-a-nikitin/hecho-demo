@@ -19,6 +19,7 @@ The governing rule: Qase exists for reporting only. Neither suite needs the netw
 - `pnpm qase:sync` creates the missing suites and cases in Qase TestOps, rewrites the cases whose content or metadata drifted, and refreshes `apps/api/src/test-support/qase-case-ids.ts` with the numeric IDs. The sync is idempotent — a second run reports every case as unchanged.
 - Each description ends with an `_Automated by <spec>_` line derived from the `qc()` calls, so moving a spec file updates its case on the next sync.
 - `qase-case-ids.ts` is generated: only the sync writes it, and it is never edited by hand.
+- A sync reaches the project immediately, while the tests reach `main` only on merge, so syncing from a branch leaves the `catalogue` job on `main` disagreeing until that pull request lands: its plan asks to archive the new case and to revert the rewritten ones. That is the order the workflow expects, and the merge puts both sides back in step; the project is never rolled back to silence the check.
 
 ## Local runs with reporting
 
