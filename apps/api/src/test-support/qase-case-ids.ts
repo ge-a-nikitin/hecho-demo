@@ -46,6 +46,7 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "categories.validation.rename": 91,
   "invoices.payment-reports.receipt-stored": 16,
   "invoices.payment-reports.confirm-payment": 17,
+  "invoices.payment-reports.duplicate-guard": 107,
   "invoices.payment-reports.executor-denied": 18,
   "invoices.validation.void-reason": 92,
   "invoices.validation.reject-reason": 93,

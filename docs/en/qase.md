@@ -24,7 +24,7 @@ The governing rule: Qase exists for reporting only. Neither suite needs the netw
 
 - `pnpm --filter @order-desk/api test:qase` reports the unit suite and `pnpm --filter @order-desk/api test:qase:integration` reports the integration one. Both export `QASE_MODE=testops`, create a run, attach every result to its case, complete the run, and print the run link.
 - `pnpm qase:run` does the same for day-to-day work: it syncs the catalogue and runs the unit suite with reporting.
-- A parameterized test reports several results on one case (the `does not allow cancelling an invoiced order` case runs for two statuses), so a unit run of 83 tests reports 83 results onto 82 cases.
+- A parameterized test reports several results on one case (the `does not allow cancelling an invoiced order` case runs for two statuses), so a unit run of 84 tests reports 84 results onto 83 cases.
 - A run link looks like `https://app.qase.io/run/HECHO/dashboard/<id>`; extracting it from a log needs `grep -oE 'Test run link: https://[^ ]+' | tail -1 | awk '{print $NF}'`, because other addresses appear before it in the output.
 
 ## CI runs
