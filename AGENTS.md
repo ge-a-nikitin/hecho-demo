@@ -67,6 +67,7 @@
 ### Commits
 
 - Follow the repository's Conventional Commits style: lowercase, imperative, with a scope when it adds information, for example `fix(web): resolve the better-auth base URL against the page origin` or `ci: deploy to the home VM from a self-hosted runner`.
+- Write the commit subject and body in English. The repository squashes with `COMMIT_MESSAGES`, so the branch commit body becomes the merge commit body and stays in the history; a description written in another language belongs in the pull request, which that setting does not copy.
 - Keep one logical change per commit, and keep formatting-only or drive-by edits out of a functional commit.
 - Automatically commit completed implementation changes unless the user asks not to. Before committing, inspect the diff, stage only task-related changes, and ensure the commit does not include unrelated user work.
 - Never commit `.env` files, generated output, or secrets. Production configuration is `deploy/prod.env`, which stays non-secret and tracked, while the secrets themselves live in the GitHub `production` environment secret `PROD_ENV_SECRETS`.
