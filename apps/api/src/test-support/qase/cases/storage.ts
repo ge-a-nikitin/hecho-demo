@@ -3,9 +3,10 @@ import type { QaseCase } from "../types.js";
 const objectsSuite = ["Storage", "Objects"] as const;
 
 /**
- * The SeaweedFS contract. The suite replaces the S3 SDK with a fake that records
- * the commands, so every case here describes a request the service sends to the
- * bucket rather than the internals of the SDK.
+ * The SeaweedFS contract. The suite replaces the S3 SDK with an in-memory bucket,
+ * so every case here describes what the service leaves in the bucket - the stored
+ * bytes, the stored content type, the keys that survive a purge - rather than the
+ * command objects it sends.
  */
 export const storageCases = [
   {
@@ -47,8 +48,8 @@ export const storageCases = [
       {
         action: "Call `put` with a buffer, its size and `image/png`.",
         expected:
-          "One `PutObjectCommand` carries the configured bucket, the key, the same buffer, " +
-          "`ContentLength` equal to the buffer length and `ContentType: image/png`.",
+          "The bucket holds one object under that key whose bytes are the uploaded buffer and whose " +
+          "content type is `image/png`.",
       },
     ],
   },
@@ -68,7 +69,7 @@ export const storageCases = [
     steps: [
       {
         action: "Call `put` with `mimetype: \"\"`.",
-        expected: "The command carries `ContentType: application/octet-stream`.",
+        expected: "The object is stored with `application/octet-stream` as its content type.",
       },
     ],
   },
@@ -87,10 +88,10 @@ export const storageCases = [
       "buffer, which is acceptable because uploads are capped at 1 MB.",
     steps: [
       {
-        action: "Call `get` for a stored key while the bucket answers with three bytes and `image/png`.",
+        action: "Call `get` for a stored key while the bucket holds three bytes with `image/png`.",
         expected:
-          "The result holds a buffer with those bytes and `contentType: image/png`, and the sent command " +
-          "names the configured bucket and the requested key.",
+          "The result holds a buffer with those bytes and `contentType: image/png`, so a download " +
+          "reproduces what was uploaded.",
       },
     ],
   },
@@ -125,12 +126,12 @@ export const storageCases = [
     behavior: "positive",
     description:
       "Removing an attachment has to remove the object as well, otherwise the bucket grows with files " +
-      "that no row points at. The key comes from the attachment row, so the command must address exactly " +
-      "that key in the configured bucket.",
+      "that no row points at. The key comes from the attachment row, so exactly that object disappears " +
+      "while its neighbours stay.",
     steps: [
       {
-        action: "Call `delete` for one key.",
-        expected: "One `DeleteObjectCommand` carries the configured bucket and that key.",
+        action: "Call `delete` for one of two stored keys.",
+        expected: "The bucket no longer holds that object and still holds the other one.",
       },
     ],
   },
@@ -150,10 +151,10 @@ export const storageCases = [
     steps: [
       {
         action:
-          "Call `deleteAll` while the bucket reports a truncated first page and one shorter second page.",
+          "Call `deleteAll` while the bucket holds three objects and returns at most two keys per page.",
         expected:
-          "Every listing asks for `MaxKeys: 1000` and forwards `NextContinuationToken` of the previous " +
-          "page; keys without a `Key` are ignored; the report counts all deleted objects.",
+          "The purge continues past the first page, the report counts all three deletions and the bucket " +
+          "is empty afterwards.",
       },
     ],
   },
@@ -172,8 +173,36 @@ export const storageCases = [
       "caller tell the operator that some files survived.",
     steps: [
       {
-        action: "Call `deleteAll` while the bucket deletes one key and reports two errors.",
-        expected: "The promise resolves with `{ deleted: 1, failed: 2 }`.",
+        action: "Call `deleteAll` while the bucket deletes one key and refuses two others.",
+        expected:
+          "The promise resolves with `{ deleted: 1, failed: 2 }` and the two refused objects are still " +
+          "in the bucket, so the operator can remove them by hand.",
+      },
+    ],
+  },
+  {
+    key: "storage.objects.config-lazy",
+    suite: objectsSuite,
+    title: "reads the bucket settings on the first call instead of at construction",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Constructing the service used to read `S3_*` and build the S3 client, so every module that only " +
+      "imported it needed SeaweedFS settings, and the offline unit suite had to invent placeholders for " +
+      "them. Reading the settings on the first call keeps construction free - while a deployment without " +
+      "`S3_BUCKET` must still fail loudly instead of storing nothing.",
+    preconditions: "`S3_*` configured, then `S3_BUCKET` removed after the service is created.",
+    steps: [
+      {
+        action: "Create the service without any `S3_*` setting and call `put`.",
+        expected: "The call rejects with `S3_BUCKET is required`.",
+      },
+      {
+        action: "Restore `S3_BUCKET` and call `put` again on the same instance.",
+        expected: "The object is stored, because the settings are read when they are first needed.",
       },
     ],
   },

@@ -12,16 +12,30 @@ import type { UploadedOrderFile } from "../orders/order-files.service.js";
 
 @Injectable()
 export class ObjectStorageService {
-  private readonly client = new S3Client({
-    endpoint: requiredEnvironmentValue("S3_ENDPOINT"),
-    region: process.env.S3_REGION ?? "us-east-1",
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: requiredEnvironmentValue("S3_ACCESS_KEY"),
-      secretAccessKey: requiredEnvironmentValue("S3_SECRET_KEY"),
-    },
-  });
-  private readonly bucket = requiredEnvironmentValue("S3_BUCKET");
+  private clientInstance?: S3Client;
+
+  /**
+   * Built on the first call rather than in the constructor, so importing or
+   * instantiating the service needs no `S3_*` settings; a deployment that lacks
+   * them still fails on the first request, where the misconfiguration shows up.
+   */
+  private get client(): S3Client {
+    this.clientInstance ??= new S3Client({
+      endpoint: requiredEnvironmentValue("S3_ENDPOINT"),
+      region: process.env.S3_REGION ?? "us-east-1",
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: requiredEnvironmentValue("S3_ACCESS_KEY"),
+        secretAccessKey: requiredEnvironmentValue("S3_SECRET_KEY"),
+      },
+    });
+
+    return this.clientInstance;
+  }
+
+  private get bucket(): string {
+    return requiredEnvironmentValue("S3_BUCKET");
+  }
 
   createObjectKey(orderId: string): string {
     return `orders/${orderId}/${randomUUID()}`;

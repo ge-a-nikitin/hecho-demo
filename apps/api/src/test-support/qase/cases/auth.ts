@@ -1,8 +1,39 @@
 import type { QaseCase } from "../types.js";
 
 const sessionSuite = ["API", "Access control"] as const;
+const configurationSuite = ["Auth", "Configuration"] as const;
 
 export const authCases = [
+  {
+    key: "auth.config.lazy",
+    suite: configurationSuite,
+    title: "loads the auth and database modules without their settings",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The Better Auth instance and the Prisma client used to be built while their modules were imported, " +
+      "so importing anything that reached them required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and " +
+      "`DATABASE_URL`. That made the offline unit suite carry invented placeholders for settings it never " +
+      "uses. Building both on first use removes that requirement without weakening it: a deployment that " +
+      "forgets the settings still fails on the first sign-in attempt instead of accepting requests.",
+    preconditions:
+      "`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL` removed from the environment.",
+    steps: [
+      {
+        action: "Import `auth.ts` and `prisma.service.ts` with a fresh module registry.",
+        expected: "Both imports resolve and neither throws.",
+      },
+      {
+        action: "Resolve a session through `auth.api.getSession`.",
+        expected:
+          "The call fails with `BETTER_AUTH_URL is required`, so the missing setting is reported where " +
+          "it is used.",
+      },
+    ],
+  },
   {
     key: "auth.session-guard.rejects-anonymous",
     suite: sessionSuite,
