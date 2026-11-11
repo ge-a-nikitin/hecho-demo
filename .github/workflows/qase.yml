@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      run-link: ${{ steps.report.outputs.run-link }}
+      run-link: ${{ steps.link.outputs.run-link }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -91,6 +91,7 @@ jobs:
           pnpm --filter @order-desk/api test:qase 2>&1 | tee qase-unit.log
 
       - name: Publish the run link
+        id: link
         if: always()
         run: |
           set -euo pipefail
@@ -111,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     outputs:
-      run-link: ${{ steps.report.outputs.run-link }}
+      run-link: ${{ steps.link.outputs.run-link }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -144,6 +145,7 @@ jobs:
           pnpm --filter @order-desk/api test:qase:integration 2>&1 | tee qase-integration.log
 
       - name: Publish the run link
+        id: link
         if: always()
         run: |
           set -euo pipefail
@@ -204,8 +206,8 @@ jobs:
           {
             echo "Qase TestOps runs for \`$SHA\`:"
             echo
-            [ -n "$UNIT_LINK" ] && echo "- unit: $UNIT_LINK"
-            [ -n "$INTEGRATION_LINK" ] && echo "- integration: $INTEGRATION_LINK"
+            if [ -n "$UNIT_LINK" ]; then echo "- unit: $UNIT_LINK"; fi
+            if [ -n "$INTEGRATION_LINK" ]; then echo "- integration: $INTEGRATION_LINK"; fi
           } > comment.md
 
           gh pr comment "$number" --repo "$REPOSITORY" --body-file comment.md
