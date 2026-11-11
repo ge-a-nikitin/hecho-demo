@@ -29,7 +29,7 @@ The interface is localized into English (default), Russian, and Spanish.
 | Database | PostgreSQL 17, Prisma 7, migrations and SQL constraints |
 | Files | SeaweedFS 4.52 via an S3-compatible API, 1 MB limit per file |
 | Infrastructure | Docker Compose, Nginx serving the frontend |
-| Tests | API unit tests via `tsx --test`; e2e automation lives in a separate repository |
+| Tests | API unit and integration tests via Vitest; e2e automation lives in a separate repository |
 
 ## Architecture
 
@@ -100,6 +100,7 @@ For publishing, a home VM runs `docker-compose.prod.yml` behind a Cloudflare tun
 | Purpose and functionality | [Functionality](./docs/en/README.md#agreed-functionality) | [Функционал](./docs/ru/README.md#согласованный-функционал) |
 | Technical constraints | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) |
 | Implementation plan | [Plan](./docs/en/README.md#implementation-plan) | [План](./docs/ru/README.md#план-реализации) |
+| Backlog | [Backlog](./docs/en/README.md#backlog) | [Бэклог](./docs/ru/README.md#бэклог) |
 | Setup and operations | [Setup](./docs/en/README.md#running-the-project-locally) | [Запуск](./docs/ru/README.md#запуск-проекта-локально) |
 | Home VM deployment | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) |
 | Database schema | [Database schema](./docs/en/database-schema.md) | [Схема БД](./docs/ru/database-schema.md) |
@@ -122,8 +123,10 @@ deploy/prod.env      production configuration without secrets
 - Interactive elements use stable `data-testid` attributes that do not depend on CSS or DOM structure.
 - The API contract is available in Swagger: `http://localhost:6201/api/docs`. Every endpoint with a request body documents a schema with a realistic example, and fields or parameters with a fixed set of values (roles, statuses, flags) list all allowed options; enum values are case-sensitive (`ADMIN`, not `admin`).
 - A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`; the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
-- API unit tests: `pnpm --filter @order-desk/api test`.
+- API unit tests: `pnpm --filter @order-desk/api test`. They run offline, without a database or network, and live next to the code in `apps/api/src/**/*.spec.ts`.
+- API integration tests: `pnpm --filter @order-desk/api test:integration`. The suite builds and starts a dedicated `docker-compose.test.yml` stack (project `order-desk-test`, ports `7101`–`7102`), waits for `/api/health`, cleans the database through `POST /api/devtools/reset`, and removes the containers together with their data after the run. The scenarios cover the order lifecycle, concurrent claiming from the pool, access control, and request validation.
 - Type checks and build: `pnpm typecheck`, `pnpm build`.
+- Runs can be reported to Qase TestOps (project `HECHO`): `pnpm --filter @order-desk/api test:qase` and `test:qase:integration`. Cases are described in the catalogue under `apps/api/src/test-support/qase/`; `pnpm qase:sync` creates and updates them in Qase (description, preconditions, steps, tags) and writes their IDs to `qase-case-ids.ts`. A case is identified by the `order-desk:<key>` tag, so a rename keeps its history, and an entry removed from the catalogue moves to `Archive / <original top level suite>` instead of being deleted. The token is stored in `.env` only.
 - Bug reports are filed through the `.github/ISSUE_TEMPLATE/bug-report.yml` form: preconditions, steps to reproduce, expected and actual result. Blank issues are disabled, so "New Issue" opens this form directly.
 - End-to-end e2e scenarios are maintained in a separate training repository and are not part of this project.
 
