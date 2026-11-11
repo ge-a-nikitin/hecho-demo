@@ -125,7 +125,7 @@ deploy/prod.env      продовая конфигурация без секре
 - Unit-тесты API на Vitest: `pnpm --filter @order-desk/api test`. Они работают офлайн, без базы и сети, и лежат рядом с кодом в `apps/api/src/**/*.spec.ts`.
 - Интеграционные тесты API: `pnpm --filter @order-desk/api test:integration`. Набор сам собирает и поднимает отдельный стек `docker-compose.test.yml` (проект `order-desk-test`, порты `7101`–`7102`), ждёт `/api/health`, очищает базу через `POST /api/devtools/reset`, а после прогона удаляет контейнеры вместе с данными. Сценарии покрывают жизненный цикл заказа, конкурентный захват из пула, права доступа и валидацию запросов.
 - Проверки типов и сборка: `pnpm typecheck`, `pnpm build`.
-- Отчёты о прогонах можно отправлять в Qase TestOps (проект `HECHO`): `pnpm --filter @order-desk/api test:qase` и `test:qase:integration`. Кейсы описаны в манифесте `apps/api/src/test-support/qase-manifest.ts`, команда `pnpm qase:sync` создаёт и обновляет их в Qase и записывает ID в `qase-case-ids.ts`; токен хранится только в `.env`.
+- Отчёты о прогонах можно отправлять в Qase TestOps (проект `HECHO`): `pnpm --filter @order-desk/api test:qase` и `test:qase:integration`. Кейсы описаны в каталоге `apps/api/src/test-support/qase/`, команда `pnpm qase:sync` создаёт и обновляет их в Qase (описание, предусловия, шаги, теги) и записывает ID в `qase-case-ids.ts`; токен хранится только в `.env`.
 - Баг-репорты создаются через форму `.github/ISSUE_TEMPLATE/bug-report.yml`: прекондиции, шаги воспроизведения, ожидаемый и фактический результат. Пустые issues отключены, поэтому «New Issue» сразу открывает эту форму.
 - Сквозные e2e-сценарии поддерживаются в отдельном учебном репозитории и не входят в этот проект.
 

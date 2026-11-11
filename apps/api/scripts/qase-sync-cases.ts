@@ -3,6 +3,11 @@
  * src/test-support/qase-manifest.ts, then writes the numeric case IDs back into
  * src/test-support/qase-case-ids.ts so the suites can link their results.
  *
+ * Every case is written in full - description, preconditions, steps, tags, type
+ * and behavior - so TestOps is readable without the repository. Cases are
+ * matched by suite and title, and a case is only patched when something differs,
+ * which keeps the run idempotent and the API traffic low.
+ *
  * Usage:
  *   pnpm --filter @order-desk/api qase:sync --dry-run   # read-only plan
  *   pnpm --filter @order-desk/api qase:sync             # apply
@@ -16,6 +21,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { qaseCases, type QaseCase } from "../src/test-support/qase-manifest.ts";
+import { qcUsageIndex } from "../src/test-support/qase/spec-index.ts";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const apiDir = resolve(repoRoot, "apps/api");
@@ -45,14 +51,40 @@ if (!project) {
 }
 
 const baseUrl = resolveBaseUrl(host);
+
+/*
+ * Field codes of the TestOps API. The API documents the accepted ranges but not
+ * their meaning, so the order below follows the TestOps UI: the ids were
+ * verified against a live project (`type` 1-11, `behavior` 1-3, `status` 0-2).
+ */
 const severityIds = { blocker: 1, critical: 2, major: 3, normal: 4, minor: 5, trivial: 6 } as const;
 const priorityIds = { high: 1, medium: 2, low: 3 } as const;
 const layerIds = { e2e: 1, api: 2, unit: 3 } as const;
+const typeIds = {
+  functional: 1,
+  smoke: 2,
+  regression: 3,
+  security: 4,
+  performance: 5,
+  acceptance: 6,
+  usability: 7,
+  compatibility: 8,
+  integration: 9,
+  exploratory: 10,
+  other: 11,
+} as const;
+const behaviorIds = { positive: 1, negative: 2, destructive: 3 } as const;
 
 interface QaseSuite {
   id: number;
   title: string;
   parent_id?: number | null;
+}
+
+interface QaseStepEntity {
+  action?: string | null;
+  expected_result?: string | null;
+  data?: string | null;
 }
 
 interface QaseCaseEntity {
@@ -62,6 +94,15 @@ interface QaseCaseEntity {
   severity?: number | null;
   priority?: number | null;
   layer?: number | null;
+  type?: number | null;
+  behavior?: number | null;
+  description?: string | null;
+  preconditions?: string | null;
+  postconditions?: string | null;
+  steps_type?: string | null;
+  steps?: QaseStepEntity[] | null;
+  /** Reads return tag objects, writes take plain strings. */
+  tags?: Array<string | { title?: string | null }> | null;
   /** The API spells the automation flag in camelCase, unlike the rest of the payload. */
   isManual?: boolean | null;
 }
@@ -74,18 +115,33 @@ interface QaseCreated {
   result: { id: number };
 }
 
+interface CaseStepPayload {
+  action: string;
+  expected_result: string;
+  data?: string;
+}
+
 interface CasePayload {
   title: string;
   suite_id: number;
   severity: number;
   priority: number;
   layer: number;
+  type: number;
+  behavior: number;
   /** Create and update endpoints expect `isManual` as 0 (automated) or 1 (manual). */
   isManual: 0 | 1;
+  description: string;
+  preconditions?: string;
+  postconditions?: string;
+  steps_type: "classic";
+  steps: CaseStepPayload[];
+  tags: string[];
 }
 
 const suites = await listAll<QaseSuite>(`suite/${project}`);
 const cases = await listAll<QaseCaseEntity>(`case/${project}`);
+const specUsage = qcUsageIndex();
 const createdSuites: string[] = [];
 const createdCases: string[] = [];
 const updatedCases: string[] = [];
@@ -93,7 +149,7 @@ const resolvedIds = new Map<string, number>();
 
 for (const qaseCase of qaseCases) {
   const suiteId = await ensureSuite(qaseCase.suite);
-  const payload = toPayload(qaseCase, suiteId);
+  const payload = toPayload(qaseCase, suiteId, specUsage.get(qaseCase.key) ?? []);
   const existing = cases.find((entity) => entity.suite_id === suiteId && entity.title === payload.title);
 
   if (!existing) {
@@ -111,12 +167,12 @@ for (const qaseCase of qaseCases) {
 
   resolvedIds.set(qaseCase.key, existing.id);
 
-  if (!needsUpdate(existing, payload)) {
+  if (!(await isDrifted(existing, payload))) {
     continue;
   }
 
   if (dryRun) {
-    updatedCases.push(`${qaseCase.key} (#${existing.id} metadata differs)`);
+    updatedCases.push(`${qaseCase.key} (#${existing.id} differs from the manifest)`);
     continue;
   }
 
@@ -166,25 +222,104 @@ async function ensureSuite(path: readonly string[]): Promise<number> {
   return parentId;
 }
 
-function toPayload(qaseCase: QaseCase, suiteId: number): CasePayload {
+function toPayload(qaseCase: QaseCase, suiteId: number, specPaths: readonly string[]): CasePayload {
   return {
     title: qaseCase.title,
     suite_id: suiteId,
     severity: severityIds[qaseCase.severity],
     priority: priorityIds[qaseCase.priority],
     layer: layerIds[qaseCase.layer],
+    type: typeIds[qaseCase.type ?? "functional"],
+    behavior: behaviorIds[qaseCase.behavior ?? "positive"],
     isManual: 0,
+    description: describe(qaseCase, specPaths),
+    ...(qaseCase.preconditions === undefined ? {} : { preconditions: qaseCase.preconditions }),
+    ...(qaseCase.postconditions === undefined ? {} : { postconditions: qaseCase.postconditions }),
+    steps_type: "classic",
+    steps: qaseCase.steps.map((step) => ({
+      action: step.action,
+      expected_result: step.expected,
+      ...(step.data === undefined ? {} : { data: step.data }),
+    })),
+    tags: tagsFor(qaseCase),
   };
 }
 
-function needsUpdate(existing: QaseCaseEntity, payload: CasePayload): boolean {
+/** The owning spec is derived, so a moved test file updates its case on the next sync. */
+function describe(qaseCase: QaseCase, specPaths: readonly string[]): string {
+  const credit =
+    specPaths.length === 0
+      ? "_Automation: no spec references this key yet._"
+      : `_Automated by ${specPaths.map((path) => `\`${path}\``).join(", ")}._`;
+
+  return `${qaseCase.description.trim()}\n\n${credit}`;
+}
+
+function tagsFor(qaseCase: QaseCase): string[] {
+  return [`order-desk:${qaseCase.key}`, qaseCase.layer, ...qaseCase.suite.map(slugTag)];
+}
+
+function slugTag(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Decides whether a stored case still matches the manifest.
+ *
+ * The list endpoint already reports the content, but it may shorten long step
+ * lists, so a difference seen there is confirmed against the case detail before
+ * anything is patched. That keeps repeated syncs free of spurious updates.
+ */
+async function isDrifted(existing: QaseCaseEntity, payload: CasePayload): Promise<boolean> {
+  if (!matchesMetadata(existing, payload)) return true;
+  if (matchesContent(existing, payload)) return false;
+
+  const detail = await request<{ result: QaseCaseEntity }>("GET", `case/${project}/${existing.id}`);
+
+  return !matchesMetadata(detail.result, payload) || !matchesContent(detail.result, payload);
+}
+
+function matchesMetadata(entity: QaseCaseEntity, payload: CasePayload): boolean {
   return (
-    existing.severity !== payload.severity ||
-    existing.priority !== payload.priority ||
-    existing.layer !== payload.layer ||
+    entity.severity === payload.severity &&
+    entity.priority === payload.priority &&
+    entity.layer === payload.layer &&
+    (entity.type ?? typeIds.functional) === payload.type &&
+    (entity.behavior ?? behaviorIds.positive) === payload.behavior &&
     // Reads return a boolean, writes take 0/1.
-    Boolean(existing.isManual) !== (payload.isManual === 1)
+    Boolean(entity.isManual) === (payload.isManual === 1)
   );
+}
+
+function matchesContent(entity: QaseCaseEntity, payload: CasePayload): boolean {
+  return (
+    text(entity.description) === text(payload.description) &&
+    text(entity.preconditions) === text(payload.preconditions) &&
+    text(entity.postconditions) === text(payload.postconditions) &&
+    (entity.steps_type ?? "classic") === payload.steps_type &&
+    JSON.stringify(stepsOf(entity.steps)) === JSON.stringify(stepsOf(payload.steps)) &&
+    JSON.stringify(tagsOf(entity.tags)) === JSON.stringify([...payload.tags].sort())
+  );
+}
+
+function stepsOf(steps: readonly QaseStepEntity[] | null | undefined): string[] {
+  return (steps ?? []).map((step) =>
+    JSON.stringify([text(step.action), text(step.expected_result), text(step.data)]),
+  );
+}
+
+function tagsOf(tags: QaseCaseEntity["tags"]): string[] {
+  return (tags ?? [])
+    .map((tag) => (typeof tag === "string" ? tag : (tag.title ?? "")))
+    .sort();
+}
+
+/** Normalizes a Markdown field so that trailing whitespace and CRLF differences never look like a change. */
+function text(value: string | null | undefined): string {
+  return (value ?? "").replace(/\r\n/g, "\n").trim();
 }
 
 async function listAll<T>(path: string): Promise<T[]> {
