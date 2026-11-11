@@ -7,3 +7,4 @@ coverage/
 apps/api/src/generated/prisma/
 *.tsbuildinfo
 .DS_Store
+.cline
