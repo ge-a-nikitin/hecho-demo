@@ -1,6 +1,5 @@
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import type { OpenAPIObject } from "@nestjs/swagger";
+import { describe, expect, it } from "vitest";
 import { hideDisabledDevTools } from "./swagger-document.js";
 
 function documentFixture(): OpenAPIObject {
@@ -22,30 +21,32 @@ function documentFixture(): OpenAPIObject {
   } as unknown as OpenAPIObject;
 }
 
-describe("hideDisabledDevTools", () => {
-  it("removes devtools routes and schemas from the document while the feature flag is off", () => {
-    const document = documentFixture();
+describe("API", () => {
+  describe("Documentation", () => {
+    it("removes devtools routes and schemas from the document while the feature flag is off", () => {
+      const document = documentFixture();
 
-    hideDisabledDevTools(document, false);
+      hideDisabledDevTools(document, false);
 
-    assert.deepEqual(Object.keys(document.paths), ["/api/orders"]);
-    assert.deepEqual(Object.keys(document.components?.schemas ?? {}), ["CreateOrderDto"]);
-  });
+      expect(Object.keys(document.paths)).toEqual(["/api/orders"]);
+      expect(Object.keys(document.components?.schemas ?? {})).toEqual(["CreateOrderDto"]);
+    });
 
-  it("keeps the devtools routes and schemas once the feature flag is on", () => {
-    const document = documentFixture();
+    it("keeps the devtools routes and schemas once the feature flag is on", () => {
+      const document = documentFixture();
 
-    hideDisabledDevTools(document, true);
+      hideDisabledDevTools(document, true);
 
-    assert.deepEqual(Object.keys(document.paths), [
-      "/api/orders",
-      "/api/devtools/users",
-      "/api/devtools/reset",
-    ]);
-    assert.deepEqual(Object.keys(document.components?.schemas ?? {}), [
-      "CreateOrderDto",
-      "CreateDevToolUserDto",
-      "ResetDevToolsDataDto",
-    ]);
+      expect(Object.keys(document.paths)).toEqual([
+        "/api/orders",
+        "/api/devtools/users",
+        "/api/devtools/reset",
+      ]);
+      expect(Object.keys(document.components?.schemas ?? {})).toEqual([
+        "CreateOrderDto",
+        "CreateDevToolUserDto",
+        "ResetDevToolsDataDto",
+      ]);
+    });
   });
 });

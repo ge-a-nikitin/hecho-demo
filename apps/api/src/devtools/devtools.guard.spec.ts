@@ -1,62 +1,59 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
 import {
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
   type ExecutionContext,
 } from "@nestjs/common";
+import { afterEach, describe, expect, it } from "vitest";
 import { DevToolsGuard } from "./devtools.guard.js";
 
 const originalEnabled = process.env.DEVTOOLS_ENABLED;
 const originalKey = process.env.DEVTOOLS_API_KEY;
 
-afterEach(() => {
-  restoreEnvironmentValue("DEVTOOLS_ENABLED", originalEnabled);
-  restoreEnvironmentValue("DEVTOOLS_API_KEY", originalKey);
-});
+describe("DevTools", () => {
+  describe("Access guard", () => {
+    afterEach(() => {
+      restoreEnvironmentValue("DEVTOOLS_ENABLED", originalEnabled);
+      restoreEnvironmentValue("DEVTOOLS_API_KEY", originalKey);
+    });
 
-describe("DevToolsGuard", () => {
-  it("hides devtools endpoints when the feature flag is disabled", () => {
-    process.env.DEVTOOLS_ENABLED = "false";
-    process.env.DEVTOOLS_API_KEY = "test-key";
+    it("hides devtools endpoints when the feature flag is disabled", () => {
+      process.env.DEVTOOLS_ENABLED = "false";
+      process.env.DEVTOOLS_API_KEY = "test-key";
 
-    assert.throws(() => guard().canActivate(context("test-key")), NotFoundException);
-  });
+      expect(() => guard().canActivate(context("test-key"))).toThrow(NotFoundException);
+    });
 
-  it("fails explicitly when enabled without an API key", () => {
-    process.env.DEVTOOLS_ENABLED = "true";
-    delete process.env.DEVTOOLS_API_KEY;
+    it("fails explicitly when enabled without an API key", () => {
+      process.env.DEVTOOLS_ENABLED = "true";
+      delete process.env.DEVTOOLS_API_KEY;
 
-    assert.throws(
-      () => guard().canActivate(context("test-key")),
-      InternalServerErrorException,
-    );
-  });
+      expect(() => guard().canActivate(context("test-key"))).toThrow(InternalServerErrorException);
+    });
 
-  it("rejects a missing or incorrect API key", () => {
-    process.env.DEVTOOLS_ENABLED = "true";
-    process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
+    it("rejects a missing or incorrect API key", () => {
+      process.env.DEVTOOLS_ENABLED = "true";
+      process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
 
-    assert.throws(() => guard().canActivate(context(undefined)), UnauthorizedException);
-    assert.throws(() => guard().canActivate(context("wrong-development-key-at-least-32")), UnauthorizedException);
-  });
+      expect(() => guard().canActivate(context(undefined))).toThrow(UnauthorizedException);
+      expect(() => guard().canActivate(context("wrong-development-key-at-least-32"))).toThrow(
+        UnauthorizedException,
+      );
+    });
 
-  it("accepts the configured API key", () => {
-    process.env.DEVTOOLS_ENABLED = "true";
-    process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
+    it("accepts the configured API key", () => {
+      process.env.DEVTOOLS_ENABLED = "true";
+      process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
 
-    assert.equal(guard().canActivate(context("expected-development-key-at-least-32")), true);
-  });
+      expect(guard().canActivate(context("expected-development-key-at-least-32"))).toBe(true);
+    });
 
-  it("fails explicitly when configured with a weak API key", () => {
-    process.env.DEVTOOLS_ENABLED = "true";
-    process.env.DEVTOOLS_API_KEY = "too-short";
+    it("fails explicitly when configured with a weak API key", () => {
+      process.env.DEVTOOLS_ENABLED = "true";
+      process.env.DEVTOOLS_API_KEY = "too-short";
 
-    assert.throws(
-      () => guard().canActivate(context("too-short")),
-      InternalServerErrorException,
-    );
+      expect(() => guard().canActivate(context("too-short"))).toThrow(InternalServerErrorException);
+    });
   });
 });
 
@@ -68,7 +65,7 @@ function context(apiKey: string | undefined): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => ({
-        header: (name: string) => name === "x-devtools-api-key" ? apiKey : undefined,
+        header: (name: string) => (name === "x-devtools-api-key" ? apiKey : undefined),
       }),
     }),
   } as unknown as ExecutionContext;
