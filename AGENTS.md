@@ -38,4 +38,36 @@
 - Verify the actual acceptance criteria and affected user workflows, not only a proxy such as compilation. Run the smallest relevant existing tests and checks, expanding coverage when the change or results warrant it.
 - For user-facing behavior, test the affected flow end to end when feasible. For runtime or deployment changes, build and run the affected services and check their health and relevant routes when feasible.
 - Report checks that were not run and meaningful failures. Do not claim runtime behavior was verified based on static checks alone.
-- Automatically commit completed implementation changes unless the user asks not to. Before committing, inspect the diff, stage only task-related changes, and ensure the commit does not include unrelated user work. Follow the repository's commit-message and trailer conventions.
+- Only report a task as complete after these checks pass or the remaining failures are explained, then commit and branch following the rules in Git workflow and deployment.
+
+## Git workflow and deployment
+
+`main` is the deployment branch: `.github/workflows/deploy.yml` publishes to the production host on every push to `main`, plus a manual `workflow_dispatch`. Treat a merge into `main` as a production release.
+
+### Branches
+
+- Never commit to `main` directly, even for one-line fixes. Branch from the current `main`, push the branch, and land the work through a pull request, so that `main` only ever receives reviewed, complete changes.
+- Name branches `<type>/<short-kebab-case-slug>`, reusing the commit types: `feat/order-filters`, `fix/web-auth-base-url`, `docs/tunnel-runbook`, `ci/pull-request-checks`.
+- Pushing a branch deploys nothing, because the workflow ignores every branch except `main`. Branches are therefore the safe place for experiments, and unsolicited pushes to them are harmless.
+- Keep the branch current with `main` (rebase it, or merge `main` into it) before review, and resolve conflicts on the branch rather than on `main`.
+- Do not force-push `main`, and do not rewrite a branch someone else is reviewing without saying so first. Delete the branch once the pull request is merged.
+
+### Commits
+
+- Follow the repository's Conventional Commits style: lowercase, imperative, with a scope when it adds information, for example `fix(web): resolve the better-auth base URL against the page origin` or `ci: deploy to the home VM from a self-hosted runner`.
+- Keep one logical change per commit, and keep formatting-only or drive-by edits out of a functional commit.
+- Automatically commit completed implementation changes unless the user asks not to. Before committing, inspect the diff, stage only task-related changes, and ensure the commit does not include unrelated user work.
+- Never commit `.env` files, generated output, or secrets. Production configuration is `deploy/prod.env`, which stays non-secret and tracked, while the secrets themselves live in the GitHub `production` environment secret `PROD_ENV_SECRETS`.
+
+### Pull requests and merging
+
+- Until pull-request checks exist, run the relevant local checks before opening the pull request: `pnpm typecheck`, `pnpm --filter @order-desk/api test`, and `pnpm build` when the change affects the bundles.
+- Merge with a squash or a rebase so that `main` stays linear, and make the pull request title a valid commit subject, because a squash merge reuses it as the commit message.
+- Describe in the pull request what was verified, naming the commands run and the workflows or routes exercised.
+- Merging deploys. After the merge, confirm that the `Deploy` run for the merge commit succeeded and that production still answers (`https://hecho-demo.hius2.fyi/api/health`) instead of assuming it worked.
+- Do not deploy by hand on the production host; let the workflow do it. `workflow_dispatch` exists only for re-running a deployment without a new commit, for example after changing the `PROD_ENV_SECRETS` secret.
+
+### Runner safety
+
+- `deploy.yml` runs on the self-hosted runner on the production host, which has Docker socket access. Never add a `pull_request` or any other untrusted-ref trigger to it: this repository is public, so such a trigger would let a fork execute its code on that host.
+- Automated pull-request checks, if they are added later, must run on GitHub-hosted `ubuntu-latest` runners and must not receive production secrets.
