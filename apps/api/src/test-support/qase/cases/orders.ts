@@ -29,29 +29,31 @@ export const ordersCases = [
   {
     key: "orders.lifecycle.executor-list-scope",
     suite: lifecycleSuite,
-    title: "limits executor order lists to assigned orders and the unassigned pool",
+    title: "shows every role only the orders it may see",
     severity: "critical",
     priority: "high",
     layer: "unit",
     type: "security",
     behavior: "positive",
     description:
-      "An executor may see the orders assigned to them plus the pool they can claim, and nothing else. " +
-      "The scope is a `where` clause rather than a post-filter, so a missing condition would hand one " +
-      "executor another's workload. Their list also skips payment report joins, because receipts belong " +
-      "to the customer and the administrator.",
+      "The order board is one endpoint for three audiences, so the scope has to come from the role: an " +
+      "administrator sees everything, a customer sees only their own orders, and an executor sees the " +
+      "work assigned to them plus the unassigned pool they may claim. A missing condition would hand one " +
+      "customer another's order. The executor list also skips payment report joins, because receipts " +
+      "belong to the customer and the administrator.",
     preconditions:
-      "An `OrdersService` backed by a stubbed Prisma `workOrder.findMany` that records its arguments.",
+      "A fake database holding one order assigned to the executor, one unassigned waiting order with an " +
+      "issued invoice and a receipt, one order assigned to another executor, and one personal draft.",
     steps: [
       {
-        action: "Call `list` as a user with the `EXECUTOR` role.",
+        action: "Call `list` as the executor, as the customer who owns two of the orders, and as an administrator.",
         expected:
-          "The query filters by `OR: [{ executorId: <self> }, { status: WAITING_DISTRIBUTION, " +
-          "executorId: null }]` and orders by `createdAt desc`.",
+          "The executor receives the pool order and their own assignment, newest first; the customer " +
+          "receives only their own orders; the administrator receives all four.",
       },
       {
-        action: "Inspect the included relations of the same query.",
-        expected: "Invoices are included, but their `paymentReports` relation is not.",
+        action: "Inspect the invoices attached to the pool order in the executor's response.",
+        expected: "The invoice is present, but its `paymentReports` are not part of the payload.",
       },
     ],
   },
@@ -95,8 +97,8 @@ export const ordersCases = [
       {
         action: "Call `submit(\"order-1\")` as its customer.",
         expected:
-          "The returned order is `WAITING_DISTRIBUTION`; the update is scoped to " +
-          "`id: order-1, status: NEW` and sets `status: WAITING_DISTRIBUTION` plus a `submittedAt` date.",
+          "The returned order is `WAITING_DISTRIBUTION`, and the stored row carries that status plus a " +
+          "`submittedAt` date.",
       },
       {
         action: "Inspect the history written by the same call.",
@@ -145,7 +147,9 @@ export const ordersCases = [
     steps: [
       {
         action: "Call `cancel` with the reason `\"No longer needed\"` as an administrator.",
-        expected: "The call rejects with `ConflictException` and the order update is never executed.",
+        expected:
+          "The call rejects with `ConflictException`; the order keeps its status and its cancellation " +
+          "reason, and no history row is written.",
       },
     ],
   },
@@ -163,11 +167,15 @@ export const ordersCases = [
       "require a fully paid invoice - not merely accepted work. The status guard rejects an order that has " +
       "not even reached invoicing before the invoice lookup runs, which keeps the failure cheap and the " +
       "message accurate.",
-    preconditions: "An order in `ON_REVIEW` with no invoice.",
+    preconditions:
+      "An order in `ON_REVIEW` with no invoice, and an order in `INVOICE_PAID` whose only invoice is " +
+      "still unpaid.",
     steps: [
       {
-        action: "Call `complete` as an administrator.",
-        expected: "The call rejects with `ConflictException` and the invoice lookup is never executed.",
+        action: "Call `complete` as an administrator for both orders.",
+        expected:
+          "Both calls reject with `ConflictException`; each order keeps its status and no history row is " +
+          "written.",
       },
     ],
   },
@@ -189,7 +197,8 @@ export const ordersCases = [
       {
         action: "Call `complete` as an administrator.",
         expected:
-          "The order returns as `COMPLETED`; the update sets `status: COMPLETED` and a `completedAt` date.",
+          "The order returns as `COMPLETED`, and the stored row carries `status: COMPLETED` with a " +
+          "`completedAt` date.",
       },
       {
         action: "Inspect the history written by the same call.",

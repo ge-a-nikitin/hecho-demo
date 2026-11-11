@@ -160,8 +160,8 @@ export const ordersFilesCases = [
       {
         action: "Call `upload` with a file of 1 024 bytes and an empty `mimetype`.",
         expected:
-          "The insert carries the order id, the actor as `uploadedById`, the generated object key, " +
-          "`sizeBytes: 1024` and `contentType: null`.",
+          "The stored attachment row carries the order id, the actor as `uploadedById`, the generated " +
+          "object key, `sizeBytes: 1024` and `contentType: null`.",
       },
     ],
   },
@@ -184,8 +184,8 @@ export const ordersFilesCases = [
       {
         action: "Call `download` with an attachment id of a different order.",
         expected:
-          "The lookup carries both the attachment id and the order id, answers `NotFoundException` and " +
-          "never reads the storage.",
+          "The attachment row of the other order stays invisible: the call answers " +
+          "`NotFoundException` and the storage is never read.",
       },
     ],
   },
