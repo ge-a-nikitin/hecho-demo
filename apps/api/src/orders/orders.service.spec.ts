@@ -1,230 +1,240 @@
-import "../env.js";
 import { BadRequestException, ConflictException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
-import { qc } from "../test-support/qase-case.js";
-import { OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import type { PrismaService } from "../database/prisma.service.js";
+import { EstimateStatus, InvoiceStatus, OrderStatus, UserRole } from "../generated/prisma/enums.js";
+import { createFakeDatabase } from "../test-support/fake-database.js";
+import { qc } from "../test-support/qase-case.js";
 import { OrdersService } from "./orders.service.js";
+
+const customer = { id: "customer-1", role: UserRole.CUSTOMER };
+const otherCustomer = { id: "customer-2", role: UserRole.CUSTOMER };
+const executor = { id: "executor-1", role: UserRole.EXECUTOR };
+const administrator = { id: "admin-1", role: UserRole.ADMIN };
 
 describe("Orders", () => {
   describe("Lifecycle", () => {
-    it(qc("orders.lifecycle.executor-list-scope", "limits executor order lists to assigned orders and the unassigned pool"), async () => {
-      let query: Record<string, unknown> | undefined;
-      const service = await createService({
-        workOrder: {
-          findMany: async (args: unknown) => {
-            query = args as Record<string, unknown>;
-            return [];
-          },
-        },
-      });
+    it(
+      qc("orders.lifecycle.executor-list-scope", "shows every role only the orders it may see"),
+      async () => {
+        const { service } = serviceWith({
+          workOrder: [
+            order({
+              id: "assigned-to-me",
+              executorId: executor.id,
+              status: OrderStatus.ASSIGNED,
+              createdAt: new Date("2026-01-03T10:00:00Z"),
+            }),
+            order({
+              id: "in-the-pool",
+              customerId: otherCustomer.id,
+              status: OrderStatus.WAITING_DISTRIBUTION,
+              createdAt: new Date("2026-01-04T10:00:00Z"),
+            }),
+            order({
+              id: "assigned-to-someone-else",
+              customerId: otherCustomer.id,
+              executorId: "executor-2",
+              status: OrderStatus.ASSIGNED,
+              createdAt: new Date("2026-01-02T10:00:00Z"),
+            }),
+            order({
+              id: "my-draft",
+              status: OrderStatus.NEW,
+              createdAt: new Date("2026-01-01T10:00:00Z"),
+            }),
+          ],
+          invoice: [{ id: "invoice-1", orderId: "in-the-pool", status: InvoiceStatus.ISSUED }],
+          invoicePaymentReport: [
+            { id: "report-1", invoiceId: "invoice-1", filename: "receipt.pdf" },
+          ],
+        });
 
-      await service.list({ id: "executor-1", role: UserRole.EXECUTOR });
+        const executorList = await service.list(executor);
+        expect(executorList.map((entry) => entry.id)).toEqual(["in-the-pool", "assigned-to-me"]);
 
-      expect(query?.where).toEqual({
-        OR: [
-          { executorId: "executor-1" },
-          { status: OrderStatus.WAITING_DISTRIBUTION, executorId: null },
-        ],
-      });
-      expect(query?.orderBy).toEqual({ createdAt: "desc" });
-      const include = query?.include as {
-        invoices?: { include?: Record<string, unknown> };
-      };
-      expect(include.invoices?.include?.paymentReports).toBeUndefined();
-    });
+        const poolEntry = executorList[0] as { invoices?: { paymentReports?: unknown }[] };
+        expect(poolEntry.invoices).toHaveLength(1);
+        expect(poolEntry.invoices?.[0]?.paymentReports).toBeUndefined();
 
-    it(qc("orders.lifecycle.foreign-order-access", "rejects customers who try to access another customer's order"), async () => {
-      const service = await createService({
-        workOrder: {
-          findUnique: async () => ({
-            id: "order-1",
-            customerId: "customer-2",
-            executorId: null,
-            status: OrderStatus.NEW,
+        expect((await service.list(administrator)).map((entry) => entry.id)).toEqual([
+          "in-the-pool",
+          "assigned-to-me",
+          "assigned-to-someone-else",
+          "my-draft",
+        ]);
+        expect((await service.list(customer)).map((entry) => entry.id)).toEqual([
+          "assigned-to-me",
+          "my-draft",
+        ]);
+      },
+    );
+
+    it(
+      qc(
+        "orders.lifecycle.foreign-order-access",
+        "rejects customers who try to access another customer's order",
+      ),
+      async () => {
+        const { service } = serviceWith({
+          workOrder: [order({ id: "foreign-order", customerId: otherCustomer.id })],
+        });
+
+        await expect(service.get("foreign-order", customer)).rejects.toThrow(ForbiddenException);
+        await expect(service.get("foreign-order", otherCustomer)).resolves.toMatchObject({
+          id: "foreign-order",
+        });
+      },
+    );
+
+    it(
+      qc(
+        "orders.lifecycle.submit-to-pool",
+        "submits unassigned drafts to the distribution pool and records the transition",
+      ),
+      async () => {
+        const { db, service } = serviceWith({ workOrder: [order({ id: "order-1" })] });
+
+        const submitted = await service.submit("order-1", customer);
+
+        expect(submitted.status).toBe(OrderStatus.WAITING_DISTRIBUTION);
+        expect(db.rows("workOrder")[0]).toMatchObject({
+          id: "order-1",
+          status: OrderStatus.WAITING_DISTRIBUTION,
+          submittedAt: expect.any(Date),
+        });
+        expect(db.rows("orderStatusHistory")).toEqual([
+          expect.objectContaining({
+            orderId: "order-1",
+            changedById: customer.id,
+            fromStatus: OrderStatus.NEW,
+            toStatus: OrderStatus.WAITING_DISTRIBUTION,
           }),
-        },
-      });
+        ]);
+      },
+    );
 
-      await expect(
-        service.get("order-1", { id: "customer-1", role: UserRole.CUSTOMER }),
-      ).rejects.toThrow(ForbiddenException);
-    });
+    it(
+      qc(
+        "orders.lifecycle.reject-estimate-comment",
+        "requires a comment when a customer rejects an estimate",
+      ),
+      async () => {
+        const { db, service } = serviceWith({
+          workOrder: [order({ id: "order-1", executorId: executor.id, status: OrderStatus.ASSIGNED })],
+          orderEstimate: [
+            { id: "estimate-1", orderId: "order-1", status: EstimateStatus.PENDING },
+          ],
+        });
 
-    it(qc("orders.lifecycle.submit-to-pool", "submits unassigned drafts to the distribution pool and records the transition"), async () => {
-      let updateArgs: Record<string, unknown> | undefined;
-      let historyArgs: unknown;
-      const order = {
-        id: "order-1",
-        customerId: "customer-1",
-        executorId: null,
-        status: OrderStatus.NEW,
-      };
-      const service = await createService({
-        workOrder: {
-          findUnique: async () => order,
-        },
-        $transaction: async (run: (tx: object) => Promise<unknown>) =>
-          run({
-            workOrder: {
-              updateMany: async (args: unknown) => {
-                updateArgs = args as Record<string, unknown>;
-                return { count: 1 };
-              },
-              findUniqueOrThrow: async () => ({
-                ...order,
-                status: OrderStatus.WAITING_DISTRIBUTION,
-              }),
-            },
-            orderStatusHistory: {
-              create: async (args: unknown) => {
-                historyArgs = args;
-              },
-            },
-          }),
-      });
+        await expect(
+          service.respondToEstimate("order-1", "estimate-1", { accepted: false }, customer),
+        ).rejects.toThrow(BadRequestException);
 
-      const result = await service.submit("order-1", {
-        id: "customer-1",
-        role: UserRole.CUSTOMER,
-      });
-
-      expect(result.status).toBe(OrderStatus.WAITING_DISTRIBUTION);
-      expect(updateArgs?.where).toEqual({ id: "order-1", status: OrderStatus.NEW });
-      expect((updateArgs?.data as Record<string, unknown>).status).toBe(
-        OrderStatus.WAITING_DISTRIBUTION,
-      );
-      expect((updateArgs?.data as Record<string, unknown>).submittedAt).toBeInstanceOf(Date);
-      expect(historyArgs).toEqual({
-        data: {
-          orderId: "order-1",
-          changedById: "customer-1",
-          fromStatus: OrderStatus.NEW,
-          toStatus: OrderStatus.WAITING_DISTRIBUTION,
-        },
-      });
-    });
-
-    it(qc("orders.lifecycle.reject-estimate-comment", "requires a comment when a customer rejects an estimate"), async () => {
-      let transactionCalled = false;
-      const service = await createService({
-        $transaction: async () => {
-          transactionCalled = true;
-          return {};
-        },
-      });
-
-      await expect(
-        service.respondToEstimate(
-          "order-1",
-          "estimate-1",
-          { accepted: false },
-          { id: "customer-1", role: UserRole.CUSTOMER },
-        ),
-      ).rejects.toThrow(BadRequestException);
-      expect(transactionCalled).toBe(false);
-    });
+        expect(db.rows("orderEstimate")).toEqual([
+          expect.objectContaining({ id: "estimate-1", status: EstimateStatus.PENDING }),
+        ]);
+        expect(db.rows("orderStatusHistory")).toEqual([]);
+      },
+    );
 
     describe.each([OrderStatus.INVOICE_ISSUED, OrderStatus.INVOICE_PAID])(
-      "cancelling an invoiced order in %s",
+      "cancelling an order in %s",
       (status) => {
         it(
           qc("orders.lifecycle.cancel-after-invoice", "does not allow cancelling an invoiced order"),
           async () => {
-            let updateCalled = false;
-            const service = await createService({
-              $transaction: async (run: (tx: object) => Promise<unknown>) =>
-                run({
-                  workOrder: {
-                    findUnique: async () => ({
-                      id: "order-1",
-                      customerId: "customer-1",
-                      executorId: null,
-                      status,
-                    }),
-                    updateMany: async () => {
-                      updateCalled = true;
-                      return { count: 1 };
-                    },
-                  },
-                }),
+            const { db, service } = serviceWith({
+              workOrder: [order({ id: "order-1", executorId: executor.id, status })],
             });
 
             await expect(
-              service.cancel("order-1", "No longer needed", {
-                id: "admin-1",
-                role: UserRole.ADMIN,
-              }),
+              service.cancel("order-1", "No longer needed", administrator),
             ).rejects.toThrow(ConflictException);
-            expect(updateCalled).toBe(false);
+
+            expect(db.rows("workOrder")).toEqual([
+              expect.objectContaining({ id: "order-1", status, cancellationReason: null }),
+            ]);
+            expect(db.rows("orderStatusHistory")).toEqual([]);
           },
         );
       },
     );
 
-    it(qc("orders.lifecycle.complete-requires-payment", "does not complete an order before payment is confirmed"), async () => {
-      let invoiceQueried = false;
-      const service = await createService({
-        $transaction: async (run: (tx: object) => Promise<unknown>) =>
-          run({
-            workOrder: {
-              findUnique: async () => ({ id: "order-1", status: OrderStatus.ON_REVIEW }),
-            },
-            invoice: {
-              findFirst: async () => {
-                invoiceQueried = true;
-                return null;
-              },
-            },
+    it(
+      qc(
+        "orders.lifecycle.complete-requires-payment",
+        "does not complete an order before payment is confirmed",
+      ),
+      async () => {
+        const onReview = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.ON_REVIEW })],
+        });
+
+        await expect(onReview.service.complete("order-1", administrator)).rejects.toThrow(
+          ConflictException,
+        );
+        expect(onReview.db.rows("workOrder")[0]).toMatchObject({ status: OrderStatus.ON_REVIEW });
+        expect(onReview.db.rows("orderStatusHistory")).toEqual([]);
+
+        const unpaidInvoice = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.INVOICE_PAID })],
+          invoice: [{ id: "invoice-1", orderId: "order-1", status: InvoiceStatus.ISSUED }],
+        });
+
+        await expect(unpaidInvoice.service.complete("order-1", administrator)).rejects.toThrow(
+          ConflictException,
+        );
+        expect(unpaidInvoice.db.rows("workOrder")[0]).toMatchObject({
+          status: OrderStatus.INVOICE_PAID,
+        });
+        expect(unpaidInvoice.db.rows("orderStatusHistory")).toEqual([]);
+      },
+    );
+
+    it(
+      qc(
+        "orders.lifecycle.complete-after-payment",
+        "completes an order only after a paid invoice exists",
+      ),
+      async () => {
+        const { db, service } = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.INVOICE_PAID })],
+          invoice: [{ id: "invoice-1", orderId: "order-1", status: InvoiceStatus.PAID }],
+        });
+
+        const completed = await service.complete("order-1", administrator);
+
+        expect(completed.status).toBe(OrderStatus.COMPLETED);
+        expect(db.rows("workOrder")[0]).toMatchObject({
+          status: OrderStatus.COMPLETED,
+          completedAt: expect.any(Date),
+        });
+        expect(db.rows("orderStatusHistory")).toEqual([
+          expect.objectContaining({
+            orderId: "order-1",
+            changedById: administrator.id,
+            fromStatus: OrderStatus.INVOICE_PAID,
+            toStatus: OrderStatus.COMPLETED,
           }),
-      });
-
-      await expect(
-        service.complete("order-1", { id: "admin-1", role: UserRole.ADMIN }),
-      ).rejects.toThrow(ConflictException);
-      expect(invoiceQueried).toBe(false);
-    });
-
-    it(qc("orders.lifecycle.complete-after-payment", "completes an order only after a paid invoice exists"), async () => {
-      let orderUpdate: Record<string, unknown> | undefined;
-      let historyData: Record<string, unknown> | undefined;
-      const service = await createService({
-        $transaction: async (run: (tx: object) => Promise<unknown>) =>
-          run({
-            workOrder: {
-              findUnique: async () => ({ id: "order-1", status: OrderStatus.INVOICE_PAID }),
-              updateMany: async (args: { data: Record<string, unknown> }) => {
-                orderUpdate = args.data;
-                return { count: 1 };
-              },
-              findUniqueOrThrow: async () => ({ id: "order-1", status: OrderStatus.COMPLETED }),
-            },
-            invoice: {
-              findFirst: async () => ({ id: "invoice-1" }),
-            },
-            orderStatusHistory: {
-              create: async (args: { data: Record<string, unknown> }) => {
-                historyData = args.data;
-              },
-            },
-          }),
-      });
-
-      const order = await service.complete("order-1", {
-        id: "admin-1",
-        role: UserRole.ADMIN,
-      });
-
-      expect(order.status).toBe(OrderStatus.COMPLETED);
-      expect(orderUpdate?.status).toBe(OrderStatus.COMPLETED);
-      expect(orderUpdate?.completedAt).toBeInstanceOf(Date);
-      expect(historyData?.fromStatus).toBe(OrderStatus.INVOICE_PAID);
-      expect(historyData?.toStatus).toBe(OrderStatus.COMPLETED);
-    });
+        ]);
+      },
+    );
   });
-
-  async function createService(prisma: Record<string, unknown>) {
-    return new OrdersService(prisma as unknown as PrismaService);
-  }
 });
 
+function serviceWith(seed: Parameters<typeof createFakeDatabase>[0] = {}) {
+  const db = createFakeDatabase(seed);
+
+  return { db, service: new OrdersService(db.prisma as unknown as PrismaService) };
+}
+
+function order(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: "order-1",
+    customerId: customer.id,
+    executorId: null,
+    status: OrderStatus.NEW,
+    cancellationReason: null,
+    ...overrides,
+  };
+}
