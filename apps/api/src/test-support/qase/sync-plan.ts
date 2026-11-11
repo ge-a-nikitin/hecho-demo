@@ -185,3 +185,27 @@ export function planArchives(
 
   return moves;
 }
+
+/** What applying a plan would change in TestOps, as the sync report counts it. */
+export interface SyncChanges {
+  readonly createdSuites: number;
+  readonly createdCases: number;
+  readonly updatedCases: number;
+  readonly archivedCases: number;
+}
+
+/**
+ * True when applying the plan writes anything.
+ *
+ * The post-merge check runs the sync in dry-run mode and treats a non-empty plan
+ * as drift: the catalogue in the repository and the cases in TestOps disagree,
+ * and results would land on cases nobody is maintaining until somebody syncs.
+ */
+export function hasDrift(changes: SyncChanges): boolean {
+  return (
+    changes.createdSuites > 0 ||
+    changes.createdCases > 0 ||
+    changes.updatedCases > 0 ||
+    changes.archivedCases > 0
+  );
+}

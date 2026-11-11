@@ -1,0 +1,211 @@
+name: Qase
+
+# Results are reported only from `main`. A pull request verifies everything
+# offline, so it never needs the token, and a fork never receives it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: qase-reporting
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Nothing here reaches a database: the value only satisfies `prisma generate`,
+  # and the unit suite overrides it with its own placeholder in vitest.config.ts.
+  DATABASE_URL: postgresql://checks:checks@127.0.0.1:5432/checks
+  QASE_TESTOPS_PROJECT: HECHO
+
+jobs:
+  catalogue:
+    name: catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The dry run plans the same sync the repository would apply, and the
+      # script exits non-zero when the plan is not empty, so a catalogue change
+      # merged without a sync is reported here instead of silently unlinked.
+      - name: Verify the catalogue matches TestOps
+        env:
+          QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+        run: pnpm --filter @order-desk/api qase:sync --dry-run
+
+  unit:
+    name: unit
+    needs: catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      run-link: ${{ steps.report.outputs.run-link }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        run: pnpm db:generate
+
+      - name: Report the unit suite
+        id: report
+        env:
+          QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+          QASE_TESTOPS_RUN_TITLE: Order Desk API · unit · ${{ github.sha }}
+          QASE_TESTOPS_RUN_DESCRIPTION: Unit suite of ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          QASE_TESTOPS_RUN_TAGS: ci,unit
+        run: |
+          set -o pipefail
+          pnpm --filter @order-desk/api test:qase 2>&1 | tee qase-unit.log
+
+      - name: Publish the run link
+        if: always()
+        run: |
+          set -euo pipefail
+          link=$(grep -oE 'Test run link: https://[^ ]+' qase-unit.log | tail -1 | awk '{print $NF}' || true)
+
+          if [ -z "$link" ]; then
+            echo "No Qase run link in the output." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "run-link=$link" >> "$GITHUB_OUTPUT"
+          echo "Qase unit run: $link" >> "$GITHUB_STEP_SUMMARY"
+
+
+  integration:
+    name: integration
+    needs: catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      run-link: ${{ steps.report.outputs.run-link }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The global setup builds and starts docker-compose.test.yml, waits for
+      # /api/health and removes the stack with its volumes afterwards.
+      - name: Report the integration suite
+        id: report
+        env:
+          QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+          QASE_TESTOPS_RUN_TITLE: Order Desk API · integration · ${{ github.sha }}
+          QASE_TESTOPS_RUN_DESCRIPTION: Integration suite of ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          QASE_TESTOPS_RUN_TAGS: ci,integration
+        run: |
+          set -o pipefail
+          pnpm --filter @order-desk/api test:qase:integration 2>&1 | tee qase-integration.log
+
+      - name: Publish the run link
+        if: always()
+        run: |
+          set -euo pipefail
+          link=$(grep -oE 'Test run link: https://[^ ]+' qase-integration.log | tail -1 | awk '{print $NF}' || true)
+
+          if [ -z "$link" ]; then
+            echo "No Qase run link in the output." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "run-link=$link" >> "$GITHUB_OUTPUT"
+          echo "Qase integration run: $link" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show the stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 200
+
+      - name: Remove the stack
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v --remove-orphans
+
+
+
+  publish:
+    name: publish
+    needs: [unit, integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The Qase GitHub app handles defects, not runs, so the merge that produced
+      # the results gets the links from here.
+      - name: Comment the run links on the merged pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          UNIT_LINK: ${{ needs.unit.outputs.run-link }}
+          INTEGRATION_LINK: ${{ needs.integration.outputs.run-link }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${UNIT_LINK}${INTEGRATION_LINK}" ]; then
+            echo "No Qase run link to publish."
+            exit 0
+          fi
+
+          number=$(gh api "repos/$REPOSITORY/commits/$SHA/pulls" --jq '.[0].number // empty')
+
+          if [ -z "$number" ]; then
+            echo "The commit is not attached to a pull request, skipping the comment."
+            exit 0
+          fi
+
+          {
+            echo "Qase TestOps runs for \`$SHA\`:"
+            echo
+            [ -n "$UNIT_LINK" ] && echo "- unit: $UNIT_LINK"
+            [ -n "$INTEGRATION_LINK" ] && echo "- integration: $INTEGRATION_LINK"
+          } > comment.md
+
+          gh pr comment "$number" --repo "$REPOSITORY" --body-file comment.md
