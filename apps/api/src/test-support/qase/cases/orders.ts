@@ -130,7 +130,7 @@ export const ordersCases = [
   {
     key: "orders.lifecycle.cancel-after-invoice",
     suite: lifecycleSuite,
-    title: "does not allow cancelling an order in %s",
+    title: "does not allow cancelling an invoiced order",
     severity: "major",
     priority: "medium",
     layer: "unit",
@@ -141,7 +141,7 @@ export const ordersCases = [
       "without a matching job, and a paid invoice would become unrefundable bookkeeping noise. The case " +
       "runs for both blocked statuses - `INVOICE_ISSUED` and `INVOICE_PAID` - because the guard must cover " +
       "the whole invoiced tail of the lifecycle, not a single value.",
-    preconditions: "An order in the status named by the case title (issued or paid invoice).",
+    preconditions: "An order whose invoice is already issued, and the same order once that invoice is paid.",
     steps: [
       {
         action: "Call `cancel` with the reason `\"No longer needed\"` as an administrator.",

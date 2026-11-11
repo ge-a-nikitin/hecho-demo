@@ -1,12 +1,18 @@
 /**
- * Creates and updates the Qase TestOps cases described by
- * src/test-support/qase-manifest.ts, then writes the numeric case IDs back into
+ * Creates and updates the Qase TestOps cases described by the catalogue in
+ * src/test-support/qase/, then writes the numeric case IDs back into
  * src/test-support/qase-case-ids.ts so the suites can link their results.
  *
  * Every case is written in full - description, preconditions, steps, tags, type
- * and behavior - so TestOps is readable without the repository. Cases are
- * matched by suite and title, and a case is only patched when something differs,
- * which keeps the run idempotent and the API traffic low.
+ * and behavior - so TestOps is readable without the repository. A case is
+ * identified by its `order-desk:<key>` tag, which lets the sync rename or move
+ * it in place instead of creating a replacement, and it is only patched when
+ * something differs, which keeps the run idempotent and the API traffic low.
+ *
+ * When a key leaves the catalogue, its case is not deleted: because the TestOps
+ * API has no case archive, the case is moved under `Archive / <original top
+ * level suite>` with its tags and results intact, and a returning key brings it
+ * back to the manifest suite with the same ID.
  *
  * Usage:
  *   pnpm --filter @order-desk/api qase:sync --dry-run   # read-only plan
@@ -22,6 +28,15 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { qaseCases, type QaseCase } from "../src/test-support/qase-manifest.ts";
 import { qcUsageIndex } from "../src/test-support/qase/spec-index.ts";
+import {
+  caseTagPrefix,
+  planArchives,
+  planMatches,
+  type PlannedCase,
+  type RemoteCase,
+  suitePathOf,
+  type SuiteRef,
+} from "../src/test-support/qase/sync-plan.ts";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const apiDir = resolve(repoRoot, "apps/api");
@@ -75,7 +90,7 @@ const typeIds = {
 } as const;
 const behaviorIds = { positive: 1, negative: 2, destructive: 3 } as const;
 
-interface QaseSuite {
+interface QaseSuiteResponse {
   id: number;
   title: string;
   parent_id?: number | null;
@@ -139,46 +154,103 @@ interface CasePayload {
   tags: string[];
 }
 
-const suites = await listAll<QaseSuite>(`suite/${project}`);
-const cases = await listAll<QaseCaseEntity>(`case/${project}`);
+const suites: SuiteRef[] = (await listAll<QaseSuiteResponse>(`suite/${project}`)).map((suite) => ({
+  id: suite.id,
+  title: suite.title,
+  parentId: suite.parent_id ?? null,
+}));
+const storedCases = await listAll<QaseCaseEntity>(`case/${project}`);
 const specUsage = qcUsageIndex();
 const createdSuites: string[] = [];
 const createdCases: string[] = [];
 const updatedCases: string[] = [];
+const archivedCases: string[] = [];
 const resolvedIds = new Map<string, number>();
+const casesByKey = new Map<string, QaseCase>(qaseCases.map((entry) => [entry.key, entry]));
+
+const plannedCases: PlannedCase[] = [];
 
 for (const qaseCase of qaseCases) {
-  const suiteId = await ensureSuite(qaseCase.suite);
-  const payload = toPayload(qaseCase, suiteId, specUsage.get(qaseCase.key) ?? []);
-  const existing = cases.find((entity) => entity.suite_id === suiteId && entity.title === payload.title);
+  plannedCases.push({
+    key: qaseCase.key,
+    title: qaseCase.title,
+    suiteId: await ensureSuite(qaseCase.suite),
+  });
+}
 
-  if (!existing) {
-    if (dryRun) {
-      createdCases.push(`${qaseCase.key} (new case in "${qaseCase.suite.join(" / ")}")`);
-      continue;
-    }
+const remoteCases: RemoteCase[] = storedCases.map((entity) => ({
+  id: entity.id,
+  title: entity.title,
+  suiteId: entity.suite_id ?? null,
+  tags: tagsOf(entity.tags),
+}));
 
-    const created = await request<QaseCreated>("POST", `case/${project}`, payload);
-    cases.push({ id: created.result.id, ...payload });
-    resolvedIds.set(qaseCase.key, created.result.id);
-    createdCases.push(qaseCase.key);
+const plan = planMatches(plannedCases, remoteCases);
+
+if (plan.conflicts.length > 0) {
+  throw new Error(
+    "Two or more Qase cases carry the same catalogue tag, so the sync cannot tell which one to update:\n" +
+      plan.conflicts.map(({ key, ids }) => `  ${key}: #${ids.join(", #")}`).join("\n") +
+      "\nDelete the duplicate case or its tag in TestOps, then run the sync again.",
+  );
+}
+
+const storedById = new Map(storedCases.map((entity) => [entity.id, entity]));
+
+for (const match of plan.matches) {
+  const qaseCase = mustCase(match.planned.key);
+  const payload = toPayload(qaseCase, match.planned.suiteId, specUsage.get(qaseCase.key) ?? []);
+  const stored = storedById.get(match.remote.id);
+
+  if (stored === undefined) {
+    throw new Error(`Qase case #${match.remote.id} disappeared while syncing "${qaseCase.key}".`);
+  }
+
+  resolvedIds.set(qaseCase.key, stored.id);
+
+  if (!(await isDrifted(stored, payload))) {
     continue;
   }
 
-  resolvedIds.set(qaseCase.key, existing.id);
-
-  if (!(await isDrifted(existing, payload))) {
-    continue;
-  }
+  const reason = updateReason(qaseCase.key, stored, payload);
 
   if (dryRun) {
-    updatedCases.push(`${qaseCase.key} (#${existing.id} differs from the manifest)`);
+    updatedCases.push(`${qaseCase.key} (${reason})`);
     continue;
   }
 
-  await request<QaseCreated>("PATCH", `case/${project}/${existing.id}`, payload);
-  Object.assign(existing, payload);
+  await request<QaseCreated>("PATCH", `case/${project}/${stored.id}`, payload);
+  Object.assign(stored, payload);
   updatedCases.push(qaseCase.key);
+}
+
+for (const entry of plan.missing) {
+  const qaseCase = mustCase(entry.key);
+
+  if (dryRun) {
+    createdCases.push(`${entry.key} (new case in "${qaseCase.suite.join(" / ")}")`);
+    continue;
+  }
+
+  const payload = toPayload(qaseCase, entry.suiteId, specUsage.get(qaseCase.key) ?? []);
+  const created = await request<QaseCreated>("POST", `case/${project}`, payload);
+  resolvedIds.set(qaseCase.key, created.result.id);
+  createdCases.push(qaseCase.key);
+}
+
+for (const move of planArchives(new Set(casesByKey.keys()), remoteCases, suites)) {
+  const from = move.from.join(" / ") || "no suite";
+  const note = `${move.key} (#${move.id} from "${from}" to "${move.to.join(" / ")}")`;
+  // Resolved before the dry-run branch so the plan also reports the archive suites it would create.
+  const suiteId = await ensureSuite(move.to);
+
+  if (dryRun) {
+    archivedCases.push(note);
+    continue;
+  }
+
+  await request<QaseCreated>("PATCH", `case/${project}/${move.id}`, { suite_id: suiteId });
+  archivedCases.push(note);
 }
 
 if (!dryRun) {
@@ -187,13 +259,36 @@ if (!dryRun) {
 
 report();
 
+function mustCase(key: string): QaseCase {
+  const entry = casesByKey.get(key);
+
+  if (entry === undefined) {
+    throw new Error(`Catalogue key "${key}" vanished from the manifest while syncing.`);
+  }
+
+  return entry;
+}
+
+/** Explains an update in the dry-run report: renames and moves are the interesting ones. */
+function updateReason(key: string, stored: QaseCaseEntity, payload: CasePayload): string {
+  const notes: string[] = [];
+
+  if (stored.title !== payload.title) notes.push(`renamed from "${stored.title}"`);
+  if ((stored.suite_id ?? null) !== payload.suite_id) {
+    const from = suitePathOf(suites, stored.suite_id ?? null).join(" / ");
+    notes.push(`moved from "${from || "no suite"}"`);
+  }
+
+  return notes.length === 0 ? "content drifted" : notes.join(", ");
+}
+
 async function ensureSuite(path: readonly string[]): Promise<number> {
   let parentId: number | null = null;
 
   for (const [index, title] of path.entries()) {
     const currentPath = path.slice(0, index + 1).join(" / ");
     const existing = suites.find(
-      (suite) => suite.title === title && (suite.parent_id ?? null) === parentId,
+      (suite) => suite.title === title && suite.parentId === parentId,
     );
 
     if (existing) {
@@ -210,7 +305,7 @@ async function ensureSuite(path: readonly string[]): Promise<number> {
       title,
       ...(parentId === null ? {} : { parent_id: parentId }),
     });
-    suites.push({ id: created.result.id, title, parent_id: parentId });
+    suites.push({ id: created.result.id, title, parentId });
     createdSuites.push(currentPath);
     parentId = created.result.id;
   }
@@ -256,7 +351,7 @@ function describe(qaseCase: QaseCase, specPaths: readonly string[]): string {
 }
 
 function tagsFor(qaseCase: QaseCase): string[] {
-  return [`order-desk:${qaseCase.key}`, qaseCase.layer, ...qaseCase.suite.map(slugTag)];
+  return [`${caseTagPrefix}${qaseCase.key}`, qaseCase.layer, ...qaseCase.suite.map(slugTag)];
 }
 
 function slugTag(title: string): string {
@@ -284,6 +379,9 @@ async function isDrifted(existing: QaseCaseEntity, payload: CasePayload): Promis
 
 function matchesMetadata(entity: QaseCaseEntity, payload: CasePayload): boolean {
   return (
+    entity.title === payload.title &&
+    // The suite moves when a case is restored from the archive, so it is part of the comparison.
+    (entity.suite_id ?? null) === payload.suite_id &&
     entity.severity === payload.severity &&
     entity.priority === payload.priority &&
     entity.layer === payload.layer &&
@@ -411,11 +509,15 @@ function report(): void {
   for (const suite of createdSuites) console.info(`${prefix}suite to create: ${suite}`);
   for (const entry of createdCases) console.info(`${prefix}case to create: ${entry}`);
   for (const entry of updatedCases) console.info(`${prefix}case to update: ${entry}`);
+  for (const entry of archivedCases) {
+    console.info(`${prefix}case ${dryRun ? "to archive" : "archived"}: ${entry}`);
+  }
 
   const unchanged = qaseCases.length - createdCases.length - updatedCases.length;
   console.info(
     `${prefix}${qaseCases.length} manifest cases: ${createdCases.length} new, ${updatedCases.length} updated, ` +
-      `${unchanged} unchanged (${createdSuites.length} new suites)`,
+      `${unchanged} unchanged (${createdSuites.length} new suites); ` +
+      `${archivedCases.length} ${dryRun ? "to archive" : "archived"}`,
   );
 
   if (!dryRun) {

@@ -42,6 +42,7 @@
 - Every test is a Qase TestOps case. Add or update its entry in the catalogue module under `apps/api/src/test-support/qase/cases/`, then call `it(qc("<key>", "<title>"), ...)`: `qc()` fails collection when the key is unknown or the title drifted, which keeps the catalogue and the suite together. Case content (`description`, `preconditions`, `steps`) is written in English, like the rest of the code, and explains why the case exists rather than restating the assertions.
 - After changing a case entry, run `pnpm qase:sync --dry-run`, review the plan, then `pnpm qase:sync`, so descriptions, steps, tags, and case IDs reach TestOps. `qase-case-ids.ts` is generated and written only by the sync; never edit it by hand.
 - When a test disappears, remove its catalogue entry and run `pnpm qase:sync` in the same change. Do not leave the catalogue ahead of or behind the suites: an offline parity test fails when a case ID survives its entry.
+- Never delete a case in TestOps by hand. The sync identifies cases by their `order-desk:<key>` tag, so a renamed or moved case keeps its ID and history; a key that leaves the catalogue has its case moved to `Archive / <original top level suite>` instead of being deleted, and a key that comes back brings the same case home.
 
 ## Verification and completion
 

@@ -125,35 +125,40 @@ describe("Orders", () => {
       expect(transactionCalled).toBe(false);
     });
 
-    it.each([OrderStatus.INVOICE_ISSUED, OrderStatus.INVOICE_PAID])(
-      qc("orders.lifecycle.cancel-after-invoice", "does not allow cancelling an order in %s"),
-      async (status) => {
-        let updateCalled = false;
-        const service = await createService({
-          $transaction: async (run: (tx: object) => Promise<unknown>) =>
-            run({
-              workOrder: {
-                findUnique: async () => ({
-                  id: "order-1",
-                  customerId: "customer-1",
-                  executorId: null,
-                  status,
+    describe.each([OrderStatus.INVOICE_ISSUED, OrderStatus.INVOICE_PAID])(
+      "cancelling an invoiced order in %s",
+      (status) => {
+        it(
+          qc("orders.lifecycle.cancel-after-invoice", "does not allow cancelling an invoiced order"),
+          async () => {
+            let updateCalled = false;
+            const service = await createService({
+              $transaction: async (run: (tx: object) => Promise<unknown>) =>
+                run({
+                  workOrder: {
+                    findUnique: async () => ({
+                      id: "order-1",
+                      customerId: "customer-1",
+                      executorId: null,
+                      status,
+                    }),
+                    updateMany: async () => {
+                      updateCalled = true;
+                      return { count: 1 };
+                    },
+                  },
                 }),
-                updateMany: async () => {
-                  updateCalled = true;
-                  return { count: 1 };
-                },
-              },
-            }),
-        });
+            });
 
-        await expect(
-          service.cancel("order-1", "No longer needed", {
-            id: "admin-1",
-            role: UserRole.ADMIN,
-          }),
-        ).rejects.toThrow(ConflictException);
-        expect(updateCalled).toBe(false);
+            await expect(
+              service.cancel("order-1", "No longer needed", {
+                id: "admin-1",
+                role: UserRole.ADMIN,
+              }),
+            ).rejects.toThrow(ConflictException);
+            expect(updateCalled).toBe(false);
+          },
+        );
       },
     );
 
