@@ -21,4 +21,27 @@ function requireDatabaseUrl(): string {
   return connectionString;
 }
 
-export const prisma = new PrismaService();
+let client: PrismaService | undefined;
+
+function clientInstance(): PrismaService {
+  client ??= new PrismaService();
+  return client;
+}
+
+/**
+ * The shared client for the modules that cannot receive it through Nest - the
+ * Better Auth adapter, for instance. It is built on first use, so importing the
+ * module needs no `DATABASE_URL`, while a missing connection string still fails
+ * at the first query instead of at import.
+ */
+export const prisma = new Proxy({} as PrismaService, {
+  get: (_target, property) => {
+    const instance = clientInstance();
+    const value = Reflect.get(instance, property);
+
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+  // Adapters probe the client - `"$transaction" in db`, for instance - so the
+  // proxy answers the same questions as the client it stands for.
+  has: (_target, property) => property in clientInstance(),
+});

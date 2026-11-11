@@ -1,8 +1,68 @@
 import type { QaseCase } from "../types.js";
 
 const sessionSuite = ["API", "Access control"] as const;
+const configurationSuite = ["Auth", "Configuration"] as const;
 
 export const authCases = [
+  {
+    key: "auth.config.mounts-handler",
+    suite: configurationSuite,
+    title: "answers the handler probe the node adapter mounts it with",
+    severity: "blocker",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "`toNodeHandler` decides how to mount the authentication routes by asking `\"handler\" in auth`: " +
+      "the property is used when the probe answers true, and the argument itself is treated as the handler " +
+      "otherwise. A lazily built instance behind a proxy answers `false` unless the proxy forwards the " +
+      "probe, and every `/api/auth/*` request then fails with `handler is not a function` - which is what " +
+      "the integration suite reported the first time the instance became lazy. The case keeps the mount " +
+      "path honest, because no unit case would otherwise notice a sign-in route that cannot be mounted.",
+    preconditions:
+      "`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL` set, with a fresh module registry.",
+    steps: [
+      {
+        action: "Import `auth.ts` and ask it whether it carries a `handler`.",
+        expected: "The probe answers true, so the node adapter mounts the property instead of the object.",
+      },
+      {
+        action: "Read `auth.handler`.",
+        expected: "The property is a function, ready to receive a request.",
+      },
+    ],
+  },
+  {
+    key: "auth.config.lazy",
+    suite: configurationSuite,
+    title: "loads the auth and database modules without their settings",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The Better Auth instance and the Prisma client used to be built while their modules were imported, " +
+      "so importing anything that reached them required `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and " +
+      "`DATABASE_URL`. That made the offline unit suite carry invented placeholders for settings it never " +
+      "uses. Building both on first use removes that requirement without weakening it: a deployment that " +
+      "forgets the settings still fails on the first sign-in attempt instead of accepting requests.",
+    preconditions:
+      "`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL` removed from the environment.",
+    steps: [
+      {
+        action: "Import `auth.ts` and `prisma.service.ts` with a fresh module registry.",
+        expected: "Both imports resolve and neither throws.",
+      },
+      {
+        action: "Resolve a session through `auth.api.getSession`.",
+        expected:
+          "The call fails with `BETTER_AUTH_URL is required`, so the missing setting is reported where " +
+          "it is used.",
+      },
+    ],
+  },
   {
     key: "auth.session-guard.rejects-anonymous",
     suite: sessionSuite,
