@@ -2,6 +2,7 @@ import "../env.js";
 import { hashPassword } from "better-auth/crypto";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { UserRole } from "../generated/prisma/enums.js";
 import type { PrismaService } from "../database/prisma.service.js";
@@ -9,7 +10,7 @@ import { UsersService } from "./users.service.js";
 
 describe("Users", () => {
   describe("Profile", () => {
-    it("requires the current password and normalizes updated profile data", async () => {
+    it(qc("users.profile.update-normalizes", "requires the current password and normalizes updated profile data"), async () => {
       const storedHash = await hashPassword("current-password");
       let updateData: Record<string, unknown> | undefined;
       const service = createService(storedHash, (data) => {
@@ -34,7 +35,7 @@ describe("Users", () => {
       expect(updateData?.emailVerified).toBe(false);
     });
 
-    it("does not update profile data when the current password is incorrect", async () => {
+    it(qc("users.profile.wrong-password", "does not update profile data when the current password is incorrect"), async () => {
       const storedHash = await hashPassword("current-password");
       let didUpdate = false;
       const service = createService(storedHash, () => {
@@ -53,7 +54,7 @@ describe("Users", () => {
   });
 
   describe("Executor rates", () => {
-    it("lets an active executor set their own hourly rate", async () => {
+    it(qc("users.executor-rates.self-service", "lets an active executor set their own hourly rate"), async () => {
       let updateArgs: Record<string, unknown> | undefined;
       const profile = {
         id: "executor-1",
@@ -84,7 +85,7 @@ describe("Users", () => {
       expect(result.hourlyRate?.toString()).toBe("45.5");
     });
 
-    it("rejects a rate update when the account is not an active executor", async () => {
+    it(qc("users.executor-rates.inactive-rejected", "rejects a rate update when the account is not an active executor"), async () => {
       const service = new UsersService({
         user: {
           updateMany: async () => ({ count: 0 }),
@@ -96,7 +97,7 @@ describe("Users", () => {
       );
     });
 
-    it("lists only active executors for customer selection", async () => {
+    it(qc("users.executor-rates.active-only-list", "lists only active executors for customer selection"), async () => {
       let query: Record<string, unknown> | undefined;
       const service = new UsersService({
         user: {

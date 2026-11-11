@@ -4,12 +4,13 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { Prisma } from "../generated/prisma/client.js";
 import { createApiErrorResponse } from "../api-exception.filter.js";
 
 describe("API", () => {
   describe("Error responses", () => {
-    it("adds a stable code and preserves validation messages", () => {
+    it(qc("api.error-responses.validation-code", "adds a stable code and preserves validation messages"), () => {
       expect(createApiErrorResponse(new BadRequestException(["title must be longer"]))).toEqual({
         statusCode: 400,
         code: "BAD_REQUEST",
@@ -18,12 +19,12 @@ describe("API", () => {
       });
     });
 
-    it("distinguishes forbidden operations from missing records", () => {
+    it(qc("api.error-responses.forbidden-vs-not-found", "distinguishes forbidden operations from missing records"), () => {
       expect(createApiErrorResponse(new ForbiddenException()).code).toBe("FORBIDDEN");
       expect(createApiErrorResponse(new NotFoundException()).code).toBe("NOT_FOUND");
     });
 
-    it("does not expose unexpected server error details", () => {
+    it(qc("api.error-responses.hides-server-details", "does not expose unexpected server error details"), () => {
       expect(createApiErrorResponse(new Error("database credentials leaked"))).toEqual({
         statusCode: 500,
         code: "INTERNAL_SERVER_ERROR",
@@ -32,7 +33,7 @@ describe("API", () => {
       });
     });
 
-    it("converts oversized uploads into a client error", () => {
+    it(qc("api.error-responses.oversized-upload", "converts oversized uploads into a client error"), () => {
       const error = Object.assign(new Error("size limit"), {
         name: "MulterError",
         code: "LIMIT_FILE_SIZE",
@@ -44,7 +45,7 @@ describe("API", () => {
       expect(response.code).toBe("PAYLOAD_TOO_LARGE");
     });
 
-    it("maps database uniqueness violations to a conflict response", () => {
+    it(qc("api.error-responses.unique-violation", "maps database uniqueness violations to a conflict response"), () => {
       const error = new Prisma.PrismaClientKnownRequestError("duplicate key", {
         code: "P2002",
         clientVersion: "test",

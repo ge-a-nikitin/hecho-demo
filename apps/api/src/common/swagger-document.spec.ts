@@ -1,5 +1,6 @@
 import type { OpenAPIObject } from "@nestjs/swagger";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { hideDisabledDevTools } from "./swagger-document.js";
 
 function documentFixture(): OpenAPIObject {
@@ -23,7 +24,7 @@ function documentFixture(): OpenAPIObject {
 
 describe("API", () => {
   describe("Documentation", () => {
-    it("removes devtools routes and schemas from the document while the feature flag is off", () => {
+    it(qc("api.documentation.hides-devtools", "removes devtools routes and schemas from the document while the feature flag is off"), () => {
       const document = documentFixture();
 
       hideDisabledDevTools(document, false);
@@ -32,7 +33,7 @@ describe("API", () => {
       expect(Object.keys(document.components?.schemas ?? {})).toEqual(["CreateOrderDto"]);
     });
 
-    it("keeps the devtools routes and schemas once the feature flag is on", () => {
+    it(qc("api.documentation.keeps-devtools", "keeps the devtools routes and schemas once the feature flag is on"), () => {
       const document = documentFixture();
 
       hideDisabledDevTools(document, true);

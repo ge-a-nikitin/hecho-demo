@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
+import { qc } from "../../src/test-support/qase-case.js";
 import {
   createActor,
   request,
@@ -113,9 +114,9 @@ async function orderInProgress(): Promise<Order> {
   return accepted.body.order;
 }
 
-describe("Orders", () => {
+describe("Orders (integration)", () => {
   describe("Lifecycle", () => {
-    it("creates a draft order for the current customer", async () => {
+    it(qc("integration.lifecycle.create-draft", "creates a draft order for the current customer"), async () => {
       const draft = await createDraft();
 
       expect(draft).toMatchObject({
@@ -128,7 +129,7 @@ describe("Orders", () => {
       expect(draft.statusHistory[0].fromStatus).toBeNull();
     });
 
-    it("rejects a draft that references an unavailable category", async () => {
+    it(qc("integration.lifecycle.unknown-category", "rejects a draft that references an unavailable category"), async () => {
       const response = await customerA.post<ApiError>("/orders", {
         title: nextTitle(),
         description: "This category does not exist",
@@ -142,7 +143,7 @@ describe("Orders", () => {
       });
     });
 
-    it("moves a submitted draft into the executor pool", async () => {
+    it(qc("integration.lifecycle.submit-to-pool", "moves a submitted draft into the executor pool"), async () => {
       const submitted = await submitDraft(await createDraft());
 
       expect(submitted.status).toBe("WAITING_DISTRIBUTION");
@@ -154,7 +155,7 @@ describe("Orders", () => {
       ]);
     });
 
-    it("grants a pooled order to exactly one of two concurrent claims", async () => {
+    it(qc("integration.lifecycle.concurrent-claim", "grants a pooled order to exactly one of two concurrent claims"), async () => {
       const pooled = await submitDraft(await createDraft());
 
       const responses = await Promise.all([
@@ -180,7 +181,7 @@ describe("Orders", () => {
       ).toHaveLength(1);
     });
 
-    it("accepts an estimate and drives the order to customer acceptance", async () => {
+    it(qc("integration.lifecycle.accept-estimate", "accepts an estimate and drives the order to customer acceptance"), async () => {
       const order = await draftAssignedTo(executorA);
       const estimate = await executorA.post<{ id: string; status: string; amount: string }>(
         `/orders/${order.id}/estimate`,
@@ -216,7 +217,7 @@ describe("Orders", () => {
       expect(acceptedWork.body.acceptedAt).not.toBeNull();
     });
 
-    it("returns work for revision and lets the executor resume it", async () => {
+    it(qc("integration.lifecycle.revision", "returns work for revision and lets the executor resume it"), async () => {
       const order = await orderInProgress();
       const review = await executorA.post<Order>(`/orders/${order.id}/submit-review`);
       expect(review.status).toBe(201);
@@ -235,7 +236,7 @@ describe("Orders", () => {
       expect(resumed.body.status).toBe("IN_PROGRESS");
     });
 
-    it("rejects an estimate and returns the order to the pool", async () => {
+    it(qc("integration.lifecycle.reject-estimate", "rejects an estimate and returns the order to the pool"), async () => {
       const order = await draftAssignedTo(executorA);
       const estimate = await executorA.post<{ id: string }>(`/orders/${order.id}/estimate`, {
         hours: 4,
@@ -257,7 +258,7 @@ describe("Orders", () => {
       });
     });
 
-    it("requires a reason when an administrator cancels work in progress", async () => {
+    it(qc("integration.lifecycle.cancel-reason", "requires a reason when an administrator cancels work in progress"), async () => {
       const order = await orderInProgress();
 
       const customerRefused = await customerA.post<ApiError>(`/orders/${order.id}/cancel`, {
@@ -286,14 +287,14 @@ describe("Orders", () => {
   });
 
   describe("Access control", () => {
-    it("rejects requests without a session", async () => {
+    it(qc("integration.access-control.no-session", "rejects requests without a session"), async () => {
       const response = await request<ApiError>("GET", "/orders");
 
       expect(response.status).toBe(401);
       expect(response.body).toMatchObject({ code: "UNAUTHENTICATED" });
     });
 
-    it("hides a customer order from another customer", async () => {
+    it(qc("integration.access-control.foreign-order", "hides a customer order from another customer"), async () => {
       const draft = await createDraft();
 
       const response = await customerB.get<ApiError>(`/orders/${draft.id}`);
@@ -307,7 +308,7 @@ describe("Orders", () => {
       expect(list.body.map((order) => order.id)).not.toContain(draft.id);
     });
 
-    it("shows a pooled order to executors and hides it once it is claimed", async () => {
+    it(qc("integration.access-control.pool-visibility", "shows a pooled order to executors and hides it once it is claimed"), async () => {
       const pooled = await submitDraft(await createDraft());
 
       const visible = await executorA.get<Order>(`/orders/${pooled.id}`);
@@ -321,7 +322,7 @@ describe("Orders", () => {
       expect(hidden.status).toBe(403);
     });
 
-    it("refuses order creation for an executor", async () => {
+    it(qc("integration.access-control.executor-create", "refuses order creation for an executor"), async () => {
       const response = await executorA.post<ApiError>("/orders", {
         title: nextTitle(),
         description: "Executors cannot create orders",
@@ -335,7 +336,7 @@ describe("Orders", () => {
       });
     });
 
-    it("refuses administrative completion for a customer", async () => {
+    it(qc("integration.access-control.customer-complete", "refuses administrative completion for a customer"), async () => {
       const draft = await createDraft();
 
       const response = await customerA.post<ApiError>(`/orders/${draft.id}/complete`);
@@ -345,7 +346,7 @@ describe("Orders", () => {
   });
 
   describe("Request validation", () => {
-    it("rejects unknown fields instead of ignoring them", async () => {
+    it(qc("integration.validation.unknown-fields", "rejects unknown fields instead of ignoring them"), async () => {
       const response = await customerA.post<ApiError>("/orders", {
         title: nextTitle(),
         description: "An unknown field must not be silently dropped",
@@ -360,7 +361,7 @@ describe("Orders", () => {
       );
     });
 
-    it("rejects a title that contains only whitespace", async () => {
+    it(qc("integration.validation.whitespace-title", "rejects a title that contains only whitespace"), async () => {
       const response = await customerA.post<ApiError>("/orders", {
         title: "   ",
         description: "The title is blank",
@@ -373,7 +374,7 @@ describe("Orders", () => {
       );
     });
 
-    it("rejects a deadline that is not an ISO-8601 date", async () => {
+    it(qc("integration.validation.deadline-format", "rejects a deadline that is not an ISO-8601 date"), async () => {
       const response = await customerA.post<ApiError>("/orders", {
         title: nextTitle(),
         description: "The deadline is malformed",

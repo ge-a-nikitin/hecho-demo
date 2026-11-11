@@ -8,6 +8,9 @@
     "dev": "nest start --watch",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:qase": "QASE_MODE=testops vitest run",
+    "test:qase:integration": "QASE_MODE=testops vitest run --config vitest.integration.config.ts",
+    "qase:sync": "tsx scripts/qase-sync-cases.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "db:format": "prisma format",
     "db:validate": "prisma validate",
@@ -50,6 +53,7 @@
     "prisma": "7.10.1",
     "tsx": "^4.23.15",
     "typescript": "6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "vitest-qase-reporter": "^1.7.0"
   }
 }

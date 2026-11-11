@@ -15,7 +15,8 @@
     "db:migrate": "pnpm --filter @order-desk/api db:migrate",
     "db:migrate:status": "pnpm --filter @order-desk/api db:migrate:status",
     "db:seed:admin": "pnpm --filter @order-desk/api db:seed:admin",
-    "db:reset": "pnpm --filter @order-desk/api db:reset"
+    "db:reset": "pnpm --filter @order-desk/api db:reset",
+    "qase:sync": "pnpm --filter @order-desk/api qase:sync"
   },
   "devDependencies": {
     "typescript": "6.0.3"

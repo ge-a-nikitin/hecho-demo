@@ -1,6 +1,7 @@
 import "../env.js";
 import { ForbiddenException } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import {
   InvoiceStatus,
   OrderStatus,
@@ -14,7 +15,7 @@ import { InvoicesService } from "./invoices.service.js";
 
 describe("Invoices", () => {
   describe("Payment reports", () => {
-    it("stores a customer receipt without marking the invoice paid or completing the order", async () => {
+    it(qc("invoices.payment-reports.receipt-stored", "stores a customer receipt without marking the invoice paid or completing the order"), async () => {
       let reportData: Record<string, unknown> | undefined;
       let invoiceUpdateCount = 0;
       let orderStatusUpdateCount = 0;
@@ -81,7 +82,7 @@ describe("Invoices", () => {
       expect(orderStatusUpdateCount).toBe(0);
     });
 
-    it("confirms payment and moves the order to INVOICE_PAID without completing it", async () => {
+    it(qc("invoices.payment-reports.confirm-payment", "confirms payment and moves the order to INVOICE_PAID without completing it"), async () => {
       let invoiceUpdate: Record<string, unknown> | undefined;
       let orderUpdate: Record<string, unknown> | undefined;
       let reportUpdate: Record<string, unknown> | undefined;
@@ -139,7 +140,7 @@ describe("Invoices", () => {
       expect(historyData?.toStatus).toBe(OrderStatus.INVOICE_PAID);
     });
 
-    it("does not allow executors to read customer payment receipts", async () => {
+    it(qc("invoices.payment-reports.executor-denied", "does not allow executors to read customer payment receipts"), async () => {
       let storageRead = false;
       const service = createService(
         {

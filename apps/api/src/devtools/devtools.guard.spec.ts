@@ -5,6 +5,7 @@ import {
   type ExecutionContext,
 } from "@nestjs/common";
 import { afterEach, describe, expect, it } from "vitest";
+import { qc } from "../test-support/qase-case.js";
 import { DevToolsGuard } from "./devtools.guard.js";
 
 const originalEnabled = process.env.DEVTOOLS_ENABLED;
@@ -17,21 +18,21 @@ describe("DevTools", () => {
       restoreEnvironmentValue("DEVTOOLS_API_KEY", originalKey);
     });
 
-    it("hides devtools endpoints when the feature flag is disabled", () => {
+    it(qc("devtools.access-guard.flag-off", "hides devtools endpoints when the feature flag is disabled"), () => {
       process.env.DEVTOOLS_ENABLED = "false";
       process.env.DEVTOOLS_API_KEY = "test-key";
 
       expect(() => guard().canActivate(context("test-key"))).toThrow(NotFoundException);
     });
 
-    it("fails explicitly when enabled without an API key", () => {
+    it(qc("devtools.access-guard.missing-key-config", "fails explicitly when enabled without an API key"), () => {
       process.env.DEVTOOLS_ENABLED = "true";
       delete process.env.DEVTOOLS_API_KEY;
 
       expect(() => guard().canActivate(context("test-key"))).toThrow(InternalServerErrorException);
     });
 
-    it("rejects a missing or incorrect API key", () => {
+    it(qc("devtools.access-guard.rejects-wrong-key", "rejects a missing or incorrect API key"), () => {
       process.env.DEVTOOLS_ENABLED = "true";
       process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
 
@@ -41,14 +42,14 @@ describe("DevTools", () => {
       );
     });
 
-    it("accepts the configured API key", () => {
+    it(qc("devtools.access-guard.accepts-key", "accepts the configured API key"), () => {
       process.env.DEVTOOLS_ENABLED = "true";
       process.env.DEVTOOLS_API_KEY = "expected-development-key-at-least-32";
 
       expect(guard().canActivate(context("expected-development-key-at-least-32"))).toBe(true);
     });
 
-    it("fails explicitly when configured with a weak API key", () => {
+    it(qc("devtools.access-guard.weak-key", "fails explicitly when configured with a weak API key"), () => {
       process.env.DEVTOOLS_ENABLED = "true";
       process.env.DEVTOOLS_API_KEY = "too-short";
 
