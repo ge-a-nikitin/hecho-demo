@@ -12,6 +12,7 @@
 - [Interface and design system](#interface-and-design-system)
 - [Implementation plan](#implementation-plan)
 - [Open questions](#open-questions)
+- [Backlog](#backlog)
 - [Running the project locally](#running-the-project-locally)
 - [Deploying to a home VM (Cloudflare Tunnel)](#deploying-to-a-home-vm-cloudflare-tunnel)
 
@@ -168,6 +169,18 @@ The Better Auth integration with NestJS and Prisma has been verified by registra
 - Clarify the display-name format for the administrator created from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Describe response schemas in Swagger: parameters, request bodies and allowed enum values are documented, while response bodies are returned without typed schemas. A complete contract needs response DTOs or dedicated serializers.
 - Configure CSP and rate limiting for `/api/auth/*` in Cloudflare (Transform Rules and WAF Rate limiting). A strict CSP needs separate handling for Swagger UI, so the decision is deferred until publication. Restricting Swagger through Cloudflare Access is not set up yet either.
+
+## Backlog
+
+Queue of test-infrastructure work. Each item is deferred deliberately and names the reason and the dependency on the previous one.
+
+1. **CI on pull requests.** `.github/workflows/` currently holds only `deploy.yml`, so types, the build, unit and integration tests are checked locally, and a regression can reach `main`. The checks move to GitHub Actions on `ubuntu-latest` and become required for merging: the self-hosted runner with Docker socket access stays with the deployment only, because the repository is public. Once the required checks are enabled, the merge button stays unavailable until they are green.
+2. **Reporting runs to Qase from CI.** Reports are sent manually from a workstation today. Only runs that reached a merge should reach Qase: a pull request verifies everything offline and without a token, and after the push to `main` the same suite runs with result reporting, a commit link in the run description, and a comment in the merged pull request. The official Qase GitHub app synchronises defects with issues and does not report runs, so the run link is published by our own job. This item follows CI, because without it there are no runs to report.
+3. **A dedicated Qase page.** The Qase section in the README has grown into a paragraph that overloads the launch instructions; it moves to `docs/{ru,en}/qase.md`, and the README keeps a short summary and a link.
+4. **Coverage of untested modules.** There are no unit tests for attachment upload and download (`orders/order-files.service.ts`), session and role checks (`auth/session.guard.ts`), categories, the S3 storage service, and some DTO constraints. They are covered with cases after CI, so that the pipeline catches regressions instead of a local run.
+5. **Rewriting tests by TDD.** Some unit cases assert Prisma call arguments, which reflects the implementation rather than observable behaviour. The rewrite goes slice by slice (orders → invoices → users → devtools → common → integration) through red-green-refactor, after CI, so that the pipeline catches regressions.
+
+Defects found while writing or rewriting tests are fixed in the same pull request together with a regression test and block the merge: they belong to the development process and are not filed as issues. The bug report form stays for defects a user can see.
 
 ## Running the project locally
 

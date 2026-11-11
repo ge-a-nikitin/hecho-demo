@@ -100,6 +100,7 @@ flowchart LR
 | Назначение и функционал | [Функционал](./docs/ru/README.md#согласованный-функционал) | [Functionality](./docs/en/README.md#agreed-functionality) |
 | Технические ограничения | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) |
 | План и статус реализации | [План](./docs/ru/README.md#план-реализации) | [Plan](./docs/en/README.md#implementation-plan) |
+| Бэклог и очередь работ | [Бэклог](./docs/ru/README.md#бэклог) | [Backlog](./docs/en/README.md#backlog) |
 | Запуск и эксплуатация | [Запуск](./docs/ru/README.md#запуск-проекта-локально) | [Setup](./docs/en/README.md#running-the-project-locally) |
 | Развёртывание на домашней ВМ | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) |
 | Схема базы данных | [Схема БД](./docs/ru/database-schema.md) | [Database schema](./docs/en/database-schema.md) |
