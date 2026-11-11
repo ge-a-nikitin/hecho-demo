@@ -31,7 +31,10 @@ export type TableName =
   | "invoicePaymentReport"
   | "user"
   | "account"
-  | "session";
+  | "session"
+  | "verification"
+  | "category"
+  | "invoiceSequence";
 
 export type FakeDatabaseOperation =
   | "findMany"
@@ -43,8 +46,12 @@ export type FakeDatabaseOperation =
   | "deleteMany";
 
 export type FakeDatabaseOptions = {
-  /** Makes one operation throw, for the paths that must contain a database failure. */
-  failOn?: { table: TableName; operation: FakeDatabaseOperation };
+  /**
+   * Makes one operation throw, for the paths that must contain a database failure.
+   * `code` turns it into the matching Prisma known error, so a service that maps
+   * `P2002`, `P2003` or `P2025` can be tested for that mapping.
+   */
+  failOn?: { table: TableName; operation: FakeDatabaseOperation; code?: string };
 };
 
 export type FakeDatabase = {
@@ -66,7 +73,36 @@ const tableNames: readonly TableName[] = [
   "user",
   "account",
   "session",
+  "verification",
+  "category",
+  "invoiceSequence",
 ];
+
+/**
+ * Unique columns the production schema declares and a service depends on: a
+ * duplicate has to raise `P2002`, because that is what the error mapping sees.
+ */
+const uniques: Partial<Record<TableName, readonly string[]>> = {
+  user: ["email"],
+};
+
+/**
+ * Foreign keys Prisma cascades on delete, so removing a parent removes the rows
+ * that could not outlive it instead of leaving dangling children behind.
+ */
+const cascades: Partial<Record<TableName, readonly { table: TableName; field: string }[]>> = {
+  user: [
+    { table: "account", field: "userId" },
+    { table: "session", field: "userId" },
+  ],
+  workOrder: [
+    { table: "orderStatusHistory", field: "orderId" },
+    { table: "orderAssignment", field: "orderId" },
+    { table: "orderEstimate", field: "orderId" },
+    { table: "orderComment", field: "orderId" },
+    { table: "orderAttachment", field: "orderId" },
+  ],
+};
 
 /**
  * Column defaults the services rely on instead of sending them in `create`.
@@ -147,7 +183,16 @@ function tableApi(
     tables()[name].filter((row) => matches(name, row, where, tables()));
   const fail = (operation: FakeDatabaseOperation): void => {
     if (options.failOn?.table === name && options.failOn.operation === operation) {
-      throw new Error(`The fake database rejected ${name}.${operation}`);
+      const message = `The fake database rejected ${name}.${operation}`;
+
+      if (options.failOn.code !== undefined) {
+        throw new Prisma.PrismaClientKnownRequestError(message, {
+          code: options.failOn.code,
+          clientVersion: "fake",
+        });
+      }
+
+      throw new Error(message);
     }
   };
 
@@ -187,8 +232,10 @@ function tableApi(
       fail("update");
       const row = read(where)[0];
       if (!row) throw missingRecord(name, "update", where);
-      for (const [field, value] of Object.entries(data)) {
-        if (value !== undefined) row[field] = value;
+      const candidate = { ...row, ...definedOnly(data) };
+      ensureUnique(name, candidate, tables()[name], row);
+      for (const [field, value] of Object.entries(definedOnly(data))) {
+        row[field] = value;
       }
       return only({ ...row }, select);
     },
@@ -197,6 +244,7 @@ function tableApi(
       const row = read(where)[0];
       if (!row) throw missingRecord(name, "delete", where);
       tables()[name] = tables()[name].filter((candidate) => candidate !== row);
+      cascadeDelete(name, row, tables());
       return only({ ...row }, select);
     },
     count: async ({ where }: Query = {}) => {
@@ -205,8 +253,22 @@ function tableApi(
     },
     create: async ({ data = {}, select }: Query = {}) => {
       fail("create");
-      const row: Row = { id: `${name}-${tables()[name].length + 1}`, ...defaults[name]?.(), ...data };
+      const { fields, children } = splitNestedCreates(name, data);
+      const row: Row = { id: `${name}-${tables()[name].length + 1}`, ...defaults[name]?.(), ...fields };
+      ensureUnique(name, row, tables()[name]);
       tables()[name].push(row);
+
+      for (const child of children) {
+        const childRow: Row = {
+          id: `${child.table}-${tables()[child.table].length + 1}`,
+          ...defaults[child.table]?.(),
+          ...child.values,
+          [child.targetField]: row[child.localField],
+        };
+        ensureUnique(child.table, childRow, tables()[child.table]);
+        tables()[child.table].push(childRow);
+      }
+
       return only(row, select);
     },
     deleteMany: async ({ where }: Query = {}) => {
@@ -214,9 +276,88 @@ function tableApi(
       const rows = read(where);
       const removed = new Set(rows);
       tables()[name] = tables()[name].filter((row) => !removed.has(row));
+      for (const row of rows) cascadeDelete(name, row, tables());
       return { count: rows.length };
     },
   };
+}
+
+/** `undefined` in `data` means "leave unchanged", the way Prisma reads it. */
+function definedOnly(data: Where): Where {
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
+}
+
+/** Raises `P2002` when a unique column would hold a value another row already has. */
+function ensureUnique(
+  name: TableName,
+  candidate: Row,
+  rows: readonly Row[],
+  exclude?: Row,
+): void {
+  for (const field of uniques[name] ?? []) {
+    const value = candidate[field];
+    if (value === undefined) continue;
+
+    if (rows.some((row) => row !== exclude && row[field] === value)) {
+      throw new Prisma.PrismaClientKnownRequestError(
+        `The fake database already holds ${name}.${field} = ${String(value)}`,
+        { code: "P2002", clientVersion: "fake" },
+      );
+    }
+  }
+}
+
+function cascadeDelete(name: TableName, row: Row, tables: Record<TableName, Row[]>): void {
+  for (const child of cascades[name] ?? []) {
+    tables[child.table] = tables[child.table].filter(
+      (candidate) => candidate[child.field] !== row.id,
+    );
+  }
+}
+
+/**
+ * Splits a `create` payload into the row's own columns and the relations written
+ * with it, so `user.create({ data: { accounts: { create: { … } } } })` stores a
+ * user and its account instead of an `accounts` column, and links the children
+ * through the relation's foreign key.
+ */
+function splitNestedCreates(
+  name: TableName,
+  data: Where,
+): {
+  fields: Where;
+  children: Array<{ table: TableName; localField: string; targetField: string; values: Row }>;
+} {
+  const fields: Where = {};
+  const children: Array<{
+    table: TableName;
+    localField: string;
+    targetField: string;
+    values: Row;
+  }> = [];
+
+  for (const [field, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+
+    const relation = relations[name]?.[field];
+    const nested = relation === undefined ? undefined : (value as { create?: Row | Row[] }).create;
+
+    if (relation && nested !== undefined) {
+      for (const entry of Array.isArray(nested) ? nested : [nested]) {
+        children.push({
+          table: relation.table,
+          localField: relation.localField,
+          targetField: relation.targetField,
+          values: entry,
+        });
+      }
+      continue;
+    }
+
+    fields[field] = value;
+  }
+
+  return { fields, children };
 }
 
 /**
@@ -291,8 +432,24 @@ function compareValues(left: unknown, right: unknown): number {
 type Relation = { table: TableName; localField: string; targetField: string; many: boolean };
 
 const relations: Partial<Record<TableName, Record<string, Relation>>> = {
+  user: {
+    accounts: { table: "account", localField: "id", targetField: "userId", many: true },
+    sessions: { table: "session", localField: "id", targetField: "userId", many: true },
+  },
   workOrder: {
     invoices: { table: "invoice", localField: "id", targetField: "orderId", many: true },
+    statusHistory: {
+      table: "orderStatusHistory",
+      localField: "id",
+      targetField: "orderId",
+      many: true,
+    },
+    assignments: {
+      table: "orderAssignment",
+      localField: "id",
+      targetField: "orderId",
+      many: true,
+    },
   },
   invoice: {
     order: { table: "workOrder", localField: "orderId", targetField: "id", many: false },
