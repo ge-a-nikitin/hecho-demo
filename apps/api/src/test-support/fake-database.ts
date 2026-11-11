@@ -1,6 +1,6 @@
 /**
- * In-memory stand-in for the Prisma client, limited to the operations the order
- * and invoice flows use.
+ * In-memory stand-in for the Prisma client, limited to the operations the order,
+ * invoice and account flows use.
  *
  * The suites assert what a call left in the database - the returned order, the
  * recorded status history, the rows that survived a refused transition - instead
@@ -14,6 +14,7 @@
  * included relation stays absent, so a case seeds just the tables it looks at.
  */
 
+import { Prisma } from "../generated/prisma/client.js";
 import { PaymentReportStatus } from "../generated/prisma/enums.js";
 
 type Row = Record<string, unknown>;
@@ -27,9 +28,19 @@ export type TableName =
   | "orderComment"
   | "orderAttachment"
   | "invoice"
-  | "invoicePaymentReport";
+  | "invoicePaymentReport"
+  | "user"
+  | "account"
+  | "session";
 
-export type FakeDatabaseOperation = "findMany" | "updateMany" | "create" | "deleteMany";
+export type FakeDatabaseOperation =
+  | "findMany"
+  | "updateMany"
+  | "create"
+  | "update"
+  | "delete"
+  | "count"
+  | "deleteMany";
 
 export type FakeDatabaseOptions = {
   /** Makes one operation throw, for the paths that must contain a database failure. */
@@ -52,6 +63,9 @@ const tableNames: readonly TableName[] = [
   "orderAttachment",
   "invoice",
   "invoicePaymentReport",
+  "user",
+  "account",
+  "session",
 ];
 
 /**
@@ -61,6 +75,7 @@ const tableNames: readonly TableName[] = [
  */
 const defaults: Partial<Record<TableName, () => Row>> = {
   invoicePaymentReport: () => ({ status: PaymentReportStatus.PENDING, submittedAt: new Date() }),
+  user: () => ({ emailVerified: false, isActive: true }),
 };
 
 export function createFakeDatabase(
@@ -73,10 +88,14 @@ export function createFakeDatabase(
   return {
     prisma: {
       ...tableAccessors(() => tables, options),
-      $transaction: async (run: (client: unknown) => Promise<unknown>) => {
+      $transaction: async (run: unknown) => {
+        if (Array.isArray(run)) return Promise.all(run);
+
         const snapshot = cloneTables(tables);
         try {
-          return await run(tableAccessors(() => tables, options));
+          return await (run as (client: unknown) => Promise<unknown>)(
+            tableAccessors(() => tables, options),
+          );
         } catch (error) {
           tables = snapshot;
           throw error;
@@ -133,15 +152,15 @@ function tableApi(
   };
 
   return {
-    findMany: async ({ where, orderBy, include }: Query = {}) => {
+    findMany: async ({ where, orderBy, include, select }: Query = {}) => {
       fail("findMany");
       return read(where)
         .sort(comparator(orderBy))
-        .map((row) => withRelations(name, row, include, tables()));
+        .map((row) => only(withRelations(name, row, include, tables()), select));
     },
-    findFirst: async ({ where, include }: Query = {}) => {
+    findFirst: async ({ where, include, select }: Query = {}) => {
       const row = read(where)[0];
-      return row ? withRelations(name, row, include, tables()) : null;
+      return row ? only(withRelations(name, row, include, tables()), select) : null;
     },
     findUnique: async ({ where, include, select }: Query = {}) => {
       const row = read(where)[0];
@@ -164,6 +183,26 @@ function tableApi(
       }
       return { count: rows.length };
     },
+    update: async ({ where, data = {}, select }: Query = {}) => {
+      fail("update");
+      const row = read(where)[0];
+      if (!row) throw missingRecord(name, "update", where);
+      for (const [field, value] of Object.entries(data)) {
+        if (value !== undefined) row[field] = value;
+      }
+      return only({ ...row }, select);
+    },
+    delete: async ({ where, select }: Query = {}) => {
+      fail("delete");
+      const row = read(where)[0];
+      if (!row) throw missingRecord(name, "delete", where);
+      tables()[name] = tables()[name].filter((candidate) => candidate !== row);
+      return only({ ...row }, select);
+    },
+    count: async ({ where }: Query = {}) => {
+      fail("count");
+      return read(where).length;
+    },
     create: async ({ data = {}, select }: Query = {}) => {
       fail("create");
       const row: Row = { id: `${name}-${tables()[name].length + 1}`, ...defaults[name]?.(), ...data };
@@ -178,6 +217,17 @@ function tableApi(
       return { count: rows.length };
     },
   };
+}
+
+/**
+ * The error Prisma raises when a row-level write matches nothing, kept as the
+ * real class so a service that maps `P2025` can be tested for that mapping.
+ */
+function missingRecord(table: TableName, operation: string, where: Where | undefined) {
+  return new Prisma.PrismaClientKnownRequestError(
+    `${table}.${operation} found no row for ${JSON.stringify(where)}`,
+    { code: "P2025", clientVersion: "fake" },
+  );
 }
 
 /** Prisma `where` semantics for the operators and relation filters the services use. */
@@ -203,8 +253,9 @@ function matches(name: TableName, row: Row, where: Where | undefined, tables: Re
           .some((candidate) => matches(relation.table, candidate, clause, tables));
       }
 
-      const operator = condition as { in?: unknown[]; not?: unknown };
+      const operator = condition as { in?: unknown[]; notIn?: unknown[]; not?: unknown };
       if (operator.in) return operator.in.includes(row[field]);
+      if (operator.notIn) return !operator.notIn.includes(row[field]);
       if ("not" in operator) return row[field] !== operator.not;
       throw new Error(
         `The fake database does not support the filter ${field}: ${JSON.stringify(condition)}. ` +
