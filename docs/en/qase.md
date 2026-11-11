@@ -9,9 +9,10 @@ The governing rule: Qase exists for reporting only. Neither suite needs the netw
 ## Case catalogue
 
 - Cases live in `apps/api/src/test-support/qase/cases/`, one module per product area, and `qase-manifest.ts` re-exports them as a single catalogue: key, suite path (mirroring the `describe` tree), title, severity, priority, layer, plus the content TestOps shows to a human — an English description of why the case exists, preconditions, classic steps (`action` and expected result), optional postconditions, and the Qase type and behavior.
+- Every entry names its Qase `type` explicitly, and the catalogue refuses `other`: `functional` for the shape the catalogue has to keep, `regression` where a case exists to catch the side effect of an edit, and `integration` for the sync against the TestOps project. `type` is a required field, so a new case that cannot answer the question fails to compile instead of reaching the project as one more `other`.
 - Tests call `qc("<key>", "<title>")` from `apps/api/src/test-support/qase-case.ts`, which fails collection when a key is missing or the title drifted, and stays a no-op until IDs exist, so offline runs and pull-request checks never depend on Qase.
 - A case is identified by its `order-desk:<key>` tag, so renaming or moving a catalogue entry patches the existing case and keeps its ID and result history. When an entry leaves the catalogue, its case is not deleted: the TestOps API has no case archive, so the sync moves it to `Archive / <original top level suite>` with its tags and results intact, and restoring the entry moves the same case back.
-- The catalogue is checked offline: `apps/api/src/test-support/qase-manifest.spec.ts` keeps unique keys, suite paths and layers, no stale generated IDs, a generated ID for every catalogue key, non-empty content, API cases with preconditions and at least three steps, and exactly one spec per key in both directions. `apps/api/src/test-support/qase/sync-plan.spec.ts` covers the sync rules the same way — tag identity, archiving, restore and duplicate tags — without touching the network.
+- The catalogue is checked offline: `apps/api/src/test-support/qase-manifest.spec.ts` keeps unique keys, suite paths and layers, an explicit type other than `other`, no stale generated IDs, a generated ID for every catalogue key, non-empty content, API cases with preconditions and at least three steps, and exactly one spec per key in both directions. `apps/api/src/test-support/qase/sync-plan.spec.ts` covers the sync rules the same way — tag identity, archiving, restore and duplicate tags — without touching the network.
 
 ## Synchronisation with the project
 
@@ -25,7 +26,7 @@ The governing rule: Qase exists for reporting only. Neither suite needs the netw
 
 - `pnpm --filter @order-desk/api test:qase` reports the unit suite and `pnpm --filter @order-desk/api test:qase:integration` reports the integration one. Both export `QASE_MODE=testops`, create a run, attach every result to its case, complete the run, and print the run link.
 - `pnpm qase:run` does the same for day-to-day work: it syncs the catalogue and runs the unit suite with reporting.
-- A parameterized test reports several results on one case (the `does not allow cancelling an invoiced order` case runs for two statuses), so a unit run of 93 tests reports 93 results onto 92 cases.
+- A parameterized test reports several results on one case (the `does not allow cancelling an invoiced order` case runs for two statuses), so a unit run of 94 tests reports 94 results onto 93 cases.
 - A run link looks like `https://app.qase.io/run/HECHO/dashboard/<id>`; extracting it from a log needs `grep -oE 'Test run link: https://[^ ]+' | tail -1 | awk '{print $NF}'`, because other addresses appear before it in the output.
 
 ## CI runs

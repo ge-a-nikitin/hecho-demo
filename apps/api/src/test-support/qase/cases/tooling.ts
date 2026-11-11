@@ -11,7 +11,7 @@ export const toolingCases = [
     severity: "minor",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "functional",
     behavior: "positive",
     description:
       "Manifest keys are the identity the suites and the sync script agree on: `qc()` looks a key up, and " +
@@ -31,7 +31,7 @@ export const toolingCases = [
     severity: "minor",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "functional",
     behavior: "positive",
     description:
       "The sync creates suites from the `suite` path, so an empty path would leave a case without a home in " +
@@ -52,7 +52,7 @@ export const toolingCases = [
     severity: "minor",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "regression",
     behavior: "positive",
     description:
       "`qase-case-ids.ts` is generated, so it can keep an ID for a case that no longer exists in the " +
@@ -72,7 +72,7 @@ export const toolingCases = [
     severity: "major",
     priority: "high",
     layer: "unit",
-    type: "other",
+    type: "regression",
     behavior: "positive",
     description:
       "A result only lands on a TestOps case when `qc()` can read the numeric ID that the sync generated: " +
@@ -93,7 +93,7 @@ export const toolingCases = [
     severity: "minor",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "functional",
     behavior: "positive",
     description:
       "A TestOps case is read by people who will never open the spec file, so the manifest carries the full " +
@@ -121,7 +121,7 @@ export const toolingCases = [
     severity: "minor",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "regression",
     behavior: "positive",
     description:
       "The manifest describes cases, the specs run them, and both directions have to agree: a manifest entry " +
@@ -138,13 +138,36 @@ export const toolingCases = [
     ],
   },
   {
+    key: "tooling.qase-manifest.case-type",
+    suite: manifestSuite,
+    title: "labels every case with a specific type instead of other",
+    severity: "minor",
+    priority: "low",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Qase `Type` answers what kind of testing a case performs, so a catalogue that leaves the field on " +
+      "`other` says nothing a reader can filter or report on. Each entry names its type deliberately: " +
+      "`functional` for the shape the catalogue has to keep, `regression` where the case exists to catch " +
+      "the side effect of an edit to the manifest or to a spec, and `integration` for the sync against the " +
+      "TestOps repository. A new case that cannot answer the question shows up here instead of reaching " +
+      "the project as another `other`.",
+    steps: [
+      {
+        action: "Walk every manifest entry and read its `type`.",
+        expected: "Each entry declares a type and none of them is `other`.",
+      },
+    ],
+  },
+  {
     key: "tooling.qase-sync.adoption",
     suite: syncSuite,
     title: "adopts an existing case by its order-desk tag so a rename keeps its ID",
     severity: "major",
     priority: "medium",
     layer: "unit",
-    type: "other",
+    type: "integration",
     behavior: "positive",
     description:
       "TestOps stores results against numeric case IDs, so replacing a case whenever its title or suite " +
@@ -169,7 +192,7 @@ export const toolingCases = [
     severity: "major",
     priority: "medium",
     layer: "unit",
-    type: "other",
+    type: "integration",
     behavior: "negative",
     description:
       "Removing a test usually removes the behaviour from the manifest too, but the case still documents " +
@@ -195,7 +218,7 @@ export const toolingCases = [
     severity: "major",
     priority: "low",
     layer: "unit",
-    type: "other",
+    type: "integration",
     behavior: "positive",
     description:
       "A retired behaviour often comes back, and with it comes the case that already documented it. " +
@@ -219,7 +242,7 @@ export const toolingCases = [
     severity: "critical",
     priority: "medium",
     layer: "unit",
-    type: "other",
+    type: "integration",
     behavior: "negative",
     description:
       "The tag is the identity, so two cases carrying the same tag make the identity ambiguous: patching " +
@@ -243,7 +266,7 @@ export const toolingCases = [
     severity: "major",
     priority: "high",
     layer: "unit",
-    type: "other",
+    type: "integration",
     behavior: "positive",
     description:
       "Once runs are reported from the pipeline, the catalogue and TestOps can drift apart unnoticed: a case " +

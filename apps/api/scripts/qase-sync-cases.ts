@@ -343,7 +343,7 @@ function toPayload(qaseCase: QaseCase, suiteId: number, specPaths: readonly stri
     severity: severityIds[qaseCase.severity],
     priority: priorityIds[qaseCase.priority],
     layer: layerIds[qaseCase.layer],
-    type: typeIds[qaseCase.type ?? "functional"],
+    type: typeIds[qaseCase.type],
     behavior: behaviorIds[qaseCase.behavior ?? "positive"],
     isManual: 0,
     description: describe(qaseCase, specPaths),

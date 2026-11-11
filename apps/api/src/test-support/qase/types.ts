@@ -46,6 +46,8 @@ export interface QaseCase {
   readonly severity: QaseSeverity;
   readonly priority: QasePriority;
   readonly layer: QaseLayer;
+  /** Always named explicitly; the catalogue refuses to leave a case on `other`. */
+  readonly type: QaseCaseType;
   /** Why the case exists and what a failure would break, in Markdown. */
   readonly description: string;
   /** State the environment must be in before step 1; required for api cases. */
@@ -53,6 +55,5 @@ export interface QaseCase {
   readonly steps: readonly QaseStep[];
   /** Cleanup or resting state after the last step, when the case changes data. */
   readonly postconditions?: string;
-  readonly type?: QaseCaseType;
   readonly behavior?: QaseBehavior;
 }
