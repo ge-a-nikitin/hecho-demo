@@ -243,7 +243,7 @@ For hot reload, install Node.js and pnpm, then run `pnpm install`. Create `.env`
 - `apps/api/src/test-support/qase-manifest.spec.ts` keeps the catalogue honest offline: unique keys, suite paths and layers, no stale generated IDs, non-empty content, API cases with preconditions and at least three steps, and exactly one spec per key in both directions. `apps/api/src/test-support/qase/sync-plan.spec.ts` covers the sync rules the same way — tag identity, archiving, restore and duplicate tags — without touching the network.
 - Sending results: `pnpm --filter @order-desk/api test:qase` for the unit suite and `pnpm --filter @order-desk/api test:qase:integration` for the ephemeral stack. Both export `QASE_MODE=testops`, create a run, attach every result to its case, complete the run, and print the run link.
 - Configuration is `apps/api/qase.config.json` (project `HECHO`, US cluster `qase.io`, `mode: off` so ordinary runs stay offline). The API token comes from `QASE_TESTOPS_API_TOKEN` in the git-ignored `.env`; `QASE_MODE`, `QASE_TESTOPS_PROJECT`, `QASE_TESTOPS_API_HOST` and `QASE_TESTOPS_RUN_TITLE` override the file when a run needs different settings.
-- A parameterized test reports several results on one case (`does not allow cancelling an order in %s`), so a unit run of 39 tests produces 38 linked results.
+- A parameterized test reports several results on one case (the `does not allow cancelling an invoiced order` case runs for two statuses), so a unit run of 43 tests covers 42 cases with results.
 - GitHub status sync for pull requests is not configured yet.
 
 ### Devtools and test data
