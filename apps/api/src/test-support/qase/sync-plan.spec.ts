@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { qc } from "../qase-case.js";
 import {
   archiveSuite,
+  hasDrift,
   type PlannedCase,
   planArchives,
   planMatches,
@@ -115,6 +116,29 @@ describe("Tooling", () => {
         expect(planMatches([planned()], duplicated).conflicts).toEqual([
           { key: "orders.example", ids: [21, 22] },
         ]);
+      },
+    );
+    it(
+      qc(
+        "tooling.qase-sync.drift",
+        "reports a dry run as drift when applying it would write anything",
+      ),
+      () => {
+        expect(hasDrift({ createdSuites: 0, createdCases: 0, updatedCases: 0, archivedCases: 0 })).toBe(
+          false,
+        );
+
+        for (const change of ["createdSuites", "createdCases", "updatedCases", "archivedCases"] as const) {
+          const changes = {
+            createdSuites: 0,
+            createdCases: 0,
+            updatedCases: 0,
+            archivedCases: 0,
+            [change]: 1,
+          };
+
+          expect(hasDrift(changes), change).toBe(true);
+        }
       },
     );
   });

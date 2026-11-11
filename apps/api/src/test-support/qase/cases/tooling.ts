@@ -66,6 +66,27 @@ export const toolingCases = [
     ],
   },
   {
+    key: "tooling.qase-manifest.linked-ids",
+    suite: manifestSuite,
+    title: "links every manifest key to a generated case ID",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "other",
+    behavior: "positive",
+    description:
+      "A result only lands on a TestOps case when `qc()` can read the numeric ID that the sync generated: " +
+      "without one the helper returns the bare title, the reporter creates nothing, and the result is " +
+      "dropped silently. The offline parity check turns that silence into a failing test as soon as a " +
+      "catalogue entry has no ID, so a case added in a pull request cannot reach `main` unlinked.",
+    steps: [
+      {
+        action: "Compare every manifest key with the generated ID map.",
+        expected: "Each key resolves to a numeric TestOps case ID.",
+      },
+    ],
+  },
+  {
     key: "tooling.qase-manifest.case-content",
     suite: manifestSuite,
     title: "documents every case with a description, steps and layer-specific detail",
@@ -212,6 +233,32 @@ export const toolingCases = [
       {
         action: "Run the sync with that plan.",
         expected: "The sync throws before creating, updating or archiving anything.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-sync.drift",
+    suite: syncSuite,
+    title: "reports a dry run as drift when applying it would write anything",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "other",
+    behavior: "positive",
+    description:
+      "Once runs are reported from the pipeline, the catalogue and TestOps can drift apart unnoticed: a case " +
+      "edited or added in a pull request lives only in the repository until somebody runs the sync. The " +
+      "post-merge check runs the sync in dry-run mode and fails when the plan is not empty, so drift is " +
+      "reported on the pipeline run that introduced it instead of surfacing as results dropped onto stale " +
+      "cases. The check reads the same plan the sync applies, so it cannot disagree with it.",
+    steps: [
+      {
+        action: "Summarize a dry run in which every catalogue entry already matches TestOps.",
+        expected: "No drift is reported and the check passes.",
+      },
+      {
+        action: "Summarize a dry run that would create a suite, create a case, update a case or archive one.",
+        expected: "Drift is reported for each of those changes, so the check fails and names what is pending.",
       },
     ],
   },

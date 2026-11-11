@@ -30,6 +30,7 @@ import { qaseCases, type QaseCase } from "../src/test-support/qase-manifest.ts";
 import { qcUsageIndex } from "../src/test-support/qase/spec-index.ts";
 import {
   caseTagPrefix,
+  hasDrift,
   planArchives,
   planMatches,
   type PlannedCase,
@@ -258,6 +259,24 @@ if (!dryRun) {
 }
 
 report();
+
+// A dry run is also the drift check the pipeline runs after a merge, so an
+// unfinished plan must fail it rather than print a warning nobody reads.
+if (
+  dryRun &&
+  hasDrift({
+    createdSuites: createdSuites.length,
+    createdCases: createdCases.length,
+    updatedCases: updatedCases.length,
+    archivedCases: archivedCases.length,
+  })
+) {
+  console.error(
+    "[dry-run] The catalogue and the TestOps project disagree: run `pnpm qase:sync` and commit " +
+      "the regenerated apps/api/src/test-support/qase-case-ids.ts.",
+  );
+  process.exitCode = 1;
+}
 
 function mustCase(key: string): QaseCase {
   const entry = casesByKey.get(key);

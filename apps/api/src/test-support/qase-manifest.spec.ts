@@ -37,6 +37,17 @@ describe("Tooling", () => {
     );
 
     it(
+      qc("tooling.qase-manifest.linked-ids", "links every manifest key to a generated case ID"),
+      () => {
+        for (const entry of qaseCases) {
+          expect(qaseCaseIds[entry.key], `${entry.key} has no generated case ID`).toEqual(
+            expect.any(Number),
+          );
+        }
+      },
+    );
+
+    it(
       qc(
         "tooling.qase-manifest.case-content",
         "documents every case with a description, steps and layer-specific detail",
