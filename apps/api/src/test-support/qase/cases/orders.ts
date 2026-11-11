@@ -197,4 +197,29 @@ export const ordersCases = [
       },
     ],
   },
+  {
+    key: "orders.validation.cancel-reason",
+    suite: validationSuite,
+    title: "keeps the cancellation reason optional but bounded",
+    severity: "normal",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Cancelling from the board must work in one click, so the reason cannot be required, but whatever " +
+      "the customer writes ends up in the status history and in the notification email. The limit keeps " +
+      "the stored reason renderable, and the string check rejects a number that the JSON body would " +
+      "otherwise slip through.",
+    steps: [
+      {
+        action: "Validate a body without `reason`, then a 2000-character reason and a 2001-character one.",
+        expected: "The empty body and the 2000-character reason pass; the longer one reports an error.",
+      },
+      {
+        action: "Validate `reason: 42`.",
+        expected: "The result reports an error for `reason`.",
+      },
+    ],
+  },
 ] as const satisfies readonly QaseCase[];

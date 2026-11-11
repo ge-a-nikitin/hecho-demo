@@ -6,6 +6,7 @@ import { invoicesCases } from "./cases/invoices.js";
 import { ordersFilesCases } from "./cases/orders-files.js";
 import { ordersCases } from "./cases/orders.js";
 import { ordersIntegrationCases } from "./cases/orders-integration.js";
+import { storageCases } from "./cases/storage.js";
 import { toolingCases } from "./cases/tooling.js";
 import { usersCases } from "./cases/users.js";
 import type { QaseCase } from "./types.js";
@@ -26,6 +27,7 @@ export const qaseCases = [
   ...invoicesCases,
   ...usersCases,
   ...devtoolsCases,
+  ...storageCases,
   ...ordersIntegrationCases,
   ...toolingCases,
 ] as const satisfies readonly QaseCase[];

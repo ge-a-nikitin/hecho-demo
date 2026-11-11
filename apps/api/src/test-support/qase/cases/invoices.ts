@@ -1,6 +1,7 @@
 import type { QaseCase } from "../types.js";
 
 const paymentSuite = ["Invoices", "Payment reports"] as const;
+const validationSuite = ["Invoices", "Request validation"] as const;
 
 export const invoicesCases = [
   {
@@ -81,6 +82,50 @@ export const invoicesCases = [
       {
         action: "Call `paymentReportFile` as a user with the `EXECUTOR` role.",
         expected: "The call rejects with `ForbiddenException` and object storage is never read.",
+      },
+    ],
+  },
+  {
+    key: "invoices.validation.void-reason",
+    suite: validationSuite,
+    title: "requires a non-blank reason to void an invoice",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Voiding is irreversible from the customer's point of view, and the reason is the only explanation " +
+      "left in the invoice history, so an empty one defeats the audit trail. The 2000-character limit " +
+      "keeps a single reason from filling the column, and the whitespace check stops a reason that renders " +
+      "as an empty line.",
+    preconditions: "An issued invoice that the administrator wants to void.",
+    steps: [
+      {
+        action: "Validate a 2000-character reason, a 2001-character reason and `\"  \\n \"`.",
+        expected:
+          "The 2000-character reason passes; the longer one and the whitespace-only one report an error " +
+          "for `reason`.",
+      },
+    ],
+  },
+  {
+    key: "invoices.validation.reject-reason",
+    suite: validationSuite,
+    title: "requires a non-blank reason to reject a payment report",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The rejection reason is shown to the customer so the receipt can be uploaded again; an empty one " +
+      "leaves the customer with a refused payment and no instruction. Rejection lives in its own DTO, so " +
+      "the same rule is asserted separately from voiding.",
+    steps: [
+      {
+        action: "Validate a readable reason and `\"\"` against `RejectPaymentReportDto`.",
+        expected: "The readable reason passes; the empty one reports an error for `reason`.",
       },
     ],
   },
