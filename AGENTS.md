@@ -33,6 +33,16 @@
 - Update directly related tests and documentation when behavior changes. Do not create planning or tracking files unless requested.
 - Do not perform destructive actions on user data or environments without explicit authorization.
 
+## Testing
+
+- Write and change tests with the `test-driven-development` skill: red, green, refactor. Add the failing test first, watch it fail, make it pass with the smallest change, then clean up while the suite stays green. If the skill is unavailable in the session, follow the same loop by hand.
+- For a bug fix, reproduce the defect with a test before touching the implementation, and keep that test afterwards as the regression guard.
+- Run the repository commands, not a generic one: the whole unit suite is `pnpm --filter @order-desk/api test`, a single file is `pnpm --filter @order-desk/api test src/orders/orders.dto.spec.ts` (no `--` separator, it eats the path), and a single case is `-t "<title>"` after the path.
+- Keep unit suites offline: no database, no network, no credentials, so pull-request checks and local runs never depend on infrastructure. A test that needs the running stack belongs in `apps/api/test/integration` and runs through `pnpm --filter @order-desk/api test:integration`.
+- Every test is a Qase TestOps case. Add or update its entry in the catalogue module under `apps/api/src/test-support/qase/cases/`, then call `it(qc("<key>", "<title>"), ...)`: `qc()` fails collection when the key is unknown or the title drifted, which keeps the catalogue and the suite together. Case content (`description`, `preconditions`, `steps`) is written in English, like the rest of the code, and explains why the case exists rather than restating the assertions.
+- After changing a case entry, run `pnpm qase:sync --dry-run`, review the plan, then `pnpm qase:sync`, so descriptions, steps, tags, and case IDs reach TestOps. `qase-case-ids.ts` is generated and written only by the sync; never edit it by hand.
+- When a test disappears, remove its catalogue entry and run `pnpm qase:sync` in the same change. Do not leave the catalogue ahead of or behind the suites: an offline parity test fails when a case ID survives its entry.
+
 ## Verification and completion
 
 - Verify the actual acceptance criteria and affected user workflows, not only a proxy such as compilation. Run the smallest relevant existing tests and checks, expanding coverage when the change or results warrant it.
