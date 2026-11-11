@@ -4,6 +4,8 @@ const guardSuite = ["DevTools", "Access guard"] as const;
 const seedSuite = ["DevTools", "Seed cleanup"] as const;
 const resetSuite = ["DevTools", "Reset"] as const;
 const validationSuite = ["DevTools", "Request validation"] as const;
+const usersSuite = ["DevTools", "Users"] as const;
+const seedImportSuite = ["DevTools", "Seed import"] as const;
 
 export const devtoolsCases = [
   {
@@ -128,21 +130,29 @@ export const devtoolsCases = [
       "The seed reset deletes the demo data without touching the schema, so every foreign key has to be " +
       "respected. Payment reports go before invoices, invoices before orders, and orders before categories, " +
       "sessions and users. Reports created while testing a seed order are picked up as well - they would " +
-      "otherwise block the invoice delete.",
-    preconditions: "A transaction stub that records the order of every `deleteMany` call.",
+      "otherwise block the invoice delete - while data that merely lives next to the seed has to survive.",
+    preconditions:
+      "A fake database seeded with the fixture users, categories and orders, an invoice and a payment " +
+      "report created during testing, and an unrelated order with its own invoice, report, category and " +
+      "session.",
     steps: [
       {
-        action: "Call `clearSeed` on a database containing a seeded order with issued and paid invoices.",
+        action: "Call `clearSeed` on that database.",
         expected:
-          "Deletes run in the order `invoice.findMany`, `invoicePaymentReport.deleteMany`, " +
-          "`invoice.deleteMany`, `workOrder.deleteMany`, `category.deleteMany`, `session.deleteMany`, " +
-          "`user.deleteMany`.",
+          "The three fixture users, both fixture orders, the fixture and testing invoices and their " +
+          "payment reports are gone, and no foreign-key failure interrupts the transaction.",
       },
       {
-        action: "Inspect the invoice IDs used by the two invoice deletes.",
+        action: "Inspect the rows the cleanup did not own.",
         expected:
-          "Both the seeded invoices and the invoice created during testing are deleted, together with all " +
-          "of their payment reports.",
+          "The unrelated order, its invoice, its payment report, its category and its session are still " +
+          "there.",
+      },
+      {
+        action: "Inspect the returned report.",
+        expected:
+          "`deletedUsers` counts the fixture users, `deletedOrders` counts the fixture order and the " +
+          "retired one, and `version` comes from the fixture.",
       },
     ],
   },
@@ -159,11 +169,18 @@ export const devtoolsCases = [
       "When a foreign key still points at a seed row the transaction fails with `P2003`, which means the " +
       "environment holds data the cleanup does not know about. Surfacing it as `409` tells the developer " +
       "to look at the leftover reference, while a raw Prisma error would read like a broken tool.",
-    preconditions: "A transaction stub whose `$transaction` throws a Prisma `P2003` error.",
+    preconditions:
+      "A fake database whose `workOrder.deleteMany` raises a Prisma `P2003` error, holding seed rows.",
     steps: [
       {
         action: "Call `clearSeed`.",
         expected: "The call rejects with `ConflictException`.",
+      },
+      {
+        action: "Inspect the tables after the failed transaction.",
+        expected:
+          "The seed user, order and category are still there, because the transaction rolled back and " +
+          "left the environment untouched.",
       },
     ],
   },
@@ -182,27 +199,28 @@ export const devtoolsCases = [
       "and `ADMIN_PASSWORD`, otherwise nobody could sign in afterwards. The password is hashed, and the " +
       "report returns per-table counts so the operator can see what was removed.",
     preconditions:
-      "`ADMIN_EMAIL=\" Admin@Example.Test \"`, `ADMIN_PASSWORD=\"reset-password-123\"` and a stubbed " +
-      "transaction that returns fixed delete counts.",
+      "`ADMIN_EMAIL=\" Admin@Example.Test \"`, `ADMIN_PASSWORD=\"reset-password-123\"`, a fake database " +
+      "holding rows in every table, and a storage stub that reports `{ deleted: 5, failed: 1 }`.",
     steps: [
       {
-        action: "Call `reset({ purgeFiles: true })`.",
+        action: "Call `reset({ purgeFiles: true })` on that database.",
         expected:
-          "Deletes run in the order `invoicePaymentReport`, `invoice`, `workOrder`, `category`, `session`, " +
-          "`verification`, `user`, `invoiceSequence`, then the administrator is created with its credential " +
-          "account.",
+          "Every business table - sessions, verifications, categories, orders, invoices, payment reports " +
+          "and invoice sequences - is empty afterwards, and no foreign-key failure interrupts the " +
+          "transaction.",
       },
       {
         action: "Inspect the recreated administrator.",
         expected:
-          "The email is normalized to `admin@example.test`, the role is `ADMIN`, the account is active, the " +
-          "credential `accountId` matches the user and the stored password is a hash, not the raw value.",
+          "The email is normalized to `admin@example.test`, the role is `ADMIN`, the account is active, " +
+          "the credential `accountId` matches the user and the stored password verifies against " +
+          "`reset-password-123`.",
       },
       {
         action: "Inspect the returned report.",
         expected:
-          "It contains the per-table delete counts, the new administrator ID and email, and the file purge " +
-          "result `{ deleted: 12, failed: 0 }` from a single purge call.",
+          "It contains the per-table delete counts of the seeded rows, the new administrator ID and " +
+          "email, and the file purge result `{ deleted: 5, failed: 1 }` from a single purge call.",
       },
     ],
     postconditions: "The database contains only the freshly created administrator account.",
@@ -253,6 +271,264 @@ export const devtoolsCases = [
     ],
   },
   {
+    key: "devtools.reset.purge-failure",
+    suite: resetSuite,
+    title: "reports a failed file purge without undoing the reset",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The database is the source of truth of a reset, so it is committed before object storage is " +
+      "touched. A bucket that cannot be reached therefore has to surface in the report as an error while " +
+      "the environment stays usable - throwing here would tell the operator the reset failed even though " +
+      "the data is already gone and the administrator already exists.",
+    preconditions:
+      "`ADMIN_EMAIL` and `ADMIN_PASSWORD` set, with a storage stub whose `deleteAll` rejects with " +
+      "`Bucket unreachable`.",
+    steps: [
+      {
+        action: "Call `reset({ purgeFiles: true })`.",
+        expected:
+          "The call resolves, `report.files` is `{ deleted: 0, failed: 0, error: \"Bucket unreachable\" }` " +
+          "and the administrator is still created.",
+      },
+    ],
+    postconditions: "The database contains only the freshly created administrator account.",
+  },
+  {
+    key: "devtools.users.create-normalizes",
+    suite: usersSuite,
+    title: "creates a test account with a normalized email and revokes its sign-up session",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Test accounts are created through the same sign-up Better Auth uses, so a developer does not end up " +
+      "with a password hash produced by a different code path. The email is trimmed and lowercased before " +
+      "the call - otherwise `New@Example.Test` and `new@example.test` would be two logins for one person - " +
+      "and the session the sign-up opens is withdrawn, because the tool must not sign itself in.",
+    preconditions:
+      "A fake database whose `signUpEmail` mock writes the user, its credential account and a session.",
+    steps: [
+      {
+        action: "Call `createUser(EXECUTOR, \" New.Executor@Example.Test \", \"executor-password\")`.",
+        expected: "The returned id belongs to a user stored with `new.executor@example.test`.",
+      },
+      {
+        action: "Inspect the stored user.",
+        expected:
+          "The email is normalized, the name is the local part of it and the role is `EXECUTOR`.",
+      },
+      {
+        action: "Inspect the sessions.",
+        expected: "No session is left, because the sign-up session was revoked.",
+      },
+    ],
+    postconditions: "The environment holds one executor account and no session.",
+  },
+  {
+    key: "devtools.users.create-duplicate",
+    suite: usersSuite,
+    title: "refuses a second account for an email that is already in use",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Emails are unique, and a duplicate would either fail deep inside Better Auth or, worse, create a " +
+      "second account that shares a login. The check runs against the normalized email before sign-up is " +
+      "attempted, so a rejected request writes nothing at all.",
+    preconditions: "An existing account for `taken@example.test`.",
+    steps: [
+      {
+        action: "Call `createUser(CUSTOMER, \" TAKEN@Example.Test \", \"customer-password\")`.",
+        expected: "The call rejects with `ConflictException` before sign-up is attempted.",
+      },
+      {
+        action: "Inspect the users.",
+        expected: "Only the pre-existing account is stored.",
+      },
+    ],
+  },
+  {
+    key: "devtools.users.create-compensates",
+    suite: usersSuite,
+    title: "removes the account again when the role cannot be applied",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Sign-up and the role assignment are two writes, so the second one can fail after the account exists. " +
+      "Leaving that half-created customer behind would hand out a login with the wrong role - worse than a " +
+      "refused request - so the service deletes the account it just created and lets the error through.",
+    preconditions:
+      "A fake database whose `user.update` fails, with a `signUpEmail` mock that writes the user, its " +
+      "credential account and a session.",
+    steps: [
+      {
+        action: "Call `createUser(EXECUTOR, \"new.executor@example.test\", \"executor-password\")`.",
+        expected: "The call rejects with the database error.",
+      },
+      {
+        action: "Inspect the users, accounts and sessions.",
+        expected: "All three tables are empty, so no half-created login survives.",
+      },
+    ],
+  },
+  {
+    key: "devtools.users.list",
+    suite: usersSuite,
+    title: "lists the accounts of one role in creation order",
+    severity: "minor",
+    priority: "low",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The list feeds the developer's account picker, so it filters on exactly one role and returns " +
+      "accounts oldest first. Only the identity and state fields are selected: the payload must not carry " +
+      "password hashes or other credential columns to a page that merely lists people.",
+    preconditions:
+      "A fake database with two executors, one retired executor and one customer, seeded in mixed order.",
+    steps: [
+      {
+        action: "Call `listUsers(EXECUTOR)`.",
+        expected:
+          "Only the three executors come back, ordered by creation date, including the inactive one.",
+      },
+      {
+        action: "Inspect the fields of a returned account.",
+        expected:
+          "Exactly `id`, `name`, `email`, `role`, `isActive` and `createdAt` are present.",
+      },
+    ],
+  },
+
+  {
+    key: "devtools.users.update-email",
+    suite: usersSuite,
+    title: "normalizes a new email, unverifies it and ends the sessions",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A changed email is a new, unproven address: it is normalized like every other email in the system, " +
+      "marked unverified, and the sessions opened under the old address are ended so a link sent to the " +
+      "previous owner cannot be used against the account. The credential account itself is untouched.",
+    preconditions:
+      "A fake database with two users, a credential account and a session for the updated one.",
+    steps: [
+      {
+        action: "Call `updateUser(\"user-1\", { email: \" Changed@Example.Test \" })`.",
+        expected:
+          "The stored email becomes `changed@example.test` and `emailVerified` turns false.",
+      },
+      {
+        action: "Inspect the sessions.",
+        expected: "The session of `user-1` is gone while the session of `user-2` survives.",
+      },
+      {
+        action: "Inspect the returned account.",
+        expected: "It reports the new email and the unchanged role.",
+      },
+    ],
+  },
+  {
+    key: "devtools.users.update-password",
+    suite: usersSuite,
+    title: "replaces the stored password hash and ends the sessions, keeping the email verified",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "The password change has to write a hash the sign-in path can verify, and it must not leave a session " +
+      "opened with the old password alive - otherwise resetting a leaked password would not lock the thief " +
+      "out. The email, and with it its verified state, is not part of this write.",
+    preconditions:
+      "A fake database with a verified user, its credential account holding the hash of `old-password`, " +
+      "and one session.",
+    steps: [
+      {
+        action: "Call `updateUser(\"user-1\", { password: \"new-password-123\" })`.",
+        expected:
+          "The stored hash verifies against `new-password-123` and no longer against `old-password`.",
+      },
+      {
+        action: "Inspect the user and the sessions.",
+        expected: "The email stays verified and the session is gone.",
+      },
+    ],
+  },
+  {
+    key: "devtools.users.update-without-credential",
+    suite: usersSuite,
+    title: "refuses a password change for an account without a credential provider",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "An account created through an external identity provider has no password row to replace. Creating " +
+      "one would silently turn a provider-only login into a password login, so the request is refused and " +
+      "the existing account and sessions stay as they are.",
+    preconditions: "A fake database with a user whose only account is a `google` provider row.",
+    steps: [
+      {
+        action: "Call `updateUser(\"user-1\", { password: \"new-password-123\" })`.",
+        expected: "The call rejects with `BadRequestException`.",
+      },
+      {
+        action: "Inspect the account and the sessions.",
+        expected: "The provider row has no password and the session is still there.",
+      },
+    ],
+  },
+  {
+    key: "devtools.users.update-rejects",
+    suite: usersSuite,
+    title: "refuses an empty patch, an unknown user and an email that is already taken",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Three requests have to fail without side effects: a patch that names no field would issue an empty " +
+      "update, an unknown id must not read as success, and an email that belongs to somebody else cannot be " +
+      "claimed - the unique constraint inside the transaction has to become a conflict, leaving the account " +
+      "as it was.",
+    preconditions:
+      "A fake database with two users and a unique email constraint enforced by the fake.",
+    steps: [
+      {
+        action: "Call `updateUser(\"user-1\", {})`.",
+        expected: "The call rejects with `BadRequestException`.",
+      },
+      {
+        action: "Call `updateUser(\"user-missing\", { isActive: false })`.",
+        expected: "The call rejects with `NotFoundException`.",
+      },
+      {
+        action: "Call `updateUser(\"user-1\", { email: \"SECOND@example.test\" })`.",
+        expected:
+          "The call rejects with `ConflictException` and both users keep their original emails.",
+      },
+    ],
+  },
+
+  {
     key: "devtools.validation.reset-confirmation",
     suite: validationSuite,
     title: "accepts a reset only with the confirmation phrase",
@@ -298,6 +574,130 @@ export const devtoolsCases = [
       {
         action: "Validate `role: \"customer\"`, a seven-character password and `email: \"not-an-email\"`.",
         expected: "Each payload reports an error for `role`, `password` and `email` respectively.",
+      },
+    ],
+  },
+  {
+    key: "devtools.seed.imports-fixture",
+    suite: seedImportSuite,
+    title: "imports the fixture with credential accounts, status history and invoices",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The seed is what a developer demos and a reviewer clicks through, so it has to be a usable " +
+      "environment rather than rows in tables: every fixture user can sign in with the seed password, " +
+      "every order carries the status history it claims, assigned orders carry the assignment behind their " +
+      "status, and the invoiced order carries its invoice. The fixture file is read as it is, which keeps " +
+      "the case honest when the fixture changes.",
+    preconditions:
+      "`DEVTOOLS_SEED_PASSWORD=\"seed-password-123\"` and an empty fake database.",
+    steps: [
+      {
+        action: "Call `seed()`.",
+        expected:
+          "The report names the fixture version, every fixture user with its email, and the number of " +
+          "imported orders.",
+      },
+      {
+        action: "Inspect the users and their accounts.",
+        expected:
+          "Each user is stored verified with its fixture email and role, the executor with its hourly " +
+          "rate, and each has a credential account whose hash verifies against the seed password.",
+      },
+      {
+        action: "Inspect the categories and orders.",
+        expected:
+          "Both categories were created by the fixture administrator, every order carries its fixture " +
+          "status with a single history row starting from nothing, and the four assigned orders carry an " +
+          "active assignment created by the administrator.",
+      },
+      {
+        action: "Inspect the comments and the invoice.",
+        expected:
+          "All fixture comments are present, and the invoice keeps its number, `ISSUED` status, decimal " +
+          "hours and amount, and no payment date.",
+      },
+    ],
+    postconditions: "The environment matches the fixture and can be signed into with the seed password.",
+  },
+  {
+    key: "devtools.seed.rejects-email-conflict",
+    suite: seedImportSuite,
+    title: "refuses to import when a fixture email belongs to another account",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "A seed run replaces its own rows, but it must never overwrite an account somebody created by hand: " +
+      "the same email under a different id means the fixture would collide with real data. The conflict is " +
+      "reported before the transaction opens and names the offending address, so nothing is written.",
+    preconditions:
+      "A fake database holding an account with id `someone-else` that uses `devtools.customer@example.test`.",
+    steps: [
+      {
+        action: "Call `seed()`.",
+        expected: "The call rejects with `ConflictException` naming that email address.",
+      },
+      {
+        action: "Inspect the users, orders and categories.",
+        expected: "Only the pre-existing account is stored; no fixture row was created.",
+      },
+    ],
+  },
+  {
+    key: "devtools.seed.requires-password",
+    suite: seedImportSuite,
+    title: "refuses to seed without a seed password of at least eight characters",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The seed password is the only credential a reviewer needs, so a missing or too short value would " +
+      "produce accounts nobody can sign into - or accounts protected by a password that does not meet the " +
+      "rule the sign-up path enforces. The check runs before anything is written.",
+    preconditions: "`DEVTOOLS_SEED_PASSWORD` unset, then set to `short`.",
+    steps: [
+      {
+        action: "Call `seed()` with the variable unset.",
+        expected: "The call rejects with `BadRequestException`.",
+      },
+      {
+        action: "Call `seed()` with `DEVTOOLS_SEED_PASSWORD=\"short\"`.",
+        expected: "The call rejects with `BadRequestException` and no user is created.",
+      },
+    ],
+  },
+  {
+    key: "devtools.seed.replaces-previous",
+    suite: seedImportSuite,
+    title: "re-seeds over its own rows instead of failing on them",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A developer runs the seed again after changing the fixture or after breaking the demo data, so a " +
+      "second run has to converge instead of failing on the unique ids it created itself. It removes its " +
+      "own records first, which is why two runs leave exactly one copy of every fixture row.",
+    preconditions: "An empty fake database and `DEVTOOLS_SEED_PASSWORD=\"seed-password-123\"`.",
+    steps: [
+      {
+        action: "Call `seed()` twice.",
+        expected: "Both calls succeed and report the same number of orders.",
+      },
+      {
+        action: "Inspect the tables.",
+        expected:
+          "Users, accounts, orders, status history rows and invoices each appear exactly as often as in " +
+          "the fixture, with no duplicates.",
       },
     ],
   },
