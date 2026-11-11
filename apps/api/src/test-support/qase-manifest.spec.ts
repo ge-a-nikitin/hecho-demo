@@ -97,5 +97,13 @@ describe("Tooling", () => {
         }
       },
     );
+    it(
+      qc("tooling.qase-manifest.case-type", "labels every case with a specific type instead of other"),
+      () => {
+        for (const entry of qaseCases) {
+          expect(entry.type, `${entry.key} type`).not.toBe("other");
+        }
+      },
+    );
   });
 });
