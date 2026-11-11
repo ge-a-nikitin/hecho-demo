@@ -1,6 +1,7 @@
 import type { QaseCase } from "../types.js";
 
 const catalogueSuite = ["Categories", "Catalogue"] as const;
+const validationSuite = ["Categories", "Request validation"] as const;
 
 export const categoriesCases = [
   {
@@ -98,6 +99,49 @@ export const categoriesCases = [
       {
         action: "Call `setActive(\"category-1\", false)` and then `setActive(\"category-1\", true)`.",
         expected: "Each update writes only `isActive` for `category-1`.",
+      },
+    ],
+  },
+  {
+    key: "categories.validation.create",
+    suite: validationSuite,
+    title: "rejects a category name that is blank or over the length limit",
+    severity: "normal",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "A category name is the only label a customer sees in the order form, so a blank one produces an " +
+      "unnamed option that cannot be picked deliberately. The 100-character limit keeps the dropdown row " +
+      "readable, and `@Matches(/\\S/)` is what turns a whitespace-only name into a refused request instead " +
+      "of a stored blank.",
+    steps: [
+      {
+        action: "Validate names of 100 and 101 characters, then `\"   \"` and `\"\"`, against `CreateCategoryDto`.",
+        expected:
+          "Only the 100-character name is accepted; the longer, blank and empty names each report an error " +
+          "for `name`.",
+      },
+    ],
+  },
+  {
+    key: "categories.validation.rename",
+    suite: validationSuite,
+    title: "applies the same rules when a category is renamed",
+    severity: "normal",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Rename talks to `UpdateCategoryDto`, a separate class from create, so the limits have to be " +
+      "restated there. Without this case a rename could accept a 101-character name that creating the same " +
+      "category refuses.",
+    steps: [
+      {
+        action: "Validate a 101-character name against `UpdateCategoryDto`.",
+        expected: "The result reports an error for `name`.",
       },
     ],
   },

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
+import { IsOptional, IsString, MaxLength } from "class-validator";
 
 export class CancelOrderDto {
   /**
@@ -12,15 +12,3 @@ export class CancelOrderDto {
   reason?: string;
 }
 
-export class VoidInvoiceDto {
-  /**
-   * Reason stored in the invoice history; the voided invoice can be reissued.
-   *
-   * @example "Amount was miscalculated"
-   */
-  @IsString()
-  @MinLength(1)
-  @MaxLength(2000)
-  @Matches(/\S/)
-  reason!: string;
-}

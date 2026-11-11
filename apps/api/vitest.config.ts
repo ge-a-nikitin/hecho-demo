@@ -18,13 +18,20 @@ export default defineConfig({
     environment: "node",
     // The suite stays offline, but a few modules build a Prisma client and a
     // Better Auth instance while they are imported, and both refuse to construct
-    // without their settings. Placeholders keep the run self-contained — no local
-    // .env is required — and no real credential from the environment can leak
-    // into a unit run.
+    // without their settings. The object storage reads its SeaweedFS endpoint and
+    // credentials when the service is instantiated, and the S3 SDK is replaced by
+    // a fake, so the placeholders only satisfy the constructor. They keep the run
+    // self-contained — no local .env is required — and no real credential from
+    // the environment can leak into a unit run.
     env: {
       DATABASE_URL: "postgresql://unit-test:unit-test@127.0.0.1:5432/unit-test",
       BETTER_AUTH_URL: "http://127.0.0.1:6201/api/auth",
       BETTER_AUTH_SECRET: "unit-test-secret-at-least-32-characters",
+      S3_ENDPOINT: "http://127.0.0.1:6203",
+      S3_REGION: "us-east-1",
+      S3_ACCESS_KEY: "unit-test-access-key",
+      S3_SECRET_KEY: "unit-test-secret-key",
+      S3_BUCKET: "unit-test-bucket",
     },
     // The Qase reporter is only wired up when a run explicitly targets Qase,
     // so local runs and pull-request checks stay offline.

@@ -2,6 +2,7 @@ import type { QaseCase } from "../types.js";
 
 const profileSuite = ["Users", "Profile"] as const;
 const rateSuite = ["Users", "Executor rates"] as const;
+const validationSuite = ["Users", "Request validation"] as const;
 
 export const usersCases = [
   {
@@ -118,6 +119,80 @@ export const usersCases = [
         action: "Call `listAvailableExecutors`.",
         expected:
           "The query filters by `{ role: EXECUTOR, isActive: true }` and selects only `id` and `name`.",
+      },
+    ],
+  },
+  {
+    key: "users.validation.executor-name",
+    suite: validationSuite,
+    title: "rejects an executor name that is blank or longer than 120 characters",
+    severity: "normal",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The executor name is what customers see on their order and on the invoice, so an unnamed executor " +
+      "or one with a 20-word name breaks both layouts. Create and update are separate DTOs, and the update " +
+      "must stay optional because the panel sends only the fields that changed.",
+    steps: [
+      {
+        action: "Validate a 120- and a 121-character name on create, then a whitespace name on update.",
+        expected:
+          "The 120-character name and the empty update pass; the 121-character and whitespace names report " +
+          "an error for `name`.",
+      },
+    ],
+  },
+  {
+    key: "users.validation.hourly-rate",
+    suite: validationSuite,
+    title: "keeps the hourly rate positive with at most four decimals",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The rate multiplies invoice line totals, so a zero, a negative or a five-decimal value produces " +
+      "amounts that cannot be rendered with two decimals. The pipe transforms the JSON value before " +
+      "validation, which is why a numeric string has to reach the service as a number and a non-numeric " +
+      "one has to fail instead of becoming `NaN` inside the amount.",
+    preconditions: "The request body is transformed the way the global `ValidationPipe` does it.",
+    steps: [
+      {
+        action:
+          "Validate `0.0001`, `1000000`, `0`, `0.00001`, `45.12345`, `1000001`, `\"45.5\"` and " +
+          "`\"not-a-rate\"`.",
+        expected:
+          "Both boundary values and the numeric string pass; zero, the amount below the minimum, the five " +
+          "decimals inside the range, the amount above the limit and the non-numeric string report an " +
+          "error for `hourlyRate`.",
+      },
+    ],
+  },
+  {
+    key: "users.validation.profile",
+    suite: validationSuite,
+    title: "requires the current password and a real change in the profile update",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Changing the login email or the display name is confirmed with the current password, so a stolen " +
+      "session alone cannot take over the account. The password field is required even when the payload " +
+      "carries nothing else, and a whitespace name is refused because it would render as an empty header.",
+    steps: [
+      {
+        action: "Validate a name-and-email payload with the current password, then a payload without it.",
+        expected:
+          "The complete payload passes; the payload without `currentPassword` reports an error for it.",
+      },
+      {
+        action: "Validate a whitespace-only `name` with a valid `currentPassword`.",
+        expected: "The result reports an error for `name`.",
       },
     ],
   },

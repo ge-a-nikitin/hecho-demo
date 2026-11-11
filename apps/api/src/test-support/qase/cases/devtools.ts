@@ -3,6 +3,7 @@ import type { QaseCase } from "../types.js";
 const guardSuite = ["DevTools", "Access guard"] as const;
 const seedSuite = ["DevTools", "Seed cleanup"] as const;
 const resetSuite = ["DevTools", "Reset"] as const;
+const validationSuite = ["DevTools", "Request validation"] as const;
 
 export const devtoolsCases = [
   {
@@ -248,6 +249,55 @@ export const devtoolsCases = [
       {
         action: "Call `reset({ purgeFiles: true })`.",
         expected: "The call rejects with `BadRequestException` and no transaction is opened.",
+      },
+    ],
+  },
+  {
+    key: "devtools.validation.reset-confirmation",
+    suite: validationSuite,
+    title: "accepts a reset only with the confirmation phrase",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "One request empties the whole environment, so the body has to prove the intent: `confirm` must be " +
+      "exactly `reset-all-data`, which a Swagger click or a reused curl history cannot supply by accident. " +
+      "`purgeFiles` stays optional because keeping the files is the safer default when it is omitted.",
+    preconditions: "DevTools are enabled and the caller holds the API key.",
+    steps: [
+      {
+        action: "Validate `confirm: \"reset-all-data\"`, then `confirm: \"reset\"`.",
+        expected: "The exact phrase passes; any other value reports an error for `confirm`.",
+      },
+      {
+        action: "Validate `purgeFiles: \"yes\"`, then `purgeFiles: false` and an omitted `purgeFiles`.",
+        expected: "The string reports an error for `purgeFiles`; the boolean and the omitted field pass.",
+      },
+    ],
+  },
+  {
+    key: "devtools.validation.create-user",
+    suite: validationSuite,
+    title: "validates the role, email and password of a test account",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Development accounts are created straight into the database with a chosen role, so the role has to " +
+      "match the enum exactly - `customer` in lowercase would silently become an account without access. " +
+      "The password boundary matters because the same rule protects every sign-in path.",
+    steps: [
+      {
+        action: "Validate a customer account with an email and an eight-character password.",
+        expected: "The payload passes.",
+      },
+      {
+        action: "Validate `role: \"customer\"`, a seven-character password and `email: \"not-an-email\"`.",
+        expected: "Each payload reports an error for `role`, `password` and `email` respectively.",
       },
     ],
   },
