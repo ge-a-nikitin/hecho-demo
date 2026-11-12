@@ -10,7 +10,7 @@ export type QaseSeverity = "blocker" | "critical" | "major" | "normal" | "minor"
 export type QasePriority = "high" | "medium" | "low";
 export type QaseLayer = "e2e" | "api" | "unit";
 
-/** Qase "Type" field; the sync maps these onto 1-11 in the order Qase lists them. */
+/** Qase "Type" field; `enums.ts` maps these onto the integer codes TestOps stores. */
 export type QaseCaseType =
   | "functional"
   | "smoke"
