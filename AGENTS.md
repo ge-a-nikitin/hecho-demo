@@ -77,7 +77,7 @@
 - Before opening the pull request, run the relevant local checks for fast feedback: `pnpm typecheck`, `pnpm --filter @order-desk/api test`, and `pnpm build` when the change affects the bundles. `.github/workflows/checks.yml` repeats them on the pull request and gates the merge, so a failing or outdated run blocks it even after local success.
 - Merge with a squash or a rebase so that `main` stays linear, and make the pull request title a valid commit subject, because a squash merge reuses it as the commit message.
 - Describe in the pull request what was verified, naming the commands run and the workflows or routes exercised.
-- Merging deploys. After the merge, confirm that the `Deploy` run for the merge commit succeeded and that production still answers (`https://hecho-demo.hius2.fyi/api/health`) instead of assuming it worked.
+- Merging deploys. After the merge, confirm that the `Deploy` run for the merge commit succeeded and that production still answers (`https://hecho-demo.gnikitin.dev/api/health`) instead of assuming it worked.
 - Do not deploy by hand on the production host; let the workflow do it. `workflow_dispatch` exists only for re-running a deployment without a new commit, for example after changing the `PROD_ENV_SECRETS` secret.
 
 ### Runner safety
