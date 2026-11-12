@@ -27,6 +27,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { qaseCases, type QaseCase } from "../src/test-support/qase-manifest.ts";
+import { behaviorIds, layerIds, priorityIds, severityIds, typeIds } from "../src/test-support/qase/enums.ts";
 import { qcUsageIndex } from "../src/test-support/qase/spec-index.ts";
 import {
   caseTagPrefix,
@@ -67,29 +68,6 @@ if (!project) {
 }
 
 const baseUrl = resolveBaseUrl(host);
-
-/*
- * Field codes of the TestOps API. The API documents the accepted ranges but not
- * their meaning, so the order below follows the TestOps UI: the ids were
- * verified against a live project (`type` 1-11, `behavior` 1-3, `status` 0-2).
- */
-const severityIds = { blocker: 1, critical: 2, major: 3, normal: 4, minor: 5, trivial: 6 } as const;
-const priorityIds = { high: 1, medium: 2, low: 3 } as const;
-const layerIds = { e2e: 1, api: 2, unit: 3 } as const;
-const typeIds = {
-  functional: 1,
-  smoke: 2,
-  regression: 3,
-  security: 4,
-  performance: 5,
-  acceptance: 6,
-  usability: 7,
-  compatibility: 8,
-  integration: 9,
-  exploratory: 10,
-  other: 11,
-} as const;
-const behaviorIds = { positive: 1, negative: 2, destructive: 3 } as const;
 
 interface QaseSuiteResponse {
   id: number;

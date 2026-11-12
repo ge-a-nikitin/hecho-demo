@@ -1,5 +1,6 @@
 import type { QaseCase } from "../types.js";
 
+const enumsSuite = ["Tooling", "Qase enums"] as const;
 const manifestSuite = ["Tooling", "Qase manifest"] as const;
 const syncSuite = ["Tooling", "Qase sync"] as const;
 
@@ -157,6 +158,34 @@ export const toolingCases = [
       {
         action: "Walk every manifest entry and read its `type`.",
         expected: "Each entry declares a type and none of them is `other`.",
+      },
+    ],
+  },
+  {
+    key: "tooling.qase-enums.field-ids",
+    suite: enumsSuite,
+    title: "sends the field codes TestOps actually stores instead of the order of its dropdown",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "regression",
+    behavior: "positive",
+    description:
+      "The TestOps API accepts integer field codes but never lists them, and the codes do not follow the order " +
+      "of the dropdown: `Functional` is stored as 8 while a select renders it second, so a table derived from " +
+      "the dropdown order files every functional case under `Other` without failing anything. The sync writes " +
+      "the whole case, so this table is the only place a catalogue name becomes something TestOps filters on; " +
+      "pinning it here turns a silent mis-filing into a failing build.",
+    steps: [
+      {
+        action: "Read the codes `qase/enums.ts` assigns to the Qase types.",
+        expected:
+          "They equal the codes a live case card reports, in particular `functional` 8 and `integration` 10 " +
+          "rather than their positions in the dropdown.",
+      },
+      {
+        action: "Check every field table used by the sync - type, severity, priority, layer and behavior.",
+        expected: "Each table uses the codes 1 to its option count exactly once, with no gap and no repeat.",
       },
     ],
   },

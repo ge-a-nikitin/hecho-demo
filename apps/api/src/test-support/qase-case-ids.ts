@@ -126,6 +126,7 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "tooling.qase-manifest.case-content": 60,
   "tooling.qase-manifest.spec-coverage": 61,
   "tooling.qase-manifest.case-type": 117,
+  "tooling.qase-enums.field-ids": 134,
   "tooling.qase-sync.adoption": 63,
   "tooling.qase-sync.archive": 64,
   "tooling.qase-sync.restore": 65,
