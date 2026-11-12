@@ -277,8 +277,8 @@ Configuration is split in two so that secrets never reach git:
 
 | Where | What | Why |
 |---|---|---|
-| `deploy/prod.env` (tracked) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `ADMIN_EMAIL`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Not secrets: changes show up in diffs and get reviewed |
-| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (multi-line) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Encrypted, available only to workflows of that environment, masked as `***` in logs |
+| `deploy/prod.env` (tracked) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Not secrets: changes show up in diffs and get reviewed |
+| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (multi-line) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Encrypted, available only to workflows of that environment, masked as `***` in logs; the administrator login lives here so the only privileged account is not published with the repository |
 | `/etc/cloudflared/` on the VM | the tunnel token | Not part of the application and never stored in the repository |
 | `.env` on the VM (created by the deploy, mode `600`) | `deploy/prod.env` concatenated with `PROD_ENV_SECRETS` | The only format `docker compose` reads |
 
@@ -324,7 +324,7 @@ Manual update on the VM: `git pull && docker compose up -d --build`.
 
 ### First start
 
-1. Fill in `deploy/prod.env` (`ADMIN_EMAIL` must be the real administrator address) and add the `PROD_ENV_SECRETS` secret to the `production` environment; generate secrets with `openssl rand -base64 32` and keep the PostgreSQL password URL-safe.
+1. Fill in `deploy/prod.env` and add the `PROD_ENV_SECRETS` secret to the `production` environment, including `ADMIN_EMAIL` — the real administrator address; generate secrets with `openssl rand -base64 32` and keep the PostgreSQL password URL-safe.
 2. Run the workflow and wait for a green result.
 3. Create the administrator once, manually:
 
@@ -342,6 +342,7 @@ The general flow: change the value in GitHub → run the deploy again. The workf
 | Secret | What to keep in mind |
 |---|---|
 | `BETTER_AUTH_SECRET` | Every session is invalidated, so users must sign in again. |
+| `ADMIN_EMAIL` | Used only by `db:seed:admin` and the full reset: the email of an existing administrator does not change and applies on the next seed or reset. |
 | `ADMIN_PASSWORD` | Affects only `db:seed:admin` and the full reset; the password of an existing administrator does not change. |
 | `POSTGRES_PASSWORD` | The password of an already initialised database does not change by itself: run `docker compose exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "ALTER USER <POSTGRES_USER> WITH PASSWORD '<new password>'"`, then update the secret and deploy. |
 | `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Volume data survives; after the deploy check a file upload and sign-in to the SeaweedFS admin UI. |

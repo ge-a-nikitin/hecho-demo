@@ -275,8 +275,8 @@
 
 | Где | Что лежит | Зачем |
 |---|---|---|
-| `deploy/prod.env` (в git) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `ADMIN_EMAIL`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Не секреты: изменения видны в диффах и проходят ревью |
-| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (многострочный) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Шифруется, доступно только workflow этого environment, маскируется в логах как `***` |
+| `deploy/prod.env` (в git) | `DOMAIN`, `WEB_PORT`, `TRUST_PROXY`, `DEVTOOLS_ENABLED`, `COMPOSE_FILE`, `POSTGRES_USER`, `POSTGRES_DB`, `S3_ACCESS_KEY`, `S3_BUCKET`, `SEAWEEDFS_ADMIN_USER` | Не секреты: изменения видны в диффах и проходят ревью |
+| GitHub → Environments → `production` → secret `PROD_ENV_SECRETS` (многострочный) | `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Шифруется, доступно только workflow этого environment, маскируется в логах как `***`; логин администратора хранится здесь, чтобы единственная привилегированная учётная запись не публиковалась вместе с репозиторием |
 | `/etc/cloudflared/` на ВМ | токен туннеля | Не относится к приложению и не хранится в репозитории |
 | `.env` на ВМ (создаётся деплоем, права `600`) | склейка `deploy/prod.env` и `PROD_ENV_SECRETS` | Единственный формат, который читает `docker compose` |
 
@@ -322,7 +322,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
 
 ### Первый запуск
 
-1. Заполните `deploy/prod.env` (`ADMIN_EMAIL` — реальный адрес администратора) и добавьте секрет `PROD_ENV_SECRETS` в environment `production`; секреты удобно генерировать через `openssl rand -base64 32`, пароль PostgreSQL должен быть URL-safe.
+1. Заполните `deploy/prod.env` и добавьте секрет `PROD_ENV_SECRETS` в environment `production`, указав в нём `ADMIN_EMAIL` — реальный адрес администратора; секреты удобно генерировать через `openssl rand -base64 32`, пароль PostgreSQL должен быть URL-safe.
 2. Запустите workflow и дождитесь зелёного статуса.
 3. Один раз создайте администратора вручную:
 
@@ -340,6 +340,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
 | Секрет | Что учесть |
 |---|---|
 | `BETTER_AUTH_SECRET` | Все сессии инвалидируются — пользователям нужно войти заново. |
+| `ADMIN_EMAIL` | Участвует только в `db:seed:admin` и полном сбросе: email существующего администратора сам не меняется и применится при следующем seed или сбросе. |
 | `ADMIN_PASSWORD` | Влияет только на `db:seed:admin` и полный сброс; пароль существующего администратора не меняется. |
 | `POSTGRES_PASSWORD` | Пароль уже инициализированной базы сам не изменится: выполните `docker compose exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "ALTER USER <POSTGRES_USER> WITH PASSWORD '<новый пароль>'"`, после чего обновите секрет и задеплойте. |
 | `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Данные в volumes сохраняются; после деплоя проверьте загрузку файла и вход в админку SeaweedFS. |
