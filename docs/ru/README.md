@@ -162,11 +162,13 @@
 
 Интеграция Better Auth с NestJS и Prisma проверена регистрацией, входом и получением сессии; регистрация создаёт пользователя с ролью `CUSTOMER`.
 
+Лимитер запросов Better Auth включён явно и не зависит от `NODE_ENV`: по умолчанию 60 запросов за 60 секунд на клиента для всего `/api/auth/*` и 5 за 60 секунд для входа и регистрации, а `/change-password` и `/change-email` сохраняют встроенное правило 3 попытки за 10 секунд. Лимиты и окно задаются переменными `AUTH_RATE_LIMIT_ENABLED`, `AUTH_RATE_LIMIT_WINDOW`, `AUTH_RATE_LIMIT_MAX`, `AUTH_SIGN_IN_RATE_LIMIT_WINDOW` и `AUTH_SIGN_IN_RATE_LIMIT_MAX`; значение, которое не удаётся прочитать, останавливает запуск API с именем переменной в сообщении об ошибке. Превышение лимита возвращает `429` с заголовком `X-Retry-After`.
+
 ## Открытые вопросы
 
 - Уточнить формат имени отображения администратора, создаваемого из `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Описать схемы ответов в Swagger: сейчас документируются параметры, тела запросов и допустимые значения перечислений, а тела ответов возвращаются без типизированных схем. Для полного контракта понадобятся response DTO или отдельные сериализаторы ответов.
-- Настроить CSP и rate limiting для `/api/auth/*` средствами Cloudflare (Transform Rules и WAF Rate limiting). Строгая CSP требует отдельной настройки Swagger UI, поэтому решение отложено до публикации. Закрытие Swagger через Cloudflare Access тоже пока не настроено.
+- Настроить CSP и WAF Rate limiting для `/api/auth/*` средствами Cloudflare (Transform Rules и WAF Rate limiting) как внешний слой: собственный лимитер приложения включён и настраивается переменными `AUTH_RATE_LIMIT_*` и `AUTH_SIGN_IN_RATE_LIMIT_*`, но защиту от распределённого перебора держит edge. Строгая CSP требует отдельной настройки Swagger UI, поэтому решение отложено до публикации. Закрытие Swagger через Cloudflare Access тоже пока не настроено.
 
 ## Бэклог
 
@@ -352,6 +354,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
 - Бэкап базы: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Файлы лежат в volume `seaweedfs_data`; его копируют, остановив `seaweedfs`, или через `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
 - Смена домена: измените `DOMAIN` в `deploy/prod.env`, добавьте новый Public Hostname в туннель, удалите прежний Public Hostname в Cloudflare Zero Trust и задеплойте. `FRONTEND_ORIGIN` и `BETTER_AUTH_URL` вычисляются из `DOMAIN`, а frontend собирается с относительным `VITE_API_URL=/api`, поэтому пересобирать код под домен не нужно. Пользователям придётся войти заново: старые cookie привязаны к прежнему домену.
 - `TRUST_PROXY=true` (не число): перед API три перехода — Cloudflare, cloudflared и nginx, а origin недоступен напрямую. Без этого протокол определяется как `http` (cookie без `Secure`) и IP клиента оказывается неверным. Адрес клиента nginx берёт из `CF-Connecting-IP` только у доверенных пиров (loopback и приватные сети, в которых живёт compose), а в API передаёт ровно одно значение `X-Forwarded-For`: Better Auth считает многозначный заголовок отсутствием адреса и пишет в сессию `null`, а без доверия к пиру — адрес docker-шлюза для всех клиентов. Это поведение закреплено тестом `apps/api/src/common/reverse-proxy.spec.ts`.
+- `NODE_ENV=production` выставляется только в `docker-compose.prod.yml`: от него зависит production-поведение Better Auth (secure-cookie, отказ от подстановки `127.0.0.1` вместо адреса клиента). Локальный compose и тестовый стек значение не задают, поэтому образ остаётся одинаковым для всех окружений.
 - После `docker compose restart api` nginx может отвечать `502`: контейнер получил новый адрес. Помогает `docker compose restart web`; штатный `up -d --build` пересоздаёт сеть целиком и этой проблемы не даёт.
 - Devtools в проде выключены (`DEVTOOLS_ENABLED=false`): группа ручек отвечает `404` и скрыта из Swagger, включая полный сброс данных.
 - Публикуется только `127.0.0.1:8080` для туннеля; порты `api`, `postgres` и `seaweedfs` остаются на `127.0.0.1` для отладки.

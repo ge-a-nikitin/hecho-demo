@@ -164,11 +164,13 @@ Preferred order — bottom-up, from database to interfaces:
 
 The Better Auth integration with NestJS and Prisma has been verified by registration, sign-in, and session retrieval; registration creates a user with the `CUSTOMER` role.
 
+The Better Auth request limiter is configured explicitly and no longer depends on `NODE_ENV`: by default 60 requests per 60 seconds per client for all of `/api/auth/*` and 5 per 60 seconds for sign-in and sign-up, while `/change-password` and `/change-email` keep the built-in rule of 3 attempts per 10 seconds. The window and the limits come from `AUTH_RATE_LIMIT_ENABLED`, `AUTH_RATE_LIMIT_WINDOW`, `AUTH_RATE_LIMIT_MAX`, `AUTH_SIGN_IN_RATE_LIMIT_WINDOW` and `AUTH_SIGN_IN_RATE_LIMIT_MAX`; a value that cannot be read stops the API at startup with the variable name in the message. Exceeding a limit answers `429` with an `X-Retry-After` header.
+
 ## Open questions
 
 - Clarify the display-name format for the administrator created from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - Describe response schemas in Swagger: parameters, request bodies and allowed enum values are documented, while response bodies are returned without typed schemas. A complete contract needs response DTOs or dedicated serializers.
-- Configure CSP and rate limiting for `/api/auth/*` in Cloudflare (Transform Rules and WAF Rate limiting). A strict CSP needs separate handling for Swagger UI, so the decision is deferred until publication. Restricting Swagger through Cloudflare Access is not set up yet either.
+- Configure CSP and WAF Rate limiting for `/api/auth/*` in Cloudflare (Transform Rules and WAF Rate limiting) as the outer layer: the application's own limiter is on and tuned through `AUTH_RATE_LIMIT_*` and `AUTH_SIGN_IN_RATE_LIMIT_*`, but a distributed guessing attack is stopped at the edge. A strict CSP needs separate handling for Swagger UI, so the decision is deferred until publication. Restricting Swagger through Cloudflare Access is not set up yet either.
 
 ## Backlog
 
@@ -354,6 +356,7 @@ The general flow: change the value in GitHub → run the deploy again. The workf
 - Database backup: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Files live in the `seaweedfs_data` volume; copy it with `seaweedfs` stopped, or through `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
 - Domain change: edit `DOMAIN` in `deploy/prod.env`, add the new Public Hostname to the tunnel, delete the previous Public Hostname in Cloudflare Zero Trust and deploy. `FRONTEND_ORIGIN` and `BETTER_AUTH_URL` are derived from `DOMAIN`, and the frontend is built with the relative `VITE_API_URL=/api`, so no rebuild for a specific domain is needed. Users must sign in again, because the old cookies belong to the previous domain.
 - `TRUST_PROXY=true` (not a number): three hops sit in front of the API — Cloudflare, cloudflared and nginx — and the origin is not reachable directly. Without it the protocol is seen as `http` (cookies lose `Secure`) and the client IP is wrong. nginx takes the client address from `CF-Connecting-IP` only for trusted peers (loopback and the private networks the compose stack lives in) and forwards exactly one `X-Forwarded-For` value: Better Auth treats a multi-value header as no address and stores `null` on the session, while a missing peer trust leaves every client on the Docker gateway address. The behaviour is pinned by `apps/api/src/common/reverse-proxy.spec.ts`.
+- `NODE_ENV=production` is set only in `docker-compose.prod.yml`: Better Auth takes its production behaviour from it (secure cookies, no `127.0.0.1` substituted for the client address). The local compose file and the test stack leave it unset, so the image stays identical everywhere.
 - After `docker compose restart api` nginx may answer `502`, because the container received a new address. `docker compose restart web` fixes it; the regular `up -d --build` recreates the whole network and does not hit this problem.
 - Devtools are disabled in production (`DEVTOOLS_ENABLED=false`): the endpoints answer `404` and are hidden from Swagger, including the full data reset.
 - Only `127.0.0.1:8080` is published for the tunnel; the `api`, `postgres` and `seaweedfs` ports stay on `127.0.0.1` for debugging.

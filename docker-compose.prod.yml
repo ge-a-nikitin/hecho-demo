@@ -19,6 +19,10 @@ services:
   api:
     restart: unless-stopped
     environment:
+      # Better Auth switches on its production behaviour - secure cookies, no
+      # localhost fallback for the client IP - only when this is set, and the
+      # image itself stays environment-agnostic for local runs and tests.
+      NODE_ENV: production
       FRONTEND_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
       BETTER_AUTH_URL: https://${DOMAIN:?Set DOMAIN in .env}/api/auth
       # Cloudflare edge -> cloudflared -> nginx are all proxies in front of the API.
