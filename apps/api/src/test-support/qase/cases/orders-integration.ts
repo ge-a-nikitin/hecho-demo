@@ -3,6 +3,7 @@ import type { QaseCase } from "../types.js";
 const lifecycleSuite = ["Orders (integration)", "Lifecycle"] as const;
 const accessSuite = ["Orders (integration)", "Lifecycle", "Access control"] as const;
 const validationSuite = ["Orders (integration)", "Lifecycle", "Request validation"] as const;
+const quotaSuite = ["Orders (integration)", "Quotas"] as const;
 
 /**
  * Every case in this file runs the same expensive setup, so the shared half of
@@ -499,6 +500,39 @@ export const ordersIntegrationCases = [
       {
         action: "Inspect the message list.",
         expected: "At least one message names `dueAt`.",
+      },
+    ],
+  },
+  {
+    key: "integration.quota.attachment-limit",
+    suite: quotaSuite,
+    title: "accepts the attachments up to the order quota and answers the next one with a 409",
+    severity: "major",
+    priority: "high",
+    layer: "api",
+    type: "security",
+    behavior: "negative",
+    description:
+      "The quota is the only thing that stands between an open registration and a full volume, so it has to " +
+      "hold end to end: the files that fit are stored, and the one that does not is refused before it lands " +
+      "in SeaweedFS. It also pins the shape of the refusal - `409` rather than `400` or `413` - so the " +
+      "frontend can tell a full order from a malformed request, and the order keeps exactly the attachments " +
+      "the API accepted.",
+    preconditions:
+      "The ephemeral stack runs with `ORDER_ATTACHMENT_LIMIT=3`, and a customer owns an order without " +
+      "attachments.",
+    steps: [
+      {
+        action: "Upload three 1-pixel PNG files to the order as that customer.",
+        expected: "Every call answers `201` with the stored attachment.",
+      },
+      {
+        action: "Upload a fourth file.",
+        expected: "The call answers `409`.",
+      },
+      {
+        action: "Read the order.",
+        expected: "It lists exactly the three accepted file names.",
       },
     ],
   },

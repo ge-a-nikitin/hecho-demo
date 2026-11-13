@@ -213,4 +213,69 @@ export const ordersFilesCases = [
       },
     ],
   },
+  {
+    key: "orders.files.rejects-attachment-over-quota",
+    suite: filesSuite,
+    title: "refuses an attachment above the quota of the order",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "The 1 MB cap bounds a single file, not the account behind it: registration is open, so without a " +
+      "per-order quota one customer can put thousands of files into the volume that holds the database. The " +
+      "count runs before the object is written, so a refused upload costs neither disk nor the bandwidth of " +
+      "the transfer.",
+    preconditions: "`ORDER_ATTACHMENT_LIMIT` is 2 and the order already holds two attachments.",
+    steps: [
+      {
+        action: "Upload a third attachment to that order.",
+        expected:
+          "The call answers `ConflictException`, the storage receives no `put` and the order keeps two rows.",
+      },
+    ],
+  },
+  {
+    key: "orders.files.rejects-daily-upload-quota",
+    suite: filesSuite,
+    title: "refuses an upload above the daily quota of the account",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "Spreading the uploads over many orders would defeat a per-order quota, so the account itself has a " +
+      "daily budget. It is counted over a rolling day rather than a calendar one, which stops an account " +
+      "from sending two batches back to back around midnight.",
+    preconditions: "`ORDER_ATTACHMENT_DAILY_LIMIT` is 2 and the account uploaded two files an hour ago.",
+    steps: [
+      {
+        action: "Upload another file to a fresh order.",
+        expected:
+          "The call answers `ConflictException`, the storage receives no `put` and the two earlier rows stay.",
+      },
+    ],
+  },
+  {
+    key: "orders.files.counts-only-the-last-day",
+    suite: filesSuite,
+    title: "does not count the uploads of earlier days",
+    severity: "normal",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A daily quota that never forgets would lock a long-running account out of the product. The window is " +
+      "the last 24 hours, so an account with two uploads from yesterday is free to send the next one today.",
+    preconditions: "`ORDER_ATTACHMENT_DAILY_LIMIT` is 2 and both earlier uploads are older than a day.",
+    steps: [
+      {
+        action: "Upload a file today.",
+        expected: "The object is stored and the order gains the attachment.",
+      },
+    ],
+  },
 ] as const satisfies readonly QaseCase[];

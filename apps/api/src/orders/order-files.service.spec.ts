@@ -1,10 +1,11 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
 import { UserRole } from "../generated/prisma/enums.js";
 import type { ObjectStorageService } from "../storage/object-storage.service.js";
 import { createFakeDatabase, type FakeDatabaseOptions } from "../test-support/fake-database.js";
 import { qc } from "../test-support/qase-case.js";
+import { withEnv } from "../test-support/with-env.js";
 import { OrderFilesService, type UploadedOrderFile } from "./order-files.service.js";
 import type { OrdersService } from "./orders.service.js";
 
@@ -57,6 +58,84 @@ describe("Orders", () => {
       expect(put).toHaveBeenCalledTimes(1);
       expect(db.rows("orderAttachment")).toHaveLength(1);
     });
+
+    it(
+      qc("orders.files.rejects-attachment-over-quota", "refuses an attachment above the quota of the order"),
+      async () => {
+        const { db, service } = await withEnv({ ORDER_ATTACHMENT_LIMIT: "2" }, () =>
+          serviceWith({
+            orderAttachment: [
+              attachment({ id: "attachment-1", uploadedById: "user-2" }),
+              attachment({ id: "attachment-2", uploadedById: "user-2" }),
+            ],
+          }),
+        );
+
+        await expect(service.upload(orderId, file(), actor)).rejects.toThrow(
+          new ConflictException("An order may hold at most 2 attachments"),
+        );
+
+        expect(createObjectKey).not.toHaveBeenCalled();
+        expect(put).not.toHaveBeenCalled();
+        expect(db.rows("orderAttachment")).toHaveLength(2);
+      },
+    );
+
+    it(
+      qc("orders.files.rejects-daily-upload-quota", "refuses an upload above the daily quota of the account"),
+      async () => {
+        const { db, service } = await withEnv({ ORDER_ATTACHMENT_DAILY_LIMIT: "2" }, () =>
+          serviceWith({
+            orderAttachment: [
+              attachment({ id: "attachment-1", orderId: "order-2", objectKey: "orders/order-2/key-1" }),
+              attachment({
+                id: "attachment-2",
+                orderId: "order-3",
+                objectKey: "orders/order-3/key-2",
+                createdAt: hoursAgo(1),
+              }),
+            ],
+          }),
+        );
+
+        await expect(service.upload(orderId, file(), actor)).rejects.toThrow(
+          new ConflictException("An account may upload at most 2 attachments a day"),
+        );
+
+        expect(put).not.toHaveBeenCalled();
+        expect(db.rows("orderAttachment")).toHaveLength(2);
+      },
+    );
+
+    it(
+      qc("orders.files.counts-only-the-last-day", "does not count the uploads of earlier days"),
+      async () => {
+        const { db, service } = await withEnv({ ORDER_ATTACHMENT_DAILY_LIMIT: "2" }, () =>
+          serviceWith({
+            orderAttachment: [
+              attachment({
+                id: "attachment-1",
+                orderId: "order-2",
+                objectKey: "orders/order-2/key-1",
+                createdAt: hoursAgo(25),
+              }),
+              attachment({
+                id: "attachment-2",
+                orderId: "order-3",
+                objectKey: "orders/order-3/key-2",
+                createdAt: hoursAgo(30),
+              }),
+            ],
+          }),
+        );
+
+        const stored = await service.upload(orderId, file(), actor);
+
+        expect(stored).toMatchObject({ orderId });
+        expect(put).toHaveBeenCalledTimes(1);
+        expect(db.rows("orderAttachment")).toHaveLength(3);
+      },
+    );
 
     it(
       qc("orders.files.checks-upload-access-first", "refuses an upload before it reaches the storage"),
@@ -122,6 +201,7 @@ describe("Orders", () => {
           filename: "photo.png",
           contentType: null,
           sizeBytes: 1_024,
+          createdAt: expect.any(Date),
         },
       ]);
     });
@@ -206,4 +286,22 @@ function file(overrides: Partial<UploadedOrderFile> = {}): UploadedOrderFile {
     size: 4,
     ...overrides,
   };
+}
+
+function attachment(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "attachment-1",
+    orderId,
+    uploadedById: actor.id,
+    objectKey,
+    filename: "photo.png",
+    contentType: "image/png",
+    sizeBytes: 4,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 60 * 60 * 1_000);
 }

@@ -111,6 +111,9 @@ const cascades: Partial<Record<TableName, readonly { table: TableName; field: st
  */
 const defaults: Partial<Record<TableName, () => Row>> = {
   invoicePaymentReport: () => ({ status: PaymentReportStatus.PENDING, submittedAt: new Date() }),
+  // The upload quota counts a rolling day of attachments, so a row the service
+  // creates needs the timestamp the schema gives it.
+  orderAttachment: () => ({ createdAt: new Date() }),
   user: () => ({ emailVerified: false, isActive: true }),
 };
 
@@ -394,9 +397,21 @@ function matches(name: TableName, row: Row, where: Where | undefined, tables: Re
           .some((candidate) => matches(relation.table, candidate, clause, tables));
       }
 
-      const operator = condition as { in?: unknown[]; notIn?: unknown[]; not?: unknown };
+      const operator = condition as {
+        in?: unknown[];
+        notIn?: unknown[];
+        not?: unknown;
+        gte?: unknown;
+        gt?: unknown;
+        lte?: unknown;
+        lt?: unknown;
+      };
       if (operator.in) return operator.in.includes(row[field]);
       if (operator.notIn) return !operator.notIn.includes(row[field]);
+      if (operator.gte !== undefined) return compareValues(row[field], operator.gte) >= 0;
+      if (operator.gt !== undefined) return compareValues(row[field], operator.gt) > 0;
+      if (operator.lte !== undefined) return compareValues(row[field], operator.lte) <= 0;
+      if (operator.lt !== undefined) return compareValues(row[field], operator.lt) < 0;
       if ("not" in operator) return row[field] !== operator.not;
       throw new Error(
         `The fake database does not support the filter ${field}: ${JSON.stringify(condition)}. ` +

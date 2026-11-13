@@ -46,7 +46,12 @@ export class OrderFilesController {
 
   @Post()
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
-  @ApiOperation({ summary: "Upload an order attachment (maximum 1 MB)" })
+  @ApiOperation({
+    summary: "Upload an order attachment (maximum 1 MB, up to the order quota)",
+    description:
+      "The order answers `409` when it already holds the maximum number of attachments or when the account " +
+      "has used its daily upload budget.",
+  })
   @ApiParam(ORDER_ID_PARAM)
   @ApiConsumes("multipart/form-data")
   @ApiBody({
@@ -56,7 +61,9 @@ export class OrderFilesController {
         file: {
           type: "string",
           format: "binary",
-          description: "Photo, drawing or document, maximum 1 MB; the file is stored in SeaweedFS",
+          description:
+            "Photo, drawing or document, maximum 1 MB; the file is stored in SeaweedFS while the order and " +
+            "the account stay inside their upload quotas",
         },
       },
       required: ["file"],

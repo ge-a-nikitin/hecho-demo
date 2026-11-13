@@ -31,6 +31,7 @@ export type Actor = {
   get: <T = unknown>(path: string) => Promise<ApiResponse<T>>;
   post: <T = unknown>(path: string, body?: unknown) => Promise<ApiResponse<T>>;
   patch: <T = unknown>(path: string, body?: unknown) => Promise<ApiResponse<T>>;
+  upload: <T = unknown>(path: string, filename: string, bytes: Buffer) => Promise<ApiResponse<T>>;
 };
 
 type RequestOptions = {
@@ -61,6 +62,31 @@ export async function request<T = unknown>(
   };
 }
 
+/**
+ * Posts a multipart body the way the browser does. The content type is left to
+ * `fetch`, because the multipart boundary has to match the one in the header.
+ */
+export async function upload<T = unknown>(
+  path: string,
+  cookie: string,
+  filename: string,
+  bytes: Buffer,
+): Promise<ApiResponse<T>> {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(bytes)]), filename);
+
+  const response = await fetch(`${API_URL}/api${path}`, {
+    method: "POST",
+    headers: { origin: CLIENT_ORIGIN, cookie },
+    body: form,
+  });
+  const text = await response.text();
+  return {
+    status: response.status,
+    body: (text ? JSON.parse(text) : undefined) as T,
+  };
+}
+
 export function actor(id: string, email: string, cookie: string): Actor {
   return {
     id,
@@ -69,6 +95,7 @@ export function actor(id: string, email: string, cookie: string): Actor {
     get: (path) => request("GET", path, { cookie }),
     post: (path, body) => request("POST", path, { cookie, body }),
     patch: (path, body) => request("PATCH", path, { cookie, body }),
+    upload: (path, filename, bytes) => upload(path, cookie, filename, bytes),
   };
 }
 

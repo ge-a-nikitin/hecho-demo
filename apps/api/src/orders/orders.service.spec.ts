@@ -4,6 +4,7 @@ import type { PrismaService } from "../database/prisma.service.js";
 import { EstimateStatus, InvoiceStatus, OrderStatus, UserRole } from "../generated/prisma/enums.js";
 import { createFakeDatabase } from "../test-support/fake-database.js";
 import { qc } from "../test-support/qase-case.js";
+import { withEnv } from "../test-support/with-env.js";
 import { OrdersService } from "./orders.service.js";
 
 const customer = { id: "customer-1", role: UserRole.CUSTOMER };
@@ -217,6 +218,56 @@ describe("Orders", () => {
             toStatus: OrderStatus.COMPLETED,
           }),
         ]);
+      },
+    );
+  });
+
+  describe("Quotas", () => {
+    it(
+      qc("orders.create.rejects-open-order-quota", "refuses a new order when the customer is at the open-order quota"),
+      async () => {
+        const { db, service } = await withEnv({ ORDER_OPEN_LIMIT: "2" }, () => {
+          const created = serviceWith({
+            category: [{ id: "category-1", name: "Plumbing", isActive: true }],
+            workOrder: [
+              order({ id: "order-1", status: OrderStatus.NEW }),
+              order({ id: "order-2", status: OrderStatus.IN_PROGRESS }),
+            ],
+          });
+          return created;
+        });
+
+        await expect(
+          service.create(
+            { title: "Fix the tap", description: "It drips", categoryId: "category-1" },
+            customer,
+          ),
+        ).rejects.toThrow(ConflictException);
+
+        expect(db.rows("workOrder")).toHaveLength(2);
+      },
+    );
+
+    it(
+      qc("orders.create.ignores-closed-orders", "does not count completed and cancelled orders against the quota"),
+      async () => {
+        const { db, service } = await withEnv({ ORDER_OPEN_LIMIT: "1" }, () =>
+          serviceWith({
+            category: [{ id: "category-1", name: "Plumbing", isActive: true }],
+            workOrder: [
+              order({ id: "order-1", status: OrderStatus.COMPLETED }),
+              order({ id: "order-2", status: OrderStatus.CANCELLED }),
+            ],
+          }),
+        );
+
+        const created = await service.create(
+          { title: "Fix the tap", description: "It drips", categoryId: "category-1" },
+          customer,
+        );
+
+        expect(created).toMatchObject({ title: "Fix the tap", customerId: customer.id });
+        expect(db.rows("workOrder")).toHaveLength(3);
       },
     );
   });
