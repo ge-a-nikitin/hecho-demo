@@ -172,7 +172,6 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "integration.invoices.complete-after-payment": 179,
   "integration.invoices.pdf-stream": 180,
   "deployment.client-address.overwrites-forwarded-for": 135,
-  "deployment.client-address.forwards-resolved-address": 136,
   "deployment.client-address.trusts-cloudflare": 137,
   "deployment.headers.nosniff": 160,
   "deployment.container.non-root": 162,
