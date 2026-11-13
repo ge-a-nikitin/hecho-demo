@@ -47,10 +47,11 @@ export class OrderFilesController {
   @Post()
   @Roles("CUSTOMER", "EXECUTOR", "ADMIN")
   @ApiOperation({
-    summary: "Upload an order attachment (maximum 1 MB, up to the order quota)",
+    summary: "Upload an order attachment (image or PDF, maximum 1 MB, up to the order quota)",
     description:
-      "The order answers `409` when it already holds the maximum number of attachments or when the account " +
-      "has used its daily upload budget.",
+      "The type is read from the file itself: PNG, JPEG, GIF, WebP and PDF are accepted and anything else " +
+      "answers `415`. The order answers `409` when it already holds the maximum number of attachments or " +
+      "when the account has used its daily upload budget.",
   })
   @ApiParam(ORDER_ID_PARAM)
   @ApiConsumes("multipart/form-data")
@@ -62,8 +63,8 @@ export class OrderFilesController {
           type: "string",
           format: "binary",
           description:
-            "Photo, drawing or document, maximum 1 MB; the file is stored in SeaweedFS while the order and " +
-            "the account stay inside their upload quotas",
+            "PNG, JPEG, GIF, WebP or PDF, maximum 1 MB; the type is detected from the bytes and the file is " +
+            "stored in SeaweedFS while the order and the account stay inside their upload quotas",
         },
       },
       required: ["file"],

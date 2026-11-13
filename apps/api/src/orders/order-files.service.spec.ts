@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnsupportedMediaTypeException,
+} from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
 import { UserRole } from "../generated/prisma/enums.js";
@@ -52,7 +58,11 @@ describe("Orders", () => {
     it(qc("orders.files.accepts-limit-size", "accepts a file of exactly the 1 MB limit"), async () => {
       const { db, service } = serviceWith();
 
-      const stored = await service.upload(orderId, file({ size: 1_048_576 }), actor);
+      const stored = await service.upload(
+        orderId,
+        file({ buffer: pngOfSize(1_048_576), size: 1_048_576 }),
+        actor,
+      );
 
       expect(stored).toMatchObject({ orderId, sizeBytes: 1_048_576 });
       expect(put).toHaveBeenCalledTimes(1);
@@ -187,7 +197,7 @@ describe("Orders", () => {
       ]);
     });
 
-    it(qc("orders.files.stores-declared-metadata", "records the uploader, size and object key"), async () => {
+    it(qc("orders.files.stores-upload-metadata", "records the uploader, size, object key and detected type"), async () => {
       const { db, service } = serviceWith();
 
       await service.upload(orderId, file({ mimetype: "", size: 1_024 }), actor);
@@ -199,7 +209,8 @@ describe("Orders", () => {
           uploadedById: actor.id,
           objectKey,
           filename: "photo.png",
-          contentType: null,
+          // An empty declared type no longer reaches the row: the bytes decide.
+          contentType: "image/png",
           sizeBytes: 1_024,
           createdAt: expect.any(Date),
         },
@@ -225,14 +236,63 @@ describe("Orders", () => {
 
     it(
       qc(
-        "orders.files.download-falls-back-to-stored-type",
-        "falls back to the stored content type of the object",
+        "orders.files.rejects-executable-type",
+        "refuses a file that is not an image or a PDF whatever type the request declares",
       ),
+      async () => {
+        const { db, service } = serviceWith();
+
+        await expect(
+          service.upload(
+            orderId,
+            file({
+              buffer: Buffer.from("<html><script>alert(1)</script></html>"),
+              originalname: "photo.png",
+              mimetype: "image/png",
+            }),
+            actor,
+          ),
+        ).rejects.toThrow(UnsupportedMediaTypeException);
+
+        expect(createObjectKey).not.toHaveBeenCalled();
+        expect(put).not.toHaveBeenCalled();
+        expect(db.rows("orderAttachment")).toEqual([]);
+      },
+    );
+
+    it(
+      qc(
+        "orders.files.stores-detected-type",
+        "stores the type detected from the bytes instead of the declared one",
+      ),
+      async () => {
+        const { db, service } = serviceWith();
+
+        await service.upload(
+          orderId,
+          file({
+            buffer: pngBytes(),
+            originalname: "scan",
+            mimetype: "text/html",
+          }),
+          actor,
+        );
+
+        expect(db.rows("orderAttachment")).toEqual([
+          expect.objectContaining({ filename: "scan", contentType: "image/png" }),
+        ]);
+        // The bucket metadata carries the same type, so a future direct read of
+        // the object cannot report what the caller claimed either.
+        expect(put).toHaveBeenCalledWith(objectKey, expect.objectContaining({ mimetype: "image/png" }));
+      },
+    );
+
+    it(
+      qc("orders.files.download-serves-neutral-type", "serves every download as a neutral binary stream"),
       async () => {
         const { service } = serviceWith({
           orderAttachment: [
-            { id: "attachment-1", orderId, objectKey, filename: "photo.png", contentType: null },
-            { id: "attachment-3", orderId, objectKey: "orders/order-1/key-3", filename: "photo.png", contentType: null },
+            { id: "attachment-1", orderId, objectKey, filename: "photo.png", contentType: "image/png" },
           ],
         });
         getObject.mockResolvedValue({ bytes: Buffer.from("data"), contentType: "image/png" });
@@ -240,11 +300,6 @@ describe("Orders", () => {
         await expect(service.download(orderId, "attachment-1", actor)).resolves.toEqual({
           bytes: Buffer.from("data"),
           filename: "photo.png",
-          contentType: "image/png",
-        });
-
-        getObject.mockResolvedValue({ bytes: Buffer.from("data"), contentType: undefined });
-        await expect(service.download(orderId, "attachment-3", actor)).resolves.toMatchObject({
           contentType: "application/octet-stream",
         });
       },
@@ -280,12 +335,25 @@ function serviceWith(
 
 function file(overrides: Partial<UploadedOrderFile> = {}): UploadedOrderFile {
   return {
-    buffer: Buffer.from("data"),
+    buffer: pngBytes(),
     originalname: "photo.png",
     mimetype: "image/png",
-    size: 4,
+    size: pngBytes().length,
     ...overrides,
   };
+}
+
+/** The smallest valid PNG: what the sniffer needs is the signature, and this has it. */
+function pngBytes(): Buffer {
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+}
+
+/** A PNG padded to an exact byte count, for the size boundary. */
+function pngOfSize(bytes: number): Buffer {
+  return Buffer.concat([pngBytes(), Buffer.alloc(bytes - pngBytes().length)]);
 }
 
 function attachment(overrides: Record<string, unknown> = {}): Record<string, unknown> {

@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnsupportedMediaTypeException,
 } from "@nestjs/common";
+import { ACCEPTED_FILE_TYPES, detectFileType } from "../common/file-signature.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ObjectStorageService } from "../storage/object-storage.service.js";
 import type { UserRole } from "../generated/prisma/enums.js";
@@ -19,6 +21,7 @@ export type UploadedOrderFile = {
 };
 const MAX_FILE_SIZE_BYTES = 1_048_576;
 const DAY_MS = 24 * 60 * 60 * 1_000;
+const DOWNLOAD_CONTENT_TYPE = "application/octet-stream";
 
 @Injectable()
 export class OrderFilesService {
@@ -35,11 +38,17 @@ export class OrderFilesService {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       throw new BadRequestException("Files may not exceed 1 MB");
     }
+    // The declared type is the caller's word, so the stored type comes from the
+    // bytes and anything else is refused before it can be attached.
+    const detected = detectFileType(file.buffer);
+    if (!detected) {
+      throw new UnsupportedMediaTypeException(`Only ${ACCEPTED_FILE_TYPES} files can be attached`);
+    }
     await this.orders.requireAttachmentUploadAccess(orderId, actor);
     await this.assertWithinQuota(orderId, actor);
 
     const objectKey = this.storage.createObjectKey(orderId);
-    await this.storage.put(objectKey, file);
+    await this.storage.put(objectKey, { ...file, mimetype: detected.contentType });
     try {
       const attachment = await this.prisma.orderAttachment.create({
         data: {
@@ -47,7 +56,7 @@ export class OrderFilesService {
           uploadedById: actor.id,
           objectKey,
           filename: sanitizeFilename(file.originalname),
-          contentType: file.mimetype || null,
+          contentType: detected.contentType,
           sizeBytes: file.size,
         },
       });
@@ -88,10 +97,13 @@ export class OrderFilesService {
     });
     if (!attachment) throw new NotFoundException("Attachment not found");
     const object = await this.storage.get(attachment.objectKey);
+    // The stored type describes the object for the product, not for the browser:
+    // answering with a neutral type and an attachment disposition means a caller
+    // can never make the API serve a file the browser would render in its origin.
     return {
       bytes: object.bytes,
       filename: attachment.filename,
-      contentType: attachment.contentType ?? object.contentType ?? "application/octet-stream",
+      contentType: DOWNLOAD_CONTENT_TYPE,
     };
   }
 }

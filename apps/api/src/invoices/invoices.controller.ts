@@ -66,7 +66,12 @@ export class InvoicesController {
 
   @Post(":invoiceId/payment-reports")
   @Roles("CUSTOMER")
-  @ApiOperation({ summary: "Report invoice payment with a receipt file (maximum 1 MB)" })
+  @ApiOperation({
+    summary: "Report invoice payment with a receipt file (image or PDF, maximum 1 MB)",
+    description:
+      "The type is read from the file itself: PNG, JPEG, GIF, WebP and PDF are accepted and anything else " +
+      "answers `415`.",
+  })
   @ApiParam(ORDER_ID_PARAM)
   @ApiParam(INVOICE_ID_PARAM)
   @ApiConsumes("multipart/form-data")
@@ -77,7 +82,7 @@ export class InvoicesController {
         file: {
           type: "string",
           format: "binary",
-          description: "Receipt image or PDF, maximum 1 MB; the file is stored in SeaweedFS",
+          description: "Receipt photo or PDF, maximum 1 MB; the type is detected from the bytes",
         },
       },
       required: ["file"],

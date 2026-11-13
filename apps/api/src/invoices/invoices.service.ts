@@ -4,9 +4,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnsupportedMediaTypeException,
 } from "@nestjs/common";
 import PDFDocument from "pdfkit";
 import { fileURLToPath } from "node:url";
+import { ACCEPTED_FILE_TYPES, detectFileType } from "../common/file-signature.js";
 import { Prisma } from "../generated/prisma/client.js";
 import {
   InvoiceStatus,
@@ -141,6 +143,14 @@ export class InvoicesService {
     if (file.size > 1_048_576) {
       throw new BadRequestException("Files may not exceed 1 MB");
     }
+    // A receipt is a photo or a scanned PDF, and the request does not get to
+    // decide which: the stored type comes from the bytes.
+    const detected = detectFileType(file.buffer);
+    if (!detected) {
+      throw new UnsupportedMediaTypeException(
+        `Only ${ACCEPTED_FILE_TYPES} files can be sent as a payment receipt`,
+      );
+    }
 
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, orderId },
@@ -155,7 +165,7 @@ export class InvoicesService {
     }
 
     const objectKey = this.storage.createObjectKey(orderId);
-    await this.storage.put(objectKey, file);
+    await this.storage.put(objectKey, { ...file, mimetype: detected.contentType });
     try {
       return await this.prisma.$transaction(async (tx) => {
         const orderLock = await tx.workOrder.updateMany({
@@ -182,7 +192,7 @@ export class InvoicesService {
             submittedById: actor.id,
             objectKey,
             filename: sanitizeFilename(file.originalname),
-            contentType: file.mimetype || null,
+            contentType: detected.contentType,
             sizeBytes: file.size,
           },
           select: paymentReportResponse,
@@ -211,10 +221,12 @@ export class InvoicesService {
     }
 
     const object = await this.storage.get(report.objectKey);
+    // Neutral type and an attachment disposition: the browser must save the
+    // receipt, never render it in the application origin.
     return {
       bytes: object.bytes,
       filename: report.filename,
-      contentType: report.contentType ?? object.contentType ?? "application/octet-stream",
+      contentType: "application/octet-stream",
     };
   }
 

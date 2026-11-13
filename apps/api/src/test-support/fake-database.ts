@@ -492,12 +492,20 @@ function withRelations(
     const spec = relations[name]?.[relation];
     if (!spec) continue;
 
-    const child = value as { include?: Where; select?: Record<string, boolean> };
+    const child = value as { include?: Where; select?: Record<string, boolean | Where> };
     const related = tables[spec.table].filter(
       (candidate) => candidate[spec.targetField] === row[spec.localField],
     );
+    // A `select` may also carry a relation (`select: { order: { select: … } }`),
+    // so those entries are attached the same way `include` is and only then
+    // narrowed, which is what Prisma does for a nested selection.
+    const nested: Where = {};
+    for (const [field, selection] of Object.entries(child.select ?? {})) {
+      if (selection !== null && typeof selection === "object") nested[field] = selection;
+    }
+    const include: Where = { ...(child.include ?? {}), ...nested };
     const attach = (candidate: Row): Row =>
-      only(withRelations(spec.table, candidate, child.include, tables), child.select);
+      only(withRelations(spec.table, candidate, include, tables), child.select as Record<string, boolean>);
 
     result[relation] = spec.many ? related.map(attach) : related[0] === undefined ? null : attach(related[0]);
   }

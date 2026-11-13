@@ -44,6 +44,20 @@ function trustedPeers(config: string): string[] {
 }
 
 describe("Deployment", () => {
+  describe("Response headers", () => {
+    it(
+      qc("deployment.headers.nosniff", "refuses to let the browser re-interpret a declared type"),
+      () => {
+        const config = readConfig();
+
+        // The server block covers the SPA and /api/, and the two locations that
+        // set their own Cache-Control repeat the header, because nginx discards
+        // the inherited add_header directives in a location that declares one.
+        expect(config.match(/add_header X-Content-Type-Options "nosniff" always;/gu)).toHaveLength(3);
+      },
+    );
+  });
+
   describe("Client address", () => {
     it(qc("deployment.client-address.overwrites-forwarded-for", "replaces the forwarded address instead of appending to it"), () => {
       const config = readConfig();

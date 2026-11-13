@@ -1,6 +1,7 @@
 import type { QaseCase } from "../types.js";
 
 const clientAddressSuite = ["Deployment", "Client address"] as const;
+const responseHeadersSuite = ["Deployment", "Response headers"] as const;
 
 export const deploymentCases = [
   {
@@ -86,6 +87,32 @@ export const deploymentCases = [
       {
         action: "Read the `real_ip_recursive` directive.",
         expected: "It is `off`, so the header is not walked as a chain.",
+      },
+    ],
+  },
+  {
+    key: "deployment.headers.nosniff",
+    suite: responseHeadersSuite,
+    title: "refuses to let the browser re-interpret a declared type",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "The SPA, the API and every download share one origin, and a download is an attachment only because " +
+      "the response says so. With `X-Content-Type-Options: nosniff` the browser stops second-guessing a " +
+      "declared type, so a file whose bytes look like a page cannot be rendered from the application origin " +
+      "even in a future inline preview. The guard reads the shipped file because the integration stack never " +
+      "runs nginx, and it expects three occurrences: nginx discards the inherited `add_header` directives in " +
+      "a location that declares its own, so the two locations that set `Cache-Control` repeat the header.",
+    preconditions:
+      "The repository holds the shipped `apps/web/nginx.conf`; the guard reads the file instead of a running " +
+      "nginx, because the integration stack speaks to the API directly.",
+    steps: [
+      {
+        action: "Count the `add_header X-Content-Type-Options \"nosniff\" always;` lines in `apps/web/nginx.conf`.",
+        expected: "There are exactly three: the server block and the two cached locations.",
       },
     ],
   },

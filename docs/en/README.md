@@ -106,7 +106,7 @@ Agreed order flow:
 - Completing the order is a separate administrator action in the **Invoice paid** status. It records `completedAt` and moves the order to **Completed**; completion is unavailable without a paid invoice.
 - If the confirmation is incorrect or the payment is not found, the administrator does not confirm payment; the order remains open until the situation is resolved.
 - When rejecting a receipt, the administrator must provide a reason. The customer sees the reason and can upload a new receipt; previous receipts and decisions remain in history.
-- The receipt is uploaded to a separate payment field/section, with the same file upload restrictions (any type, maximum 1 MB), and is not considered a regular work attachment.
+- The receipt is uploaded to a separate payment field/section, with the same file restrictions as an attachment (a photo or a PDF, maximum 1 MB), and is not considered a regular work attachment.
 - Automatic payment processing through an external provider is outside the MVP and may be added later.
 - At this stage, the invoice is an internal, non-legal document.
 - The invoice currency is USD.
@@ -117,7 +117,7 @@ Agreed order flow:
 
 ### Files and notifications
 
-- Files of any type up to 1 MB per file can be attached to an order.
+- Images (PNG, JPEG, GIF, WebP) and PDF documents up to 1 MB per file can be attached to an order. The type is read from the file itself, not from the upload, anything else is refused with `415`, and every download is served as `application/octet-stream` with an attachment disposition, so the browser saves the file instead of rendering it in the application origin.
 - The quotas that keep one account from filling the disk are counted by the API before an object reaches SeaweedFS: 20 attachments per order, 100 uploads per account in a rolling 24 hours, and 20 open orders per customer (completed and cancelled orders do not count). Exceeding a quota answers `409`. The three values come from `ORDER_ATTACHMENT_LIMIT`, `ORDER_ATTACHMENT_DAILY_LIMIT` and `ORDER_OPEN_LIMIT`, and a value that cannot be read stops the API at startup.
 - Notifications are outside the MVP.
 

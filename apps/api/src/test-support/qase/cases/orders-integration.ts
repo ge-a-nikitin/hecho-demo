@@ -4,6 +4,7 @@ const lifecycleSuite = ["Orders (integration)", "Lifecycle"] as const;
 const accessSuite = ["Orders (integration)", "Lifecycle", "Access control"] as const;
 const validationSuite = ["Orders (integration)", "Lifecycle", "Request validation"] as const;
 const quotaSuite = ["Orders (integration)", "Quotas"] as const;
+const attachmentsSuite = ["Orders (integration)", "Attachments"] as const;
 
 /**
  * Every case in this file runs the same expensive setup, so the shared half of
@@ -533,6 +534,39 @@ export const ordersIntegrationCases = [
       {
         action: "Read the order.",
         expected: "It lists exactly the three accepted file names.",
+      },
+    ],
+  },
+  {
+    key: "integration.attachment-content-type.enforced",
+    suite: attachmentsSuite,
+    title: "refuses a page uploaded as a photo with a 415 and downloads the stored file as a binary stream",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "security",
+    behavior: "negative",
+    description:
+      "The type of an upload used to come from the multipart part, and the download handed it back, so a " +
+      "caller could decide what the product says a file is. The running API has to prove both halves of the " +
+      "fix: an unaccepted signature answers `415` and never reaches SeaweedFS, and an accepted file is " +
+      "downloaded as `application/octet-stream` with an attachment disposition, which is what keeps the " +
+      "browser saving rather than rendering it in the application origin.",
+    preconditions: stack + "A second order without attachments.",
+    steps: [
+      {
+        action: "Upload an HTML document named `photo.png` to that order as the customer.",
+        expected: "The call answers `415`.",
+      },
+      {
+        action: "Upload a real 1-pixel PNG to the same order.",
+        expected: "The call answers `201` with the stored attachment.",
+      },
+      {
+        action: "Download the stored attachment and read its response headers.",
+        expected:
+          "`200`, `content-type: application/octet-stream` and a `content-disposition` that starts with " +
+          "`attachment`.",
       },
     ],
   },
