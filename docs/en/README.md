@@ -118,6 +118,7 @@ Agreed order flow:
 ### Files and notifications
 
 - Files of any type up to 1 MB per file can be attached to an order.
+- The quotas that keep one account from filling the disk are counted by the API before an object reaches SeaweedFS: 20 attachments per order, 100 uploads per account in a rolling 24 hours, and 20 open orders per customer (completed and cancelled orders do not count). Exceeding a quota answers `409`. The three values come from `ORDER_ATTACHMENT_LIMIT`, `ORDER_ATTACHMENT_DAILY_LIMIT` and `ORDER_OPEN_LIMIT`, and a value that cannot be read stops the API at startup.
 - Notifications are outside the MVP.
 
 ## Technical constraints and preferences
@@ -366,4 +367,5 @@ The general flow: change the value in GitHub → run the deploy again. The workf
 - Swagger is public — this is a project decision. For restricted access, put a Cloudflare Access application over `/api/docs*`: no tunnel routes need to change.
 - No CSP and no rate limiting for `/api/auth/*`: both are configured in Cloudflare (Transform Rules and WAF Rate limiting), not in the repository. Note that Swagger UI is incompatible with a strict CSP.
 - `docker compose down -v` deletes the PostgreSQL and SeaweedFS data; back up with `pg_dump` and volume copies instead of deleting the stack.
+- The `seaweedfs_data` volume has no size cap and nothing alerts on free space: the upload quotas (`ORDER_ATTACHMENT_LIMIT`, `ORDER_ATTACHMENT_DAILY_LIMIT`) are what bounds how fast the disk fills, and a full disk stops the database, the API and the tunnel on the same machine, so watch `df -h` on the host.
 - Merging into `main` is protected: the `main protection` ruleset requires green `static` and `integration` checks and an up-to-date branch, and forbids direct pushes, force-pushes and branch deletion. A merge into `main` immediately runs the deployment, so it only happens through a pull request.

@@ -2,6 +2,7 @@ import type { QaseCase } from "../types.js";
 
 const validationSuite = ["Orders", "Request validation"] as const;
 const lifecycleSuite = ["Orders", "Lifecycle"] as const;
+const quotasSuite = ["Orders", "Quotas"] as const;
 
 export const ordersCases = [
   {
@@ -228,6 +229,116 @@ export const ordersCases = [
       {
         action: "Validate `reason: 42`.",
         expected: "The result reports an error for `reason`.",
+      },
+    ],
+  },
+  {
+    key: "orders.quotas.defaults",
+    suite: quotasSuite,
+    title: "keeps the documented quotas when nothing is configured",
+    severity: "normal",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "Registration is open to any visitor by design, so the quotas are the only thing that stops a new " +
+      "account from filling the volume that holds the database or from burying the board in orders. They " +
+      "have to hold without any configuration, because an operator who forgets the variables must still " +
+      "get the protection the documentation promises.",
+    steps: [
+      {
+        action: "Resolve the quotas from an empty environment.",
+        expected:
+          "20 attachments per order, 100 attachments per account per day and 20 open orders per customer.",
+      },
+    ],
+  },
+  {
+    key: "orders.quotas.environment",
+    suite: quotasSuite,
+    title: "reads the three quotas from the environment",
+    severity: "normal",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The right limits depend on the hosting: a training stand with a small disk can stay strict, while a " +
+      "busy installation needs more room. Every quota is therefore a variable, and a value read here has to " +
+      "reach the service unchanged, otherwise an operator raises a limit and the uploads keep failing.",
+    steps: [
+      {
+        action:
+          "Resolve the quotas from `ORDER_ATTACHMENT_LIMIT=5`, `ORDER_ATTACHMENT_DAILY_LIMIT=30` and " +
+          "`ORDER_OPEN_LIMIT=3`.",
+        expected: "The result carries exactly 5, 30 and 3.",
+      },
+    ],
+  },
+  {
+    key: "orders.quotas.invalid",
+    suite: quotasSuite,
+    title: "refuses a quota it cannot read instead of ignoring the setting",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "A mistyped quota is worse than a missing one: `0` or `-1` would either block every upload or turn the " +
+      "check into a no-op, and `many` would do the same through `NaN` comparisons. Failing at startup names " +
+      "the variable, so the operator fixes the typo instead of shipping a stand without the control.",
+    steps: [
+      {
+        action:
+          "Resolve the quotas with `ORDER_ATTACHMENT_LIMIT=0`, then `ORDER_ATTACHMENT_DAILY_LIMIT=-1`, then " +
+          "`ORDER_OPEN_LIMIT=many`.",
+        expected: "Each call throws an error that names the offending variable.",
+      },
+    ],
+  },
+  {
+    key: "orders.create.rejects-open-order-quota",
+    suite: quotasSuite,
+    title: "refuses a new order when the customer is at the open-order quota",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "Each open order carries its own attachment budget and a place in the administrators' queue, so an " +
+      "account that posts orders without end spends the shared disk and the operators' attention. The check " +
+      "runs inside the creating transaction, before any row is written, so a refused order leaves nothing " +
+      "behind for the board to show.",
+    preconditions: "The customer already has two open orders and the quota is two.",
+    steps: [
+      {
+        action: "Create an order for that customer.",
+        expected:
+          "The call answers `ConflictException`, and the database still holds exactly the two earlier orders.",
+      },
+    ],
+  },
+  {
+    key: "orders.create.ignores-closed-orders",
+    suite: quotasSuite,
+    title: "does not count completed and cancelled orders against the quota",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Finished work is history, not load: a customer who has completed hundreds of orders must stay able to " +
+      "open the next one. Only orders that still need attention count, which is why the quota filter excludes " +
+      "`COMPLETED` and `CANCELLED` rather than counting every row of the table.",
+    preconditions: "The customer has one completed and one cancelled order and the quota is one.",
+    steps: [
+      {
+        action: "Create an order for that customer.",
+        expected: "The order is created and the database holds three orders.",
       },
     ],
   },

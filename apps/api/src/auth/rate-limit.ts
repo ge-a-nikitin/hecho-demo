@@ -1,3 +1,5 @@
+import { positiveInteger, readSetting } from "../common/settings.js";
+
 /**
  * Settings for the request limiter Better Auth runs in front of `/api/auth/*`.
  *
@@ -55,29 +57,6 @@ export function authRateLimitOptions(env: NodeJS.ProcessEnv = process.env): Auth
       "/sign-up/*": credentials,
     },
   };
-}
-
-/** Reads a setting, treating a blank value as "not configured". */
-function readSetting(env: NodeJS.ProcessEnv, name: string): string | undefined {
-  const value = env[name]?.trim();
-
-  return value ? value : undefined;
-}
-
-function positiveInteger(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
-  const value = readSetting(env, name);
-
-  if (value === undefined) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-
-  if (!/^\d+$/u.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive whole number, got "${value}"`);
-  }
-
-  return parsed;
 }
 
 function booleanValue(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {

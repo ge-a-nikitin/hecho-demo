@@ -13,6 +13,7 @@ import {
 import type { ObjectStorageService } from "../storage/object-storage.service.js";
 import { createFakeDatabase, type FakeDatabase } from "../test-support/fake-database.js";
 import { qc } from "../test-support/qase-case.js";
+import { withEnv } from "../test-support/with-env.js";
 import { DevToolsService } from "./devtools.service.js";
 
 /**
@@ -715,35 +716,6 @@ function signUpThroughFake(db: FakeDatabase): void {
 
     return { user: { id: user.id } };
   });
-}
-
-/** Runs a case with environment overrides, restoring the previous values afterwards. */
-async function withEnv<T>(
-  values: Record<string, string | undefined>,
-  run: () => Promise<T>,
-): Promise<T> {
-  const previous = new Map<string, string | undefined>();
-
-  for (const [name, value] of Object.entries(values)) {
-    previous.set(name, process.env[name]);
-    if (value === undefined) {
-      delete process.env[name];
-    } else {
-      process.env[name] = value;
-    }
-  }
-
-  try {
-    return await run();
-  } finally {
-    for (const [name, value] of previous) {
-      if (value === undefined) {
-        delete process.env[name];
-      } else {
-        process.env[name] = value;
-      }
-    }
-  }
 }
 
 function userRow(overrides: Record<string, unknown> = {}) {

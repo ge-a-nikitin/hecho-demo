@@ -23,6 +23,7 @@ import type {
   UpdateDraftOrderDto,
   WorkTimeDto,
 } from "./orders.dto.js";
+import { orderQuotas, type OrderQuotas } from "./order-quotas.js";
 
 const orderInclude = {
   category: true,
@@ -68,6 +69,8 @@ type Actor = { id: string; role: UserRole };
 
 @Injectable()
 export class OrdersService {
+  private readonly quotas: OrderQuotas = orderQuotas();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async list(actor: Actor) {
@@ -123,6 +126,7 @@ export class OrdersService {
     if (!category) throw new BadRequestException("Category is not available");
 
     return this.prisma.$transaction(async (tx) => {
+      await this.assertOpenOrderQuota(tx, actor);
       if (dto.executorId) await this.lockActiveExecutor(tx, dto.executorId);
       return tx.workOrder.create({
         data: {
@@ -779,5 +783,24 @@ export class OrdersService {
       data: { updatedAt: new Date() },
     });
     if (executor.count !== 1) throw new BadRequestException("Active executor not found");
+  }
+
+  /**
+   * Registration is open, so the queue is the only thing a new customer cannot
+   * grow without bound: every open order keeps its own attachment budget and a
+   * place in the administrators' list. Completed and cancelled orders are
+   * history, not load, and do not count.
+   */
+  private async assertOpenOrderQuota(tx: Prisma.TransactionClient, actor: Actor): Promise<void> {
+    const { openOrdersPerCustomer } = this.quotas;
+    const open = await tx.workOrder.count({
+      where: {
+        customerId: actor.id,
+        status: { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED] },
+      },
+    });
+    if (open >= openOrdersPerCustomer) {
+      throw new ConflictException(`A customer may keep at most ${openOrdersPerCustomer} open orders`);
+    }
   }
 }
