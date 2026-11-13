@@ -24,6 +24,9 @@ export type UserRole = "CUSTOMER" | "EXECUTOR" | "ADMIN";
 
 export type ApiResponse<T = unknown> = { status: number; body: T };
 
+/** A download keeps its headers and bytes, because a PDF or a receipt is not JSON. */
+export type DownloadResponse = { status: number; headers: Headers; bytes: Buffer };
+
 export type Actor = {
   id: string;
   email: string;
@@ -32,6 +35,7 @@ export type Actor = {
   post: <T = unknown>(path: string, body?: unknown) => Promise<ApiResponse<T>>;
   patch: <T = unknown>(path: string, body?: unknown) => Promise<ApiResponse<T>>;
   upload: <T = unknown>(path: string, filename: string, bytes: Buffer) => Promise<ApiResponse<T>>;
+  download: (path: string) => Promise<DownloadResponse>;
 };
 
 type RequestOptions = {
@@ -87,6 +91,23 @@ export async function upload<T = unknown>(
   };
 }
 
+/**
+ * Downloads a response as bytes: invoices are PDFs and receipts are binary, so
+ * parsing the body as JSON would lose exactly what the case asserts. Headers are
+ * kept because the content type and the disposition are part of the contract.
+ */
+export async function download(path: string, cookie: string): Promise<DownloadResponse> {
+  const response = await fetch(`${API_URL}/api${path}`, {
+    headers: { origin: CLIENT_ORIGIN, cookie },
+  });
+
+  return {
+    status: response.status,
+    headers: response.headers,
+    bytes: Buffer.from(await response.arrayBuffer()),
+  };
+}
+
 export function actor(id: string, email: string, cookie: string): Actor {
   return {
     id,
@@ -96,6 +117,7 @@ export function actor(id: string, email: string, cookie: string): Actor {
     post: (path, body) => request("POST", path, { cookie, body }),
     patch: (path, body) => request("PATCH", path, { cookie, body }),
     upload: (path, filename, bytes) => upload(path, cookie, filename, bytes),
+    download: (path) => download(path, cookie),
   };
 }
 
