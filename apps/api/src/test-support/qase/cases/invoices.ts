@@ -114,6 +114,52 @@ export const invoicesCases = [
     ],
   },
   {
+    key: "invoices.payment-reports.rejects-unsupported-type",
+    suite: paymentSuite,
+    title: "refuses a receipt whose bytes are not an image or a PDF",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "A receipt lands in the same bucket as an order attachment and used to keep whatever type the upload " +
+      "declared, so the same client-chosen header decided what the API later serves. The receipt is a photo " +
+      "or a scanned PDF, and anything else is refused with `415` before an object key exists - otherwise a " +
+      "customer could park a page or a script in the bucket under the name of a bank receipt.",
+    preconditions: "An order waiting for payment and its issued invoice.",
+    steps: [
+      {
+        action: "Report payment with an HTML document named `receipt.pdf` and the declared type `application/pdf`.",
+        expected:
+          "The call answers `UnsupportedMediaTypeException`, the storage receives neither an object key nor a " +
+          "`put`, and no payment report row appears.",
+      },
+    ],
+  },
+  {
+    key: "invoices.payment-reports.receipt-download-neutral-type",
+    suite: paymentSuite,
+    title: "serves a receipt download as a neutral binary stream",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "A receipt is downloaded, never rendered: answering with `application/octet-stream` means the browser " +
+      "saves the file whatever the stored row or the bucket says about its type, even if an inline preview " +
+      "for receipts is added later. The stored type stays in the database for the product and the audit.",
+    preconditions: "A pending receipt whose row and object both report `application/pdf`.",
+    steps: [
+      {
+        action: "Download the receipt as the owning customer.",
+        expected:
+          "The result carries `contentType: \"application/octet-stream\"`, the stored file name and the bytes.",
+      },
+    ],
+  },
+  {
     key: "invoices.validation.void-reason",
     suite: validationSuite,
     title: "requires a non-blank reason to void an invoice",

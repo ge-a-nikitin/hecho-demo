@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { qc } from "../../src/test-support/qase-case.js";
-import { createActor, resetWorld, signInAdmin, waitForApi, type Actor } from "./helpers/stack.js";
+import { createActor, resetWorld, signInAdmin, waitForApi, API_URL, type Actor } from "./helpers/stack.js";
 
 /**
  * The unit cases prove the quota logic against an in-memory database; only the
@@ -42,6 +42,51 @@ beforeAll(async () => {
 });
 
 describe("Orders", () => {
+  describe("Attachment content type (integration)", () => {
+    it(
+      qc(
+        "integration.attachment-content-type.enforced",
+        "refuses a page uploaded as a photo with a 415 and downloads the stored file as a binary stream",
+      ),
+      async () => {
+        const admin = await signInAdmin();
+        const category = await admin.post<{ id: string }>("/categories", {
+          name: `Type ${randomUUID()}`,
+        });
+        const order = await customer.post<{ id: string }>("/orders", {
+          title: "Order with a typed attachment",
+          description: "One stored file",
+          categoryId: category.body.id,
+        });
+        const typedOrderId = order.body.id;
+
+        // The request says nothing about the type; the bytes are a page, so the
+        // upload is refused before the object reaches the bucket.
+        const refused = await customer.upload(
+          `/orders/${typedOrderId}/attachments`,
+          "photo.png",
+          Buffer.from("<html><script>alert(1)</script></html>"),
+        );
+        expect(refused.status).toBe(415);
+
+        const stored = await customer.upload<Attachment>(
+          `/orders/${typedOrderId}/attachments`,
+          "photo.png",
+          ONE_PIXEL_PNG,
+        );
+        expect(stored.status).toBe(201);
+
+        const download = await fetch(
+          `${API_URL}/api/orders/${typedOrderId}/attachments/${stored.body.id}`,
+          { headers: { cookie: customer.cookie } },
+        );
+        expect(download.status).toBe(200);
+        expect(download.headers.get("content-type")).toBe("application/octet-stream");
+        expect(download.headers.get("content-disposition")).toContain("attachment");
+      },
+    );
+  });
+
   describe("Upload quotas (integration)", () => {
     it(
       qc(

@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  UnsupportedMediaTypeException,
+} from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
 import {
@@ -36,23 +40,26 @@ describe("Invoices", () => {
 
         expect(report).toMatchObject({
           status: PaymentReportStatus.PENDING,
-          filename: "receipt.txt",
+          filename: "receipt.pdf",
         });
         expect(db.rows("invoicePaymentReport")).toHaveLength(1);
         expect(db.rows("invoicePaymentReport")[0]).toMatchObject({
           invoiceId: "invoice-1",
           submittedById: customer.id,
           objectKey,
-          filename: "receipt.txt",
-          contentType: "text/plain",
-          sizeBytes: 7,
+          filename: "receipt.pdf",
+          contentType: "application/pdf",
+          sizeBytes: 8,
           status: PaymentReportStatus.PENDING,
           submittedAt: expect.any(Date),
         });
         expect(db.rows("invoice")[0]).toMatchObject({ status: InvoiceStatus.ISSUED });
         expect(db.rows("workOrder")[0]).toMatchObject({ status: OrderStatus.INVOICE_ISSUED });
         expect(db.rows("workOrder")[0]?.completedAt).toBeUndefined();
-        expect(put).toHaveBeenCalledWith(objectKey, expect.objectContaining({ size: 7 }));
+        expect(put).toHaveBeenCalledWith(
+          objectKey,
+          expect.objectContaining({ size: 8, mimetype: "application/pdf" }),
+        );
       },
     );
 
@@ -130,6 +137,52 @@ describe("Invoices", () => {
         expect(getObject).not.toHaveBeenCalled();
       },
     );
+    it(
+      qc(
+        "invoices.payment-reports.rejects-unsupported-type",
+        "refuses a receipt whose bytes are not an image or a PDF",
+      ),
+      async () => {
+        const { db, service } = serviceWith(awaitingPayment());
+
+        await expect(
+          service.reportPayment(
+            "order-1",
+            "invoice-1",
+            receipt({
+              buffer: Buffer.from("<html><script>alert(1)</script></html>"),
+              originalname: "receipt.pdf",
+              mimetype: "application/pdf",
+              size: 38,
+            }),
+            customer,
+          ),
+        ).rejects.toThrow(UnsupportedMediaTypeException);
+
+        expect(createObjectKey).not.toHaveBeenCalled();
+        expect(put).not.toHaveBeenCalled();
+        expect(db.rows("invoicePaymentReport")).toEqual([]);
+      },
+    );
+
+    it(
+      qc(
+        "invoices.payment-reports.receipt-download-neutral-type",
+        "serves a receipt download as a neutral binary stream",
+      ),
+      async () => {
+        const { service } = serviceWith(pendingReport());
+        getObject.mockResolvedValue({ bytes: Buffer.from("%PDF-1.7"), contentType: "application/pdf" });
+
+        await expect(
+          service.paymentReportFile("order-1", "invoice-1", "report-1", customer),
+        ).resolves.toEqual({
+          bytes: Buffer.from("%PDF-1.7"),
+          filename: "receipt.pdf",
+          contentType: "application/octet-stream",
+        });
+      },
+    );
   });
 });
 
@@ -182,17 +235,18 @@ function pendingReport() {
         invoiceId: "invoice-1",
         status: PaymentReportStatus.PENDING,
         objectKey,
-        filename: "receipt.txt",
+        filename: "receipt.pdf",
       },
     ],
   };
 }
 
-function receipt(): UploadedOrderFile {
+function receipt(overrides: Partial<UploadedOrderFile> = {}): UploadedOrderFile {
   return {
-    buffer: Buffer.from("receipt"),
-    originalname: "receipt.txt",
-    mimetype: "text/plain",
-    size: 7,
+    buffer: Buffer.from("%PDF-1.7"),
+    originalname: "receipt.pdf",
+    mimetype: "application/pdf",
+    size: 8,
+    ...overrides,
   };
 }

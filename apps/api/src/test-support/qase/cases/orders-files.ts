@@ -143,9 +143,9 @@ export const ordersFilesCases = [
     ],
   },
   {
-    key: "orders.files.stores-declared-metadata",
+    key: "orders.files.stores-upload-metadata",
     suite: filesSuite,
-    title: "records the uploader, size and object key",
+    title: "records the uploader, size, object key and detected type",
     severity: "normal",
     priority: "medium",
     layer: "unit",
@@ -153,15 +153,15 @@ export const ordersFilesCases = [
     behavior: "positive",
     description:
       "The attachment row is the only place that ties an object back to the order and to the person who " +
-      "sent it, which is what the order page and the audit trail render. It also carries the declared " +
-      "content type, and a file with no type must be stored as a null type instead of the string " +
-      "`\"undefined\"`, which would be served back as a broken `Content-Type` header.",
+      "sent it, which is what the order page and the audit trail render. Its content type no longer comes " +
+      "from the request: an upload that declares nothing - or the wrong thing - is stored with the type its " +
+      "bytes prove, so the row never carries a null or a caller-chosen value.",
     steps: [
       {
-        action: "Call `upload` with a file of 1 024 bytes and an empty `mimetype`.",
+        action: "Call `upload` with a PNG of 1 024 bytes and an empty `mimetype`.",
         expected:
           "The stored attachment row carries the order id, the actor as `uploadedById`, the generated " +
-          "object key, `sizeBytes: 1024` and `contentType: null`.",
+          "object key, `sizeBytes: 1024` and `contentType: \"image/png\"`.",
       },
     ],
   },
@@ -190,26 +190,69 @@ export const ordersFilesCases = [
     ],
   },
   {
-    key: "orders.files.download-falls-back-to-stored-type",
+    key: "orders.files.rejects-executable-type",
     suite: filesSuite,
-    title: "falls back to the stored content type of the object",
-    severity: "normal",
-    priority: "medium",
+    title: "refuses a file that is not an image or a PDF whatever type the request declares",
+    severity: "critical",
+    priority: "high",
     layer: "unit",
-    type: "functional",
-    behavior: "positive",
+    type: "security",
+    behavior: "negative",
     description:
-      "Older rows can carry a null content type, and the browser needs one to render or download the file " +
-      "correctly. The service therefore prefers the stored object type and only then falls back to " +
-      "`application/octet-stream`, so a photo keeps being served as an image after a schema change.",
+      "The request chooses the multipart `Content-Type`, so a caller could upload a page or a script and " +
+      "call it `image/png`. Today every download is an attachment, so the header only picks the program the " +
+      "browser opens - but the same value turns executable as soon as an inline preview exists. The bytes " +
+      "therefore decide: an unaccepted signature is refused with `415` before the object key is even made, " +
+      "so nothing lands in the bucket and nothing is recorded in the order.",
+    preconditions: "The actor may upload to the order.",
     steps: [
       {
-        action: "Call `download` for a row without `contentType` whose object reports `image/png`.",
-        expected: "The result carries `contentType: \"image/png\"` and the stored file name.",
+        action: "Upload an HTML document named `photo.png` with the declared type `image/png`.",
+        expected:
+          "The call answers `UnsupportedMediaTypeException`, the storage receives neither an object key nor " +
+          "a `put`, and the order keeps no attachment rows.",
       },
+    ],
+  },
+  {
+    key: "orders.files.stores-detected-type",
+    suite: filesSuite,
+    title: "stores the type detected from the bytes instead of the declared one",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "A file that is acceptable should be stored with the type it actually is, not with the declaration " +
+      "that accompanied it. The row and the bucket metadata both carry the detected type, so neither a " +
+      "later read of the database nor a direct read of the object can report what the caller claimed.",
+    steps: [
       {
-        action: "Call `download` for a row and an object that both lack a content type.",
-        expected: "The result carries `contentType: \"application/octet-stream\"`.",
+        action: "Upload a PNG that declares `text/html`.",
+        expected:
+          "The attachment row stores `contentType: \"image/png\"`, and the object is written with the same type.",
+      },
+    ],
+  },
+  {
+    key: "orders.files.download-serves-neutral-type",
+    suite: filesSuite,
+    title: "serves every download as a neutral binary stream",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "The stored type describes the object for the product, not for the browser. Serving the download as " +
+      "`application/octet-stream` - together with the attachment disposition the controller already sets - " +
+      "means a caller cannot make the API answer with a type the browser would render in the application " +
+      "origin, whatever the row or the bucket says.",
+    steps: [
+      {
+        action: "Download an attachment whose row and object both report `image/png`.",
+        expected: "The result carries `contentType: \"application/octet-stream\"` and the stored file name.",
       },
     ],
   },

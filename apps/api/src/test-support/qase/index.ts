@@ -3,6 +3,7 @@ import { authCases } from "./cases/auth.js";
 import { categoriesCases } from "./cases/categories.js";
 import { deploymentCases } from "./cases/deployment.js";
 import { devtoolsCases } from "./cases/devtools.js";
+import { filesCases } from "./cases/files.js";
 import { invoicesCases } from "./cases/invoices.js";
 import { ordersFilesCases } from "./cases/orders-files.js";
 import { ordersCases } from "./cases/orders.js";
@@ -22,6 +23,7 @@ import type { QaseCase } from "./types.js";
 export const qaseCases = [
   ...apiCases,
   ...authCases,
+  ...filesCases,
   ...ordersCases,
   ...ordersFilesCases,
   ...categoriesCases,
