@@ -1,6 +1,7 @@
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { betterAuth } from "better-auth";
 import { prisma } from "../database/prisma.service.js";
+import { authRateLimitOptions } from "./rate-limit.js";
 
 function requiredEnvironmentValue(name: string): string {
   const value = process.env[name];
@@ -22,6 +23,9 @@ function createAuth() {
       enabled: true,
       requireEmailVerification: false,
     },
+    // Off by default only outside production, which this image does not set:
+    // the limiter is configured explicitly so it cannot be lost that way.
+    rateLimit: authRateLimitOptions(),
     user: {
       additionalFields: {
         role: {

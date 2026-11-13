@@ -58,6 +58,32 @@ describe("Auth", () => {
       },
     );
   });
+
+  describe("Rate limiting", () => {
+    it(
+      qc("auth.rate-limit.wired-into-instance", "hands the credential rule to the Better Auth instance"),
+      async () => {
+        await withEnv(
+          {
+            BETTER_AUTH_URL: "http://127.0.0.1:6209/api/auth",
+            BETTER_AUTH_SECRET: "unit-test-secret-at-least-32-characters",
+            DATABASE_URL: "postgresql://unit-test:unit-test@127.0.0.1:5432/unit-test",
+            AUTH_SIGN_IN_RATE_LIMIT_MAX: "7",
+          },
+          async () => {
+            vi.resetModules();
+
+            const { auth } = await import("./auth.js");
+
+            // The limit a sign-in request meets is the one the instance carries:
+            // resolving the settings is worthless if `betterAuth()` drops them.
+            expect(auth.options.rateLimit?.enabled).toBe(true);
+            expect(auth.options.rateLimit?.customRules?.["/sign-in/*"]).toEqual({ window: 60, max: 7 });
+          },
+        );
+      },
+    );
+  });
 });
 
 /** Runs a case with environment overrides, restoring the previous values afterwards. */

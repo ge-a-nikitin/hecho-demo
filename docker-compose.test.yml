@@ -23,6 +23,11 @@ services:
       DEVTOOLS_ENABLED: "true"
       DEVTOOLS_API_KEY: integration-devtools-key-at-least-32
       DEVTOOLS_SEED_PASSWORD: integration-seed-password
+      # The suite signs in and registers dozens of accounts from one address, so
+      # the general and credential limits are raised here; the 429 case exercises
+      # the built-in 3-per-10-seconds rule on the password endpoints instead.
+      AUTH_RATE_LIMIT_MAX: "1000"
+      AUTH_SIGN_IN_RATE_LIMIT_MAX: "1000"
       S3_ENDPOINT: http://seaweedfs:8333
       S3_ACCESS_KEY: order-desk
       S3_SECRET_KEY: integration-s3-password

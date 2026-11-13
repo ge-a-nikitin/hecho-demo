@@ -2,6 +2,7 @@ import type { QaseCase } from "../types.js";
 
 const sessionSuite = ["API", "Access control"] as const;
 const configurationSuite = ["Auth", "Configuration"] as const;
+const rateLimitSuite = ["Auth", "Rate limiting"] as const;
 
 export const authCases = [
   {
@@ -192,6 +193,142 @@ export const authCases = [
       {
         action: "Call `canActivate` on an undecorated handler with an active customer session.",
         expected: "The guard returns `true`.",
+      },
+    ],
+  },
+  {
+    key: "auth.rate-limit.defaults",
+    suite: rateLimitSuite,
+    title: "keeps the limiter on with the defaults the application documents",
+    severity: "blocker",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "Better Auth enables its own limiter only when `NODE_ENV` is \"production\", and the API image ran " +
+      "without `NODE_ENV`: `/api/auth/sign-in/email` accepted unlimited password guesses and " +
+      "`/api/auth/sign-up/email` unlimited registrations, each paying for a password hash and database " +
+      "rows. The settings are now resolved from the environment with the limiter explicitly on, so the " +
+      "control no longer depends on how the container happens to be started. The case pins the documented " +
+      "defaults: 60 requests per minute per client for `/api/auth/*`, and 5 per minute for the credential " +
+      "endpoints, because guessing a password is the cheapest thing an anonymous caller can do.",
+    steps: [
+      {
+        action: "Resolve the settings with an empty environment.",
+        expected:
+          "The limiter is enabled with a 60-second window and 60 requests, and `/sign-in/*` and " +
+          "`/sign-up/*` carry their own 60-second, 5-request rule.",
+      },
+    ],
+  },
+  {
+    key: "auth.rate-limit.environment",
+    suite: rateLimitSuite,
+    title: "reads the switch, the window and the limit from the environment",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "An operator has to be able to raise a limit for a busy office IP or switch the limiter off while " +
+      "debugging, without editing code and rebuilding the image. Every knob therefore comes from the " +
+      "environment, and the credential rule shares one window and one limit so the two sign-in and " +
+      "sign-up paths cannot drift apart.",
+    steps: [
+      {
+        action:
+          "Resolve the settings with `AUTH_RATE_LIMIT_ENABLED=false`, `AUTH_RATE_LIMIT_WINDOW=30`, " +
+          "`AUTH_RATE_LIMIT_MAX=120`, `AUTH_SIGN_IN_RATE_LIMIT_WINDOW=10` and " +
+          "`AUTH_SIGN_IN_RATE_LIMIT_MAX=3`.",
+        expected:
+          "The switch, the window, the limit and both credential rules carry those values, and setting " +
+          "the switch to `false` keeps the rules in place for the next run.",
+      },
+    ],
+  },
+  {
+    key: "auth.rate-limit.invalid",
+    suite: rateLimitSuite,
+    title: "refuses a value it cannot read instead of silently ignoring the setting",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "A rate limit that a typo turns into `0`, a negative window or a word would either block every " +
+      "sign-in or disable the limit without a trace, and a deployment with a broken limiter looks " +
+      "exactly like a healthy one. The resolver therefore fails with the variable name in the message, " +
+      "so the container stops at startup where the operator can see it.",
+    steps: [
+      {
+        action: "Resolve the settings with `AUTH_RATE_LIMIT_MAX=0`.",
+        expected: "The resolver throws and names `AUTH_RATE_LIMIT_MAX`.",
+      },
+      {
+        action: "Resolve the settings with `AUTH_RATE_LIMIT_WINDOW=-5`, `AUTH_SIGN_IN_RATE_LIMIT_MAX=soon` and `AUTH_RATE_LIMIT_ENABLED=maybe`.",
+        expected: "Each call throws and names the variable that carries the unreadable value.",
+      },
+    ],
+  },
+  {
+    key: "auth.rate-limit.wired-into-instance",
+    suite: rateLimitSuite,
+    title: "hands the credential rule to the Better Auth instance",
+    severity: "blocker",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "Resolving the settings is worthless if the instance drops them: the option has to reach " +
+      "`betterAuth()`. The case builds the real instance from the environment and reads the rule back, " +
+      "which is what the sign-in path consults before it verifies a password.",
+    preconditions:
+      "`BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL` set, with `AUTH_SIGN_IN_RATE_LIMIT_MAX=7`.",
+    steps: [
+      {
+        action: "Import the auth module with a fresh registry and read `auth.options.rateLimit`.",
+        expected:
+          "The limiter is enabled and the `/sign-in/*` rule carries the configured window and a limit of 7.",
+      },
+    ],
+  },
+  {
+    key: "auth.rate-limit.enforced",
+    suite: rateLimitSuite,
+    title: "answers the fourth password change within ten seconds with a 429",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "security",
+    behavior: "negative",
+    description:
+      "Settings and a running limiter are two different things, and only the real API shows the second: " +
+      "a case that stops at the resolved options would stay green even if the handler never consulted " +
+      "them. The case drives the password endpoint, whose built-in rule of 3 attempts per 10 seconds is " +
+      "stricter than the configured limits, so it stays valid while the suite raises the sign-in limits " +
+      "for its own sign-ups. Three failed attempts prove the request reached the handler; the fourth " +
+      "must be refused by the limiter, not by a missing session.",
+    preconditions:
+      "The ephemeral stack from `docker-compose.test.yml` with a freshly created customer session.",
+    steps: [
+      {
+        action:
+          "Send `POST /api/auth/change-password` with a wrong `currentPassword` from a signed-in customer.",
+        expected: "The API answers `400`, so the request reached the handler and was not refused earlier.",
+      },
+      {
+        action: "Send the same request twice more within ten seconds.",
+        expected: "Both attempts answer `400` as well: three attempts of the ten-second window are spent.",
+      },
+      {
+        action: "Send the fourth request within the same window.",
+        expected:
+          "The API answers `429` with `Too many requests` in the body, while the same session still " +
+          "reaches other endpoints: the limiter is scoped to the path, not to the account.",
       },
     ],
   },
