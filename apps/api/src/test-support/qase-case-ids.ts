@@ -144,6 +144,8 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "deployment.client-address.forwards-resolved-address": 136,
   "deployment.client-address.trusts-cloudflare": 137,
   "deployment.headers.nosniff": 160,
+  "deployment.container.non-root": 162,
+  "deployment.container.read-only-filesystem-and-limits": 163,
   "tooling.qase-manifest.unique-keys": 50,
   "tooling.qase-manifest.suite-paths": 51,
   "tooling.qase-manifest.generated-ids": 52,
