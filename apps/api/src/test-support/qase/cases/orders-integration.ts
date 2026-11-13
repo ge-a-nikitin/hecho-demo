@@ -5,6 +5,8 @@ const accessSuite = ["Orders (integration)", "Lifecycle", "Access control"] as c
 const validationSuite = ["Orders (integration)", "Lifecycle", "Request validation"] as const;
 const quotaSuite = ["Orders (integration)", "Quotas"] as const;
 const attachmentsSuite = ["Orders (integration)", "Attachments"] as const;
+const administrationSuite = ["Orders (integration)", "Administration"] as const;
+const timeSuite = ["Orders (integration)", "Time tracking"] as const;
 
 /**
  * Every case in this file runs the same expensive setup, so the shared half of
@@ -534,6 +536,104 @@ export const ordersIntegrationCases = [
       {
         action: "Read the order.",
         expected: "It lists exactly the three accepted file names.",
+      },
+    ],
+  },
+  {
+    key: "integration.orders.reassign-after-start",
+    suite: administrationSuite,
+    title: "reassigns work in progress and returns the order to the estimate stage",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The administrator can take work away from an executor after it started, but the new executor has a rate " +
+      "and an estimate of their own, so the order goes back to `ASSIGNED` and the approved amount is cleared. " +
+      "The previous executor loses access, and the recorded time stays on the order where the new executor " +
+      "overwrites it with their own summary entry.",
+    preconditions:
+      stack + "An order in `IN_PROGRESS` assigned to `executorA` with an accepted estimate and 150 recorded minutes.",
+    steps: [
+      {
+        action: "`POST /api/orders/{id}/assign` with `executorB` as the administrator.",
+        expected:
+          "`201`; the order is `ASSIGNED` to `executorB`, `approvedHours`, `approvedHourlyRate` and " +
+          "`approvedAmount` are `null`, and the assignments list the new `ACTIVE` one above the `REASSIGNED` one.",
+      },
+      {
+        action: "Read the order as the previous executor.",
+        expected: "`403`, because the order no longer belongs to that account.",
+      },
+      {
+        action: "Read the time entry of the order.",
+        expected: "It still holds 150 minutes recorded by the previous executor.",
+      },
+      {
+        action: "Propose a three-hour estimate as `executorB`.",
+        expected: "`201`, so the new executor can price the work before it starts again.",
+      },
+    ],
+  },
+  {
+    key: "integration.orders.decline",
+    suite: administrationSuite,
+    title: "returns a declined assignment to the pool and withdraws its pending estimate",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A decline is the executor's refusal of an assignment they have not started. The order must become " +
+      "claimable again, the declined assignment has to stay in the record, and the estimate that never reached " +
+      "the customer must not survive as a pending proposal.",
+    preconditions:
+      stack + "An order in `ASSIGNED` for `executorA` with one pending three-hour estimate.",
+    steps: [
+      {
+        action: "`POST /api/orders/{id}/decline` as `executorA` with the comment `\"No availability this week\"`.",
+        expected: "`201`; the order is `WAITING_DISTRIBUTION` without an executor.",
+      },
+      {
+        action: "Read the assignment, the estimate and the status history.",
+        expected:
+          "The assignment is `DECLINED`, the estimate is `WITHDRAWN`, and the last history entry records " +
+          "`ASSIGNED` to `WAITING_DISTRIBUTION` with the comment.",
+      },
+      {
+        action: "Claim the order as `executorB`.",
+        expected: "`201` with `executorB` assigned, so the pool works again.",
+      },
+    ],
+  },
+  {
+    key: "integration.orders.time-overwrite",
+    suite: timeSuite,
+    title: "keeps one summary time entry that is editable only while the work is in progress",
+    severity: "major",
+    priority: "medium",
+    layer: "api",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Actual time is one summary entry per order, not a log: the executor corrects it while working and the " +
+      "last value wins. Once the work is submitted the figure is part of what the customer reviews, so a late " +
+      "save is refused and the stored value stays.",
+    preconditions: stack + "An order in `IN_PROGRESS` assigned to `executorA`.",
+    steps: [
+      {
+        action: "Record 90 minutes, then 120 minutes with a comment.",
+        expected: "Both calls answer `201`; the second returns 120 minutes with the comment.",
+      },
+      {
+        action: "Read the order as the customer.",
+        expected: "The single `timeEntry` holds 120 minutes.",
+      },
+      {
+        action: "Submit the work for review, then record 200 minutes.",
+        expected: "The late save answers `409` with `code: CONFLICT`, and the stored entry still holds 120.",
       },
     ],
   },

@@ -2,9 +2,344 @@ import type { QaseCase } from "../types.js";
 
 const validationSuite = ["Orders", "Request validation"] as const;
 const lifecycleSuite = ["Orders", "Lifecycle"] as const;
+const distributionSuite = ["Orders", "Distribution"] as const;
+const draftSuite = ["Orders", "Draft editing"] as const;
+const estimatesSuite = ["Orders", "Estimates"] as const;
+const acceptanceSuite = ["Orders", "Acceptance and cancellation"] as const;
+const commentsSuite = ["Orders", "Comments"] as const;
 const quotasSuite = ["Orders", "Quotas"] as const;
 
 export const ordersCases = [
+  {
+    key: "orders.assign.restarts-started-work",
+    suite: distributionSuite,
+    title: "returns work in progress to the assignment stage for the new executor",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The administrator is the only role that can take work away from an executor after it started. The " +
+      "order cannot jump straight back to work: a new executor has their own rate and their own estimate, so " +
+      "the order returns to `ASSIGNED` with the approved hours, rate and amount cleared, while the previous " +
+      "assignment and the accepted estimate stay in the history.",
+    preconditions:
+      "An order in `IN_PROGRESS` assigned to `executor-1` with an approved estimate of 2.5 hours at 60, one " +
+      "`ACTIVE` assignment and one `ACCEPTED` estimate; `executor-2` is an active executor.",
+    steps: [
+      {
+        action: "Assign the order to `executor-2` as the administrator.",
+        expected:
+          "The order is `ASSIGNED` to `executor-2` with `approvedHours`, `approvedHourlyRate` and " +
+          "`approvedAmount` set to `null`.",
+      },
+      {
+        action: "Read the assignment history.",
+        expected:
+          "The first assignment is `REASSIGNED` with an end date, and a new `ACTIVE` assignment names " +
+          "`executor-2` and the administrator.",
+      },
+      {
+        action: "Read the status history and the estimate.",
+        expected:
+          "One entry records `IN_PROGRESS` to `ASSIGNED` by the administrator, and the old estimate is still " +
+          "`ACCEPTED`, so the new executor must propose a fresh one.",
+      },
+    ],
+  },
+  {
+    key: "orders.assign.reassigns-with-history",
+    suite: distributionSuite,
+    title: "assigns a pooled order and moves a later reassignment into the history",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Distribution is auditable: the administrator assigns a pooled order, and a later reassignment does not " +
+      "delete the first executor from the record. The estimate the first executor left behind is withdrawn " +
+      "rather than deleted, and the reassignment is written as its own history entry.",
+    preconditions:
+      "An order in `WAITING_DISTRIBUTION` with one `PENDING` estimate, and two active executors.",
+    steps: [
+      {
+        action: "Assign the order to `executor-1` as the administrator.",
+        expected: "The order is `ASSIGNED` to `executor-1` with one `ACTIVE` assignment.",
+      },
+      {
+        action: "Assign the same order to `executor-2`.",
+        expected:
+          "The order is `ASSIGNED` to `executor-2`, the first assignment is `REASSIGNED` with an end date and " +
+          "a second `ACTIVE` assignment names the new executor.",
+      },
+      {
+        action: "Read the estimate and the status history.",
+        expected:
+          "The pending estimate is `WITHDRAWN` with the note that the order was reassigned, and the history " +
+          "holds both transitions plus the reassignment note.",
+      },
+    ],
+  },
+  {
+    key: "orders.assign.requires-active-executor",
+    suite: distributionSuite,
+    title: "refuses an inactive executor, the current one and a closed order",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "Assignment is the administrator's way to build the queue, so a deactivated account must never receive " +
+      "new work and an order that is already closed must not be reopened by pointing it at someone. Naming the " +
+      "current executor again is a conflict rather than a silent no-op.",
+    preconditions:
+      "An order in `WAITING_DISTRIBUTION`, one active and one inactive executor, and a completed order.",
+    steps: [
+      {
+        action: "Assign the waiting order to the inactive executor and to a missing id.",
+        expected: "Both calls answer `BadRequestException`.",
+      },
+      {
+        action: "Assign it to the active executor, then to the same executor again.",
+        expected: "The first call succeeds with one `ACTIVE` assignment; the second answers `ConflictException`.",
+      },
+      {
+        action: "Assign the completed order to the active executor.",
+        expected: "The call answers `ConflictException` and the closed order keeps its status.",
+      },
+    ],
+  },
+  {
+    key: "orders.draft.update-fields",
+    suite: draftSuite,
+    title: "stores the edited draft with trimmed values and releases the executor the customer detaches",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A draft is the only state the customer may still change, and every change has to reach the stored row: " +
+      "padded text is trimmed, an emptied optional field becomes null, and detaching the chosen executor ends " +
+      "that assignment instead of leaving it `ACTIVE` on an order nobody owns.",
+    preconditions:
+      "A `NEW` draft assigned to `executor-1` with one `ACTIVE` assignment and an active category.",
+    steps: [
+      {
+        action: "Edit the draft with a padded title, an emptied location, the category and `executorId: null`.",
+        expected:
+          "The stored order has the trimmed title, `location: null`, the category and `executorId: null`, and " +
+          "is still `NEW`.",
+      },
+      {
+        action: "Read the assignment history.",
+        expected: "The single assignment is `RELEASED` with an end date.",
+      },
+    ],
+  },
+  {
+    key: "orders.draft.refuses-invalid-edits",
+    suite: draftSuite,
+    title: "refuses to edit a submitted draft, another customer's order and an unavailable category",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The draft guard is the boundary between planning and execution: once the order is submitted the main " +
+      "parameters are frozen, and an owner check keeps one customer out of another customer's draft. A retired " +
+      "category is refused with a readable error rather than a foreign-key failure.",
+    preconditions:
+      "One `ASSIGNED` order, one `NEW` order of another customer, and one inactive category.",
+    steps: [
+      {
+        action: "Edit the submitted order.",
+        expected: "The call answers `ConflictException` and the order keeps its status.",
+      },
+      {
+        action: "Edit the order of the other customer.",
+        expected: "The call answers `ForbiddenException` and the owner stays unchanged.",
+      },
+      {
+        action: "Move a draft to the inactive category.",
+        expected: "The call answers `BadRequestException` and the draft keeps no category change.",
+      },
+    ],
+  },
+  {
+    key: "orders.estimates.requires-rate",
+    suite: estimatesSuite,
+    title: "refuses an estimate from an executor without a positive hourly rate",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The amount is rate times hours, so a proposal without a rate has no amount at all. Refusing the call " +
+      "keeps a zero-value estimate out of the customer's approval queue.",
+    preconditions: "An `ASSIGNED` order whose executor has no hourly rate.",
+    steps: [
+      {
+        action: "Propose two hours for the order.",
+        expected: "The call answers `BadRequestException`.",
+      },
+      {
+        action: "Read the estimate table.",
+        expected: "No estimate row exists.",
+      },
+    ],
+  },
+  {
+    key: "orders.estimates.amount-from-rate",
+    suite: estimatesSuite,
+    title: "multiplies the stored rate by the proposed hours and keeps the rate of the proposal",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The amount the customer approves is the one the invoice later snapshots, so the multiplication and its " +
+      "rounding are part of the money contract. The rate is copied into the estimate at proposal time, which is " +
+      "what keeps a later profile change from rewriting an accepted amount.",
+    preconditions: "Two `ASSIGNED` orders by one executor whose rate is 45.5.",
+    steps: [
+      {
+        action: "Propose 2.25 hours for the first order.",
+        expected:
+          "The estimate stores 2.25 hours, rate 45.5, amount 102.38 (45.5 x 2.25 rounded half up) and is " +
+          "`PENDING`.",
+      },
+      {
+        action: "Raise the executor's rate to 99 and propose one hour for the second order.",
+        expected: "The new estimate stores rate 99.",
+      },
+      {
+        action: "Read the first estimate again.",
+        expected: "It still stores rate 45.5, so the accepted amount cannot drift with the profile.",
+      },
+    ],
+  },
+  {
+    key: "orders.estimates.single-pending",
+    suite: estimatesSuite,
+    title: "answers conflict when a proposal is already waiting for the customer",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The customer approves one amount, so a second pending proposal would make the approval ambiguous and " +
+      "leave an orphaned estimate in the history. The database enforces the rule with a unique index, and the " +
+      "service turns that violation into a readable conflict instead of a server error.",
+    preconditions: "An `ASSIGNED` order with an executor whose rate is set.",
+    steps: [
+      {
+        action: "Propose two hours while the estimate insert raises the uniqueness violation.",
+        expected: "The call answers `ConflictException`.",
+      },
+      {
+        action: "Read the estimate table.",
+        expected: "Neither proposal was stored.",
+      },
+    ],
+  },
+  {
+    key: "orders.lifecycle.accept-once",
+    suite: acceptanceSuite,
+    title: "accepts the work once and refuses a second acceptance",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Acceptance is the customer's statement that the work is done, and it is what allows an invoice to be " +
+      "issued. A second acceptance would rewrite the moment of agreement and add a second history entry, so the " +
+      "call is refused and the stored acceptance stays untouched.",
+    preconditions: "An order in `ON_REVIEW` without an acceptance, and the owning customer.",
+    steps: [
+      {
+        action: "Accept the work.",
+        expected: "The order keeps `ON_REVIEW` and records an `acceptedAt` date.",
+      },
+      {
+        action: "Accept the same work again.",
+        expected: "The call answers `ConflictException`.",
+      },
+      {
+        action: "Read the status history.",
+        expected: "Exactly one entry records the acceptance note.",
+      },
+    ],
+  },
+  {
+    key: "orders.cancel.releases-assignment",
+    suite: acceptanceSuite,
+    title: "cancels a started assignment without a reason and withdraws the estimate awaiting the customer",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Before work starts a customer may walk away without explaining why, but the order must not be left in a " +
+      "half-assigned state: the assignment ends and the estimate that still waits for the customer is withdrawn " +
+      "so nobody can approve a plan for a cancelled order.",
+    preconditions:
+      "An `ASSIGNED` order with one `ACTIVE` assignment and one `PENDING` estimate, owned by the customer.",
+    steps: [
+      {
+        action: "Cancel the order without a reason as the customer.",
+        expected: "The order is `CANCELLED` with `cancellationReason: null`.",
+      },
+      {
+        action: "Read the assignment and the estimate.",
+        expected:
+          "The assignment is `RELEASED` with an end date and the estimate is `WITHDRAWN` with the note that " +
+          "the order was cancelled.",
+      },
+      {
+        action: "Read the status history.",
+        expected: "One entry records `ASSIGNED` to `CANCELLED` without a note.",
+      },
+    ],
+  },
+  {
+    key: "orders.comments.participants-only",
+    suite: commentsSuite,
+    title: "records a comment from a participant and refuses an outsider",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The comment thread is the shared record of the job, so it has to accept the customer, the assigned " +
+      "executor and the administrator, and nobody else. Storing the trimmed text keeps an accidental run of " +
+      "spaces out of the timeline.",
+    preconditions: "An order in `IN_PROGRESS` with `executor-1` assigned and a second customer.",
+    steps: [
+      {
+        action: "Add a padded comment as the owning customer.",
+        expected: "The stored comment carries the trimmed text and the customer as its author.",
+      },
+      {
+        action: "Add a comment as the other customer.",
+        expected: "The call answers `ForbiddenException`.",
+      },
+      {
+        action: "Read the comment table.",
+        expected: "Only the first comment exists.",
+      },
+    ],
+  },
   {
     key: "orders.validation.whitespace-title",
     suite: validationSuite,
