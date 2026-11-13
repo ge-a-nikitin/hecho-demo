@@ -9,3 +9,6 @@ apps/api/src/generated/prisma/
 *.tsbuildinfo
 .DS_Store
 .cline
+
+# Local security audit report: findings stay out of the public repository.
+SECURITY_ISSUES.md
