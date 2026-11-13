@@ -2,6 +2,7 @@ import type { QaseCase } from "../types.js";
 
 const clientAddressSuite = ["Deployment", "Client address"] as const;
 const responseHeadersSuite = ["Deployment", "Response headers"] as const;
+const containerSuite = ["Deployment", "Container hardening"] as const;
 
 export const deploymentCases = [
   {
@@ -113,6 +114,71 @@ export const deploymentCases = [
       {
         action: "Count the `add_header X-Content-Type-Options \"nosniff\" always;` lines in `apps/web/nginx.conf`.",
         expected: "There are exactly three: the server block and the two cached locations.",
+      },
+    ],
+  },
+  {
+    key: "deployment.container.non-root",
+    suite: containerSuite,
+    title: "runs the API as the unprivileged user without a writable home",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "The API container held the database password, the S3 keys and the Better Auth secret while running " +
+      "as `root`, so a dependency that turns into code execution inherited every file of the image and the " +
+      "ability to modify it. The last `USER` directive therefore has to be `node`, and the entrypoint has to " +
+      "work without a writable `$HOME`: corepack resolves `pnpm` through a cache under it, which a " +
+      "read-only root filesystem does not provide - the container failed to start with exactly that error " +
+      "before the migration called the local binary. `exec` keeps the server as PID 1 so a stop signal " +
+      "reaches it instead of the wrapping shell.",
+    preconditions:
+      "The repository holds the shipped `apps/api/Dockerfile`; the guard reads the file, because the suites " +
+      "never build and inspect a container.",
+    steps: [
+      {
+        action: "Collect every `USER` directive of `apps/api/Dockerfile` and take the last one.",
+        expected: "It is `node`, so no later directive brings `root` back.",
+      },
+      {
+        action: "Read the `CMD` line.",
+        expected:
+          "It runs `prisma migrate deploy` and then `exec node dist/main.js`, and it never calls `pnpm`.",
+      },
+    ],
+  },
+  {
+    key: "deployment.container.read-only-filesystem-and-limits",
+    suite: containerSuite,
+    title: "keeps the root filesystem read-only inside a bounded container",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "positive",
+    description:
+      "The API writes nothing at run time - uploads stay in memory, the invoice PDF is rendered in memory " +
+      "and Prisma only reads its schema - so the container can run with a read-only root filesystem and a " +
+      "memory-backed `/tmp`. Dropped capabilities and `no-new-privileges` remove the privileged and setuid " +
+      "paths an exploited dependency would look for, while the memory, CPU and process limits keep one " +
+      "leaking process from taking the tunnel and the CI runner that share the VM down with it. The limits " +
+      "are read from `API_MEM_LIMIT`, `API_CPUS` and `API_PIDS_LIMIT` with a default, so a smaller VM is " +
+      "tuned in `.env` instead of the compose file.",
+    preconditions: "The repository holds the shipped `docker-compose.yml`.",
+    steps: [
+      {
+        action: "Read the `api` service of `docker-compose.yml`.",
+        expected:
+          "It sets `read_only: true` and mounts `/tmp` as `rw,noexec,nosuid` with a size, drops all " +
+          "capabilities and enables `no-new-privileges`.",
+      },
+      {
+        action: "Read the resource limits of that service.",
+        expected:
+          "`mem_limit`, `cpus` and `pids_limit` are set and fall back to a default through the " +
+          "`API_*` variables.",
       },
     ],
   },

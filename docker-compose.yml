@@ -19,6 +19,22 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: "no"
+    # The API writes nothing to its own filesystem, so it gets a read-only root
+    # filesystem and a small memory-backed /tmp. Dropping the capabilities and
+    # enabling `no-new-privileges` means an exploited dependency can neither use
+    # a privileged binary nor gain rights through a setuid one, and the limits
+    # keep one process from taking the whole VM with it - the tunnel and the CI
+    # runner share this machine. Override the numbers in .env when the VM fits
+    # something else.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${API_MEM_LIMIT:-512m}
+    cpus: ${API_CPUS:-1.0}
+    pids_limit: ${API_PIDS_LIMIT:-256}
     env_file:
       - .env
     environment:
