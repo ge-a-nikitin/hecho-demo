@@ -266,7 +266,7 @@
 ### Что нужно
 
 - ВМ (подойдёт QEMU-виртуалка на домашнем компьютере) с Docker Engine и Docker Compose v2, git и curl; 2+ ГБ RAM и место под volumes `postgres_data` и `seaweedfs_data`.
-- Домен, зона которого делегирована на Cloudflare и находится в статусе Active: приложение публикуется на `hecho-demo.hius2.fyi`, поэтому зона `hius2.fyi` должна быть Active.
+- Домен, зона которого делегирована на Cloudflare и находится в статусе Active: приложение публикуется на `hecho-demo.gnikitin.dev`, поэтому зона `gnikitin.dev` должна быть Active.
 - Токен туннеля из Cloudflare Zero Trust.
 
 ### Схема окружения и секретов
@@ -295,7 +295,7 @@
    systemctl status cloudflared
    ```
 
-3. В Cloudflare Zero Trust создайте Public Hostname `hecho-demo.hius2.fyi` с пустым путём и сервисом `HTTP://localhost:8080`. DNS-запись создаёт сам туннель, поэтому конфликтующие A/CNAME удалите заранее. В настройках зоны включите Always Use HTTPS (HSTS — по желанию).
+3. В Cloudflare Zero Trust создайте Public Hostname `hecho-demo.gnikitin.dev` с пустым путём и сервисом `HTTP://localhost:8080`. DNS-запись создаёт сам туннель, поэтому конфликтующие A/CNAME удалите заранее. В настройках зоны включите Always Use HTTPS (HSTS — по желанию).
 4. Зарегистрируйте self-hosted runner (Settings → Actions → Runners) и установите его службой:
 
    ```bash
@@ -331,7 +331,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
    ```
 
    Деплой администратора не создаёт: `ADMIN_EMAIL`/`ADMIN_PASSWORD` используются только командами seed и полного сброса.
-4. Проверьте прод: `curl -I https://hecho-demo.hius2.fyi`, `curl https://hecho-demo.hius2.fyi/api/health`, откройте `https://hecho-demo.hius2.fyi/api/docs` и войдите в интерфейс под администратором. Загрузите файл в заказ — это проверяет и cookie-сессию, и SeaweedFS.
+4. Проверьте прод: `curl -I https://hecho-demo.gnikitin.dev`, `curl https://hecho-demo.gnikitin.dev/api/health`, откройте `https://hecho-demo.gnikitin.dev/api/docs` и войдите в интерфейс под администратором. Загрузите файл в заказ — это проверяет и cookie-сессию, и SeaweedFS.
 
 ### Ротация секретов
 
@@ -349,7 +349,7 @@ Workflow `.github/workflows/deploy.yml` при каждом push в `main` (ил
 - Статус: `docker compose ps`; логи приложения — `docker compose logs -f`, только API — `docker compose logs -f api`, туннель — `journalctl -u cloudflared -f`.
 - Перезагрузка ВМ: контейнеры с `restart: unless-stopped`, а также службы `cloudflared` и runner'а поднимаются автоматически. В локальном режиме без overlay контейнеры по-прежнему не перезапускаются.
 - Бэкап базы: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Файлы лежат в volume `seaweedfs_data`; его копируют, остановив `seaweedfs`, или через `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
-- Смена домена: измените `DOMAIN` в `deploy/prod.env`, добавьте новый Public Hostname в туннель и задеплойте. `FRONTEND_ORIGIN` и `BETTER_AUTH_URL` вычисляются из `DOMAIN`, а frontend собирается с относительным `VITE_API_URL=/api`, поэтому пересобирать код под домен не нужно. Пользователям придётся войти заново: старые cookie привязаны к прежнему домену.
+- Смена домена: измените `DOMAIN` в `deploy/prod.env`, добавьте новый Public Hostname в туннель, удалите прежний Public Hostname в Cloudflare Zero Trust и задеплойте. `FRONTEND_ORIGIN` и `BETTER_AUTH_URL` вычисляются из `DOMAIN`, а frontend собирается с относительным `VITE_API_URL=/api`, поэтому пересобирать код под домен не нужно. Пользователям придётся войти заново: старые cookie привязаны к прежнему домену.
 - `TRUST_PROXY=true` (не число): перед API три перехода — Cloudflare, cloudflared и nginx, а origin недоступен напрямую. Без этого протокол определяется как `http` (cookie без `Secure`) и IP клиента оказывается неверным.
 - После `docker compose restart api` nginx может отвечать `502`: контейнер получил новый адрес. Помогает `docker compose restart web`; штатный `up -d --build` пересоздаёт сеть целиком и этой проблемы не даёт.
 - Devtools в проде выключены (`DEVTOOLS_ENABLED=false`): группа ручек отвечает `404` и скрыта из Swagger, включая полный сброс данных.

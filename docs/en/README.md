@@ -268,7 +268,7 @@ browser → Cloudflare (TLS, cache, WAF) → cloudflared on the VM → nginx:808
 ### What you need
 
 - A VM (a QEMU virtual machine on a home computer is fine) with Docker Engine and Docker Compose v2, git and curl; 2+ GB of RAM and space for the `postgres_data` and `seaweedfs_data` volumes.
-- A domain whose zone is delegated to Cloudflare and shows the Active status: the application is published on `hecho-demo.hius2.fyi`, so the `hius2.fyi` zone must be Active.
+- A domain whose zone is delegated to Cloudflare and shows the Active status: the application is published on `hecho-demo.gnikitin.dev`, so the `gnikitin.dev` zone must be Active.
 - A tunnel token from Cloudflare Zero Trust.
 
 ### Environment and secret layout
@@ -297,7 +297,7 @@ An honest boundary: with this approach secrets exist in plaintext in `.env` on t
    systemctl status cloudflared
    ```
 
-3. In Cloudflare Zero Trust create a Public Hostname `hecho-demo.hius2.fyi` with an empty path and the service `HTTP://localhost:8080`. The tunnel creates the DNS record itself, so delete conflicting A/CNAME records beforehand. Enable Always Use HTTPS in the zone settings (HSTS is optional).
+3. In Cloudflare Zero Trust create a Public Hostname `hecho-demo.gnikitin.dev` with an empty path and the service `HTTP://localhost:8080`. The tunnel creates the DNS record itself, so delete conflicting A/CNAME records beforehand. Enable Always Use HTTPS in the zone settings (HSTS is optional).
 4. Register a self-hosted runner (Settings → Actions → Runners) and install it as a service:
 
    ```bash
@@ -333,7 +333,7 @@ Manual update on the VM: `git pull && docker compose up -d --build`.
    ```
 
    The deploy does not create an administrator: `ADMIN_EMAIL`/`ADMIN_PASSWORD` are used only by the seed command and the full reset.
-4. Verify production: `curl -I https://hecho-demo.hius2.fyi`, `curl https://hecho-demo.hius2.fyi/api/health`, open `https://hecho-demo.hius2.fyi/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
+4. Verify production: `curl -I https://hecho-demo.gnikitin.dev`, `curl https://hecho-demo.gnikitin.dev/api/health`, open `https://hecho-demo.gnikitin.dev/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
 
 ### Rotating secrets
 
@@ -351,7 +351,7 @@ The general flow: change the value in GitHub → run the deploy again. The workf
 - Status: `docker compose ps`. Application logs: `docker compose logs -f`, API only: `docker compose logs -f api`, tunnel: `journalctl -u cloudflared -f`.
 - VM reboot: containers with `restart: unless-stopped` come back automatically, as do the `cloudflared` and runner services. In local mode without the overlay the containers still do not restart.
 - Database backup: `docker compose exec -T postgres pg_dump -U <POSTGRES_USER> <POSTGRES_DB> | gzip > backup-$(date +%F).sql.gz`. Files live in the `seaweedfs_data` volume; copy it with `seaweedfs` stopped, or through `docker run --rm -v <project>_seaweedfs_data:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz /data`.
-- Domain change: edit `DOMAIN` in `deploy/prod.env`, add the new Public Hostname to the tunnel and deploy. `FRONTEND_ORIGIN` and `BETTER_AUTH_URL` are derived from `DOMAIN`, and the frontend is built with the relative `VITE_API_URL=/api`, so no rebuild for a specific domain is needed. Users must sign in again, because the old cookies belong to the previous domain.
+- Domain change: edit `DOMAIN` in `deploy/prod.env`, add the new Public Hostname to the tunnel, delete the previous Public Hostname in Cloudflare Zero Trust and deploy. `FRONTEND_ORIGIN` and `BETTER_AUTH_URL` are derived from `DOMAIN`, and the frontend is built with the relative `VITE_API_URL=/api`, so no rebuild for a specific domain is needed. Users must sign in again, because the old cookies belong to the previous domain.
 - `TRUST_PROXY=true` (not a number): three hops sit in front of the API — Cloudflare, cloudflared and nginx — and the origin is not reachable directly. Without it the protocol is seen as `http` (cookies lose `Secure`) and the client IP is wrong.
 - After `docker compose restart api` nginx may answer `502`, because the container received a new address. `docker compose restart web` fixes it; the regular `up -d --build` recreates the whole network and does not hit this problem.
 - Devtools are disabled in production (`DEVTOOLS_ENABLED=false`): the endpoints answer `404` and are hidden from Swagger, including the full data reset.
