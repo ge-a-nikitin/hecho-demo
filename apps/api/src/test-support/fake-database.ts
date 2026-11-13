@@ -114,6 +114,9 @@ const defaults: Partial<Record<TableName, () => Row>> = {
   // A proposal starts pending, which is the state the customer answers and the
   // one the service filters on when it looks for the estimate to respond to.
   orderEstimate: () => ({ status: EstimateStatus.PENDING }),
+  // A category is offered to customers as soon as it is created; retiring it is
+  // an explicit later action.
+  category: () => ({ isActive: true }),
   // The upload quota counts a rolling day of attachments, so a row the service
   // creates needs the timestamp the schema gives it.
   orderAttachment: () => ({ createdAt: new Date() }),

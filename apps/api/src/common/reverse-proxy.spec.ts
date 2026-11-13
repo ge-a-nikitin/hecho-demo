@@ -61,16 +61,13 @@ describe("Deployment", () => {
   describe("Client address", () => {
     it(qc("deployment.client-address.overwrites-forwarded-for", "replaces the forwarded address instead of appending to it"), () => {
       const config = readConfig();
+      const block = apiLocationBlock(config);
 
-      expect(proxyHeader(apiLocationBlock(config), "X-Forwarded-For")).toBe("$remote_addr");
-      expect(config).not.toContain("$proxy_add_x_forwarded_for");
-    });
-
-    it(qc("deployment.client-address.forwards-resolved-address", "sends the resolved address as both the real-IP and the forwarded header"), () => {
-      const block = apiLocationBlock(readConfig());
-
+      // The API reads one address, so nginx sends the peer it resolved under both
+      // header names and never appends a value the caller supplied.
       expect(proxyHeader(block, "X-Real-IP")).toBe("$remote_addr");
       expect(proxyHeader(block, "X-Forwarded-For")).toBe("$remote_addr");
+      expect(config).not.toContain("$proxy_add_x_forwarded_for");
     });
 
     it(qc("deployment.client-address.trusts-cloudflare", "takes CF-Connecting-IP only from the tunnel and the container network"), () => {

@@ -31,28 +31,11 @@ export const deploymentCases = [
         action: "Search the whole file for `$proxy_add_x_forwarded_for`.",
         expected: "No occurrence remains, so no other location can append a client-supplied value.",
       },
-    ],
-  },
-  {
-    key: "deployment.client-address.forwards-resolved-address",
-    suite: clientAddressSuite,
-    title: "sends the resolved address as both the real-IP and the forwarded header",
-    severity: "major",
-    priority: "high",
-    layer: "unit",
-    type: "functional",
-    behavior: "positive",
-    description:
-      "The API is configured with `TRUST_PROXY=true`, so Express takes the client address from the " +
-      "forwarded headers, and Better Auth stores the same value on the session. Both headers must carry " +
-      "the address nginx resolved, because a missing one silently falls back to the container network " +
-      "address: a session created through the tunnel used to store `172.27.0.1` - the Docker bridge " +
-      "gateway - for every client in the world.",
-    preconditions: "The tracked `apps/web/nginx.conf`, read directly by the case.",
-    steps: [
       {
-        action: "Read the `location /api/` block and look at `X-Real-IP` and `X-Forwarded-For`.",
-        expected: "Both are set to `$remote_addr`, which is the address after real-IP processing.",
+        action: "Look at `X-Real-IP` and `X-Forwarded-For` in the same block.",
+        expected:
+          "Both are set to `$remote_addr`, which is the address after real-IP processing, so the API never " +
+          "falls back to the container network address of the tunnel.",
       },
     ],
   },

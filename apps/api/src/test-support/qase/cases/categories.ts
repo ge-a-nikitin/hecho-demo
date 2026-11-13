@@ -19,8 +19,8 @@ export const categoriesCases = [
       "ordered by name because the web form renders it as a plain dropdown.",
     steps: [
       {
-        action: "Call `list(false)`.",
-        expected: "The query filters on `isActive: true` and orders by name ascending.",
+        action: "Seed one active `Plumbing` category and one retired one, then call `list(false)`.",
+        expected: "Only the active category is returned.",
       },
     ],
   },
@@ -39,8 +39,8 @@ export const categoriesCases = [
       "pass `isActive: false`, which would show only the retired ones.",
     steps: [
       {
-        action: "Call `list(true)`.",
-        expected: "The query runs without an `isActive` filter and keeps the name ordering.",
+        action: "Seed `Zebra` as active and `Plumbing` as retired, then call `list(true)`.",
+        expected: "Both are returned in name order - `Plumbing` first - with their active flags.",
       },
     ],
   },
@@ -60,7 +60,8 @@ export const categoriesCases = [
     steps: [
       {
         action: "Call `create(\"  Repair \", \"user-1\")`.",
-        expected: "The insert carries `name: \"Repair\"` and `createdById: \"user-1\"`.",
+        expected:
+          "The returned and stored category is named `Repair`, records `createdById: \"user-1\"` and starts active.",
       },
     ],
   },
@@ -79,7 +80,7 @@ export const categoriesCases = [
     steps: [
       {
         action: "Call `rename(\"category-1\", \" Painting \")`.",
-        expected: "The update targets `category-1` with `name: \"Painting\"`.",
+        expected: "The stored row `category-1` is named `Painting` and keeps its active flag.",
       },
     ],
   },
@@ -98,7 +99,8 @@ export const categoriesCases = [
     steps: [
       {
         action: "Call `setActive(\"category-1\", false)` and then `setActive(\"category-1\", true)`.",
-        expected: "Each update writes only `isActive` for `category-1`.",
+        expected:
+          "After each call the stored row is inactive and then active again, and its name stays `Plumbing`.",
       },
     ],
   },
