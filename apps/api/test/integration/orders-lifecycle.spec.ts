@@ -286,6 +286,124 @@ describe("Orders (integration)", () => {
     });
   });
 
+  describe("Administration", () => {
+    it(
+      qc(
+        "integration.orders.reassign-after-start",
+        "reassigns work in progress and returns the order to the estimate stage",
+      ),
+      async () => {
+        const order = await orderInProgress();
+        const time = await executorA.post(`/orders/${order.id}/time`, { minutes: 150 });
+        expect(time.status).toBe(201);
+
+        const reassigned = await admin.post<Order>(`/orders/${order.id}/assign`, {
+          executorId: executorB.id,
+        });
+
+        expect(reassigned.status).toBe(201);
+        expect(reassigned.body).toMatchObject({
+          status: "ASSIGNED",
+          executorId: executorB.id,
+          approvedHours: null,
+          approvedHourlyRate: null,
+          approvedAmount: null,
+        });
+        expect(reassigned.body.assignments).toEqual([
+          expect.objectContaining({ executorId: executorB.id, outcome: "ACTIVE" }),
+          expect.objectContaining({ executorId: executorA.id, outcome: "REASSIGNED" }),
+        ]);
+        // The time the previous executor recorded stays on the order; the new
+        // executor overwrites it with their own summary entry.
+        expect(reassigned.body.timeEntry?.minutes).toBe(150);
+
+        const byPreviousExecutor = await executorA.get<ApiError>(`/orders/${order.id}`);
+        expect(byPreviousExecutor.status).toBe(403);
+
+        const estimate = await executorB.post(`/orders/${order.id}/estimate`, { hours: 3 });
+        expect(estimate.status).toBe(201);
+      },
+    );
+
+    it(
+      qc(
+        "integration.orders.decline",
+        "returns a declined assignment to the pool and withdraws its pending estimate",
+      ),
+      async () => {
+        const order = await draftAssignedTo(executorA);
+        const estimate = await executorA.post<{ id: string }>(`/orders/${order.id}/estimate`, {
+          hours: 3,
+        });
+        expect(estimate.status).toBe(201);
+
+        const declined = await executorA.post<Order>(`/orders/${order.id}/decline`, {
+          comment: "No availability this week",
+        });
+
+        expect(declined.status).toBe(201);
+        expect(declined.body).toMatchObject({
+          status: "WAITING_DISTRIBUTION",
+          executorId: null,
+        });
+        expect(declined.body.assignments[0]).toMatchObject({
+          executorId: executorA.id,
+          outcome: "DECLINED",
+        });
+        expect(declined.body.estimates[0]).toMatchObject({ status: "WITHDRAWN" });
+        expect(declined.body.statusHistory.at(-1)).toMatchObject({
+          fromStatus: "ASSIGNED",
+          toStatus: "WAITING_DISTRIBUTION",
+          note: "No availability this week",
+        });
+
+        const claimed = await executorB.post<Order>(`/orders/${order.id}/claim`);
+        expect(claimed.status).toBe(201);
+        expect(claimed.body.executorId).toBe(executorB.id);
+      },
+    );
+  });
+
+  describe("Time tracking", () => {
+    it(
+      qc(
+        "integration.orders.time-overwrite",
+        "keeps one summary time entry that is editable only while the work is in progress",
+      ),
+      async () => {
+        const order = await orderInProgress();
+
+        const first = await executorA.post<{ minutes: number }>(`/orders/${order.id}/time`, {
+          minutes: 90,
+        });
+        const second = await executorA.post<{ minutes: number; comment: string }>(
+          `/orders/${order.id}/time`,
+          { minutes: 120, comment: "Worked together with a second technician" },
+        );
+
+        expect(first.status).toBe(201);
+        expect(second.status).toBe(201);
+        expect(second.body).toMatchObject({
+          minutes: 120,
+          comment: "Worked together with a second technician",
+        });
+
+        const stored = await customerA.get<Order>(`/orders/${order.id}`);
+        expect(stored.body.timeEntry?.minutes).toBe(120);
+
+        const review = await executorA.post<Order>(`/orders/${order.id}/submit-review`);
+        expect(review.status).toBe(201);
+
+        const late = await executorA.post<ApiError>(`/orders/${order.id}/time`, { minutes: 200 });
+        expect(late.status).toBe(409);
+        expect(late.body).toMatchObject({ code: "CONFLICT" });
+
+        const afterLateSave = await customerA.get<Order>(`/orders/${order.id}`);
+        expect(afterLateSave.body.timeEntry?.minutes).toBe(120);
+      },
+    );
+  });
+
   describe("Access control", () => {
     it(qc("integration.access-control.no-session", "rejects requests without a session"), async () => {
       const response = await request<ApiError>("GET", "/orders");

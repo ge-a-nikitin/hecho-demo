@@ -41,7 +41,7 @@ This document records the agreed requirements, implementation status, and launch
 - The initial administrator account is created by a separate CLI command from `ADMIN_EMAIL` and `ADMIN_PASSWORD`; repeated runs do not change an existing administrator.
 - When creating an executor, the administrator sets an initial password and communicates it outside the application. The administrator does not set the hourly rate: the executor sets and changes it independently in their profile. The administrator resets customer or executor passwords; customer self-service password recovery is deferred until email is connected.
 - Sign-out is available in the sidebar on wide screens and in the top bar on mobile.
-- Accounts are deactivated, not deleted, to preserve order and invoice history.
+- Accounts are deactivated, not deleted, to preserve order and invoice history. Only customer and executor accounts can be deactivated; an administrator account cannot.
 - Before deactivating an executor, the administrator must reassign all their unfinished orders.
 - One user has one role. Customer, executor, and administrator sign in through different routes/panels; credentials for one role do not grant access to other roles' panels.
 - A customer sees only the orders they created and related comments and invoices.
@@ -53,7 +53,7 @@ This document records the agreed requirements, implementation status, and launch
 - In the shared pool, all executors see the full order description and attachments.
 - An order is locked to the first executor who takes it from the pool.
 - The administrator can also distribute orders.
-- One executor performs an order. The administrator can reassign an order; the history preserves the previous executor.
+- One executor performs an order. The administrator can reassign an order; the history preserves the previous executor. Reassigning work that is already in progress returns the order to **Assigned** with the approved hours, rate, and amount cleared, so the new executor proposes an estimate and the customer approves it again; the time the previous executor recorded stays on the order.
 - The selected or assigned executor can decline an order; the order returns to the unassigned pool.
 - In a draft, the customer can change all data. After submission, the main order parameters cannot be edited; the customer can add comments.
 - Title, description, and category are required. Due date, attachments/files, and location or address are optional.
@@ -72,7 +72,7 @@ Agreed order flow:
 - After confirmation, the order moves to **In progress**.
 - The executor submits the completed work for review: **On review**.
 - If the customer requests changes, the order moves to **Needs revision**. When the executor starts revisions, the order returns to **In progress**; after revisions, the executor submits the order for review again: **On review**.
-- After the customer accepts the work, the administrator issues an invoice: **Invoice issued**.
+- After the customer accepts the work, the administrator issues an invoice: **Invoice issued**. Accepting the work keeps the order **On review** and only records the acceptance time; issuing the invoice is what moves it to **Invoice issued**.
 - After accepting the work, the customer reports payment, and the order awaits the administrator's payment review in the **Invoice issued** status. After review, the administrator confirms payment, and the order moves to **Invoice paid**. Completion is a separate administrator action after confirming receipt of funds; only then does the order become **Completed**.
 - An order can be **Cancelled** according to the rules below.
 
@@ -82,6 +82,7 @@ Agreed order flow:
 - Before work starts, a cancellation reason is not required.
 - After work starts, only the administrator can cancel the order; a reason is required.
 - After an invoice is issued, the order cannot be cancelled: an unpaid invoice is voided, after which a new one can be issued. A paid invoice is immutable and cannot be voided; post-payment adjustments are outside the current process.
+- Cancelling ends the current assignment and withdraws any estimate that still awaits the customer's answer, so a cancelled order never carries a half-finished assignment or a proposal someone could still approve.
 
 ### Rate, estimate, and time tracking
 

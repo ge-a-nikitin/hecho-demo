@@ -15,7 +15,7 @@
  */
 
 import { Prisma } from "../generated/prisma/client.js";
-import { PaymentReportStatus } from "../generated/prisma/enums.js";
+import { EstimateStatus, PaymentReportStatus } from "../generated/prisma/enums.js";
 
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
@@ -111,6 +111,9 @@ const cascades: Partial<Record<TableName, readonly { table: TableName; field: st
  */
 const defaults: Partial<Record<TableName, () => Row>> = {
   invoicePaymentReport: () => ({ status: PaymentReportStatus.PENDING, submittedAt: new Date() }),
+  // A proposal starts pending, which is the state the customer answers and the
+  // one the service filters on when it looks for the estimate to respond to.
+  orderEstimate: () => ({ status: EstimateStatus.PENDING }),
   // The upload quota counts a rolling day of attachments, so a row the service
   // creates needs the timestamp the schema gives it.
   orderAttachment: () => ({ createdAt: new Date() }),
