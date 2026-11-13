@@ -235,8 +235,13 @@ export class OrdersService {
       const isUnassignedOrder =
         order.status === OrderStatus.WAITING_DISTRIBUTION && order.executorId === null;
       const isReassignment = order.status === OrderStatus.ASSIGNED && order.executorId !== null;
-      if (!isUnassignedOrder && !isReassignment) {
-        throw new ConflictException("Only waiting or assigned orders can be assigned");
+      // Work already in progress still belongs to the administrator: a new
+      // executor has a rate and an estimate of their own, so the order goes back
+      // to the assignment stage instead of handing over an amount that nobody
+      // agreed to pay them.
+      const isStartedWork = order.status === OrderStatus.IN_PROGRESS && order.executorId !== null;
+      if (!isUnassignedOrder && !isReassignment && !isStartedWork) {
+        throw new ConflictException("Only waiting, assigned or in-progress orders can be assigned");
       }
       if (order.executorId === executorId) {
         throw new ConflictException("Order is already assigned to this executor");
@@ -244,7 +249,13 @@ export class OrdersService {
 
       const update = await tx.workOrder.updateMany({
         where: { id, status: order.status, executorId: order.executorId },
-        data: { executorId, status: OrderStatus.ASSIGNED },
+        data: {
+          executorId,
+          status: OrderStatus.ASSIGNED,
+          ...(isStartedWork
+            ? { approvedHours: null, approvedHourlyRate: null, approvedAmount: null }
+            : {}),
+        },
       });
       if (update.count !== 1) throw new ConflictException("Order has already been assigned");
       if (order.executorId) {
