@@ -3,6 +3,7 @@ import type { QaseCase } from "../types.js";
 const sessionSuite = ["API", "Access control"] as const;
 const configurationSuite = ["Auth", "Configuration"] as const;
 const rateLimitSuite = ["Auth", "Rate limiting"] as const;
+const registrationSuite = ["Auth", "Registration"] as const;
 
 export const authCases = [
   {
@@ -329,6 +330,74 @@ export const authCases = [
         expected:
           "The API answers `429` with `Too many requests` in the body, while the same session still " +
           "reaches other endpoints: the limiter is scoped to the path, not to the account.",
+      },
+    ],
+  },
+  {
+    key: "integration.auth.self-registration",
+    suite: registrationSuite,
+    title: "registers a visitor as an active customer without an administrator",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "Open registration is a product decision: a visitor signs up, becomes a customer and starts placing " +
+      "orders without waiting for an administrator to create the account. The case pins the two halves " +
+      "that make it usable - the returned session works immediately, which a deactivated account could " +
+      "not, and the account appears as active in the administrator's customer list.",
+    preconditions:
+      "The ephemeral stack from `docker-compose.test.yml` with a reset database and a signed-in administrator.",
+    steps: [
+      {
+        action: "Send `POST /api/auth/sign-up/email` with a name, a fresh email and a password.",
+        expected: "`200` and a session cookie.",
+      },
+      {
+        action: "Read `/api/users/me` with that cookie.",
+        expected: "`200` with the new email and `role: CUSTOMER`.",
+      },
+      {
+        action: "List customers with `includeInactive=true` as the administrator.",
+        expected: "The new account is present with `isActive: true`.",
+      },
+    ],
+  },
+  {
+    key: "integration.auth.registration-ignores-privileged-input",
+    suite: registrationSuite,
+    title: "keeps a self-registered visitor a customer when the body asks for an administrator",
+    severity: "blocker",
+    priority: "high",
+    layer: "api",
+    type: "security",
+    behavior: "negative",
+    description:
+      "The sign-up route belongs to Better Auth, so nothing in the Nest layer sees the body before the " +
+      "account is written. The only protection is `input: false` on `role` and `isActive` in `auth.ts`, " +
+      "which replaces whatever the caller sends with the defaults. The case sends exactly what an " +
+      "escalation attempt sends and then proves the account cannot reach the administrator API, because a " +
+      "case on the configuration alone would stay green with the route still open.",
+    preconditions:
+      "The ephemeral stack from `docker-compose.test.yml` with a reset database and a signed-in administrator.",
+    steps: [
+      {
+        action:
+          "Send `POST /api/auth/sign-up/email` with `role: \"ADMIN\"`, `isActive: false`, a name, a fresh " +
+          "email and a password.",
+        expected: "`200` and a session cookie; the privileged fields are replaced by the defaults.",
+      },
+      {
+        action: "Read `/api/users/me` with that cookie.",
+        expected:
+          "`200` with `role: CUSTOMER`, which also proves the account is active because a deactivated " +
+          "account is refused.",
+      },
+      {
+        action: "Create a category as the new account and list customers as the administrator.",
+        expected:
+          "`403` with `code: FORBIDDEN` for the category, and the account is listed as `isActive: true`.",
       },
     ],
   },

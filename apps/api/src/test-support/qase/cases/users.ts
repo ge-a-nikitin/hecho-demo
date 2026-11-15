@@ -198,6 +198,33 @@ export const usersCases = [
     ],
   },
   {
+    key: "users.accounts.deactivate-refuses-admin",
+    suite: accountSuite,
+    title: "refuses to deactivate an administrator account",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "The administrator is the only role that can deactivate anybody, so an administrator account that " +
+      "could be deactivated could lock the console out of its own last user - or, worse, be switched off " +
+      "by a mistaken request that the API then reports as done. The role filter turns both directions into " +
+      "`404`, and the case keeps the row and the session so a refusal cannot hide a write.",
+    preconditions: "A stored administrator with one session and a stored customer.",
+    steps: [
+      {
+        action: "Call `setActive(\"admin-1\", false)` and then `setActive(\"admin-1\", true)`.",
+        expected: "Both calls reject with `NotFoundException`.",
+      },
+      {
+        action: "Read the user and session tables.",
+        expected:
+          "The administrator is still `ADMIN` and `isActive: true`, and its session is still stored.",
+      },
+    ],
+  },
+  {
     key: "users.accounts.password-reset",
     suite: accountSuite,
     title: "replaces the stored password hash and ends the sessions of the account",

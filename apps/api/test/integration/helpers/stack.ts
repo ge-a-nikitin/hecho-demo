@@ -187,6 +187,37 @@ export async function signIn(email: string, password: string, attempts = 5): Pro
   }
 }
 
+export type SignUpResponse = {
+  status: number;
+  body: { user?: { id?: string; email?: string; role?: string } } | undefined;
+  cookie: string;
+};
+
+/**
+ * Registers a visitor through the public sign-up endpoint the landing page uses
+ * and keeps the session cookie it opens. The caller passes the whole body,
+ * because a case may try to smuggle privileged fields into it.
+ */
+export async function signUp(body: Record<string, unknown>): Promise<SignUpResponse> {
+  const response = await fetch(`${API_URL}/api/auth/sign-up/email`, {
+    method: "POST",
+    headers: { origin: CLIENT_ORIGIN, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  const cookie = response.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .filter((value) => value.includes("session_token"))
+    .join("; ");
+
+  return {
+    status: response.status,
+    body: (text ? JSON.parse(text) : undefined) as SignUpResponse["body"],
+    cookie,
+  };
+}
+
 export async function signInAdmin(): Promise<Actor> {
   const cookie = await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
   const profile = await request<{ id: string }>("GET", "/users/me", { cookie });

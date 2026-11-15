@@ -186,6 +186,33 @@ describe("Users", () => {
 
     it(
       qc(
+        "users.accounts.deactivate-refuses-admin",
+        "refuses to deactivate an administrator account",
+      ),
+      async () => {
+        // The administrator can end any customer or executor session, so the
+        // only account that could lock the product out of its own console is the
+        // administrator's. The role filter refuses it before any write, and the
+        // case keeps the session and the row so that a refusal cannot be mistaken
+        // for a silent deactivation.
+        const { db, service } = serviceWith({
+          user: [administrator(), customer()],
+          session: [{ id: "session-admin", userId: "admin-1" }],
+        });
+
+        await expect(service.setActive("admin-1", false)).rejects.toThrow(NotFoundException);
+        await expect(service.setActive("admin-1", true)).rejects.toThrow(NotFoundException);
+
+        expect(db.rows("user").find((row) => row.id === "admin-1")).toMatchObject({
+          role: UserRole.ADMIN,
+          isActive: true,
+        });
+        expect(db.rows("session").map((row) => row.userId)).toEqual(["admin-1"]);
+      },
+    );
+
+    it(
+      qc(
         "users.accounts.password-reset",
         "replaces the stored password hash and ends the sessions of the account",
       ),

@@ -182,6 +182,41 @@ export const invoicesIntegrationCases = [
     ],
   },
   {
+    key: "integration.invoices.receipt-quota-exempt",
+    suite: reviewSuite,
+    title: "accepts a receipt while the order already holds its attachment quota",
+    severity: "critical",
+    priority: "high",
+    layer: "api",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A customer who uploaded the documented number of photos must still be able to pay. Only the " +
+      "running API shows that the two upload paths really are separate: the case fills the order to " +
+      "`ORDER_ATTACHMENT_LIMIT`, watches the next attachment refused with `409`, and then sends the receipt " +
+      "through the invoice route, which has to accept it and leave the attachment list unchanged.",
+    preconditions:
+      stack +
+      "An order whose customer uploaded the three attachments allowed by `ORDER_ATTACHMENT_LIMIT=3` and " +
+      "saw the fourth refused, then driven to accepted work and issued an invoice.",
+    steps: [
+      {
+        action: "Issue an invoice for the accepted order as the administrator.",
+        expected: "`201` with status `ISSUED` for an order that already holds three attachments.",
+      },
+      {
+        action: "Upload a receipt to `/orders/{id}/invoices/{invoiceId}/payment-reports`.",
+        expected: "`201` with a `PENDING` report named `receipt.pdf`.",
+      },
+      {
+        action: "Read the order as its customer.",
+        expected:
+          "The invoice is still `ISSUED` and the order lists exactly three attachments: the receipt belongs " +
+          "to the invoice, not to the attachment quota.",
+      },
+    ],
+  },
+  {
     key: "integration.invoices.receipt-access",
     suite: reviewSuite,
     title: "keeps the receipt away from the executor and serves it to the administrator as a download",
