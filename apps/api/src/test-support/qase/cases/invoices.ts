@@ -38,6 +38,39 @@ export const invoicesCases = [
     ],
   },
   {
+    key: "invoices.payment-reports.quota-exempt",
+    suite: paymentSuite,
+    title: "accepts a receipt while the order already holds its attachment quota",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The product documentation promises that payment receipts do not count towards the attachment " +
+      "quotas, which is what lets a customer pay for an order whose photo budget is already spent. The " +
+      "receipt lives in `InvoicePaymentReport`, a table the attachment quota never counts, and the case " +
+      "pins that separation: both quotas are exhausted - the order holds its only attachment and the " +
+      "rolling day already stored one - and the receipt still has to be accepted without adding an " +
+      "attachment row.",
+    preconditions:
+      "`ORDER_ATTACHMENT_LIMIT=1` and `ORDER_ATTACHMENT_DAILY_LIMIT=1`, an invoice in `ISSUED` owned by " +
+      "the acting customer, one attachment on its order and one attachment uploaded by the same customer " +
+      "on another order.",
+    steps: [
+      {
+        action: "Call `reportPayment` with a receipt as the owning customer.",
+        expected: "The call succeeds and stores a `PENDING` payment report for the invoice.",
+      },
+      {
+        action: "Read the attachment table after the call.",
+        expected:
+          "It still holds exactly the two seeded rows, so the quota neither blocked the receipt nor paid " +
+          "for it.",
+      },
+    ],
+  },
+  {
     key: "invoices.payment-reports.confirm-payment",
     suite: paymentSuite,
     title: "confirms payment and moves the order to INVOICE_PAID without completing it",

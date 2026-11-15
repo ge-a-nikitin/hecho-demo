@@ -110,5 +110,8 @@ export class OrderFilesService {
 
 function sanitizeFilename(filename: string): string {
   const basename = filename.replaceAll("\\", "/").split("/").at(-1)?.trim();
+  // Control characters are exactly what a stored filename must lose, so the
+  // regex intentionally reaches into that range.
+  // eslint-disable-next-line no-control-regex
   return basename?.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 255) || "attachment";
 }

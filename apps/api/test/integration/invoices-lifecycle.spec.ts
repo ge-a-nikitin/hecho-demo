@@ -19,6 +19,12 @@ import {
 
 const HOURLY_RATE = 60;
 const HOURS = 2.5;
+/** `ORDER_ATTACHMENT_LIMIT=3` in docker-compose.test.yml keeps quota cases cheap. */
+const ATTACHMENT_LIMIT = 3;
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+  "base64",
+);
 const RECEIPT_BYTES = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n");
 
 type StatusEntry = { fromStatus: string | null; toStatus: string; note: string | null };
@@ -53,6 +59,7 @@ type Order = {
   status: string;
   acceptedAt: string | null;
   completedAt: string | null;
+  attachments: { id: string; filename: string }[];
   invoices: Invoice[];
   statusHistory: StatusEntry[];
 };
@@ -100,8 +107,13 @@ function sequenceOf(number: string): number {
   return Number(number.split("-").at(-1));
 }
 
-/** Drives a fresh order to the state the administrator invoices: accepted work. */
-async function acceptedWork(): Promise<Order> {
+/**
+ * Drives a fresh order to the state the administrator invoices: accepted work.
+ * `attachments` fills the order's attachment quota first, which is only open to
+ * the customer while the order is still a draft; the extra upload that proves
+ * the quota is exhausted is asserted here so a later case can rely on it.
+ */
+async function acceptedWork({ attachments = 0 }: { attachments?: number } = {}): Promise<Order> {
   const draft = await customer.post<Order>("/orders", {
     title: nextTitle(),
     description: "Work that the administrator will invoice",
@@ -109,6 +121,25 @@ async function acceptedWork(): Promise<Order> {
     executorId: executor.id,
   });
   expect(draft.status).toBe(201);
+
+  for (let index = 1; index <= attachments; index += 1) {
+    const photo = await customer.upload(
+      `/orders/${draft.body.id}/attachments`,
+      `photo-${index}.png`,
+      ONE_PIXEL_PNG,
+    );
+    expect(photo.status).toBe(201);
+  }
+
+  if (attachments > 0) {
+    const refused = await customer.upload(
+      `/orders/${draft.body.id}/attachments`,
+      "over-quota.png",
+      ONE_PIXEL_PNG,
+    );
+    expect(refused.status).toBe(409);
+    expect((refused.body as ApiError).message).toContain(`at most ${ATTACHMENT_LIMIT} attachments`);
+  }
 
   const submitted = await customer.post<Order>(`/orders/${draft.body.id}/submit`);
   expect(submitted.body.status).toBe("ASSIGNED");
@@ -272,7 +303,7 @@ describe("Invoices (integration)", () => {
       async () => {
         const order = await paidOrder();
         const invoice = order.invoices[0];
-        expect(invoice).toBeDefined();
+        expect(order.invoices).toHaveLength(1);
 
         const response = await admin.post<ApiError>(
           `/orders/${order.id}/invoices/${invoice!.id}/void`,
@@ -335,6 +366,34 @@ describe("Invoices (integration)", () => {
           "CONFIRMED",
           "REJECTED",
         ]);
+      },
+    );
+
+    it(
+      qc(
+        "integration.invoices.receipt-quota-exempt",
+        "accepts a receipt while the order already holds its attachment quota",
+      ),
+      async () => {
+        // The documentation promises that a receipt is not an attachment. The
+        // order is filled to `ORDER_ATTACHMENT_LIMIT` and the next attachment is
+        // refused before the invoice exists, so the accepted receipt proves the
+        // exemption against a quota that is genuinely exhausted.
+        const order = await acceptedWork({ attachments: ATTACHMENT_LIMIT });
+        const invoice = await issueInvoice(order);
+
+        const report = await customer.upload<PaymentReport>(
+          `/orders/${order.id}/invoices/${invoice.id}/payment-reports`,
+          "receipt.pdf",
+          RECEIPT_BYTES,
+        );
+
+        expect(report.status).toBe(201);
+        expect(report.body).toMatchObject({ status: "PENDING", filename: "receipt.pdf" });
+
+        const stored = await customer.get<Order>(`/orders/${order.id}`);
+        expect(stored.body.attachments).toHaveLength(ATTACHMENT_LIMIT);
+        expect(stored.body.invoices[0]).toMatchObject({ status: "ISSUED" });
       },
     );
 

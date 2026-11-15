@@ -3,7 +3,6 @@ import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { readFile } from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaService } from "../database/prisma.service.js";
-import { Prisma } from "../generated/prisma/client.js";
 import {
   AssignmentOutcome,
   InvoiceStatus,

@@ -18,6 +18,7 @@ import type { OrdersService } from "../orders/orders.service.js";
 import type { ObjectStorageService } from "../storage/object-storage.service.js";
 import { createFakeDatabase } from "../test-support/fake-database.js";
 import { qc } from "../test-support/qase-case.js";
+import { withEnv } from "../test-support/with-env.js";
 import { InvoicesService } from "./invoices.service.js";
 
 const objectKey = "orders/order-1/receipt";
@@ -62,6 +63,60 @@ describe("Invoices", () => {
           objectKey,
           expect.objectContaining({ size: 8, mimetype: "application/pdf" }),
         );
+      },
+    );
+
+    it(
+      qc(
+        "invoices.payment-reports.quota-exempt",
+        "accepts a receipt while the order already holds its attachment quota",
+      ),
+      async () => {
+        // Both documented quotas are exhausted for this customer: the order
+        // holds its only attachment and a second upload in the rolling day was
+        // already stored on another order. A receipt is a payment document, not
+        // an attachment, so the exemption has to survive exactly this state.
+        const { db, service } = await withEnv(
+          { ORDER_ATTACHMENT_LIMIT: "1", ORDER_ATTACHMENT_DAILY_LIMIT: "1" },
+          () =>
+            serviceWith({
+              ...awaitingPayment(),
+              orderAttachment: [
+                {
+                  id: "attachment-1",
+                  orderId: "order-1",
+                  uploadedById: customer.id,
+                  objectKey: "orders/order-1/photo",
+                  filename: "photo.png",
+                  contentType: "image/png",
+                  sizeBytes: 8,
+                },
+                {
+                  id: "attachment-2",
+                  orderId: "order-2",
+                  uploadedById: customer.id,
+                  objectKey: "orders/order-2/photo",
+                  filename: "photo.png",
+                  contentType: "image/png",
+                  sizeBytes: 8,
+                },
+              ],
+            }),
+        );
+
+        const report = await service.reportPayment("order-1", "invoice-1", receipt(), customer);
+
+        expect(report).toMatchObject({
+          status: PaymentReportStatus.PENDING,
+          filename: "receipt.pdf",
+        });
+        expect(db.rows("invoicePaymentReport")).toHaveLength(1);
+        // Neither quota moves: the receipt is stored in its own table and the
+        // attachment rows stay exactly as they were.
+        expect(db.rows("orderAttachment").map((row) => row.id)).toEqual([
+          "attachment-1",
+          "attachment-2",
+        ]);
       },
     );
 
