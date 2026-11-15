@@ -51,6 +51,8 @@ describe("Auth", () => {
 
             // `toNodeHandler` mounts `auth.handler` only when this probe answers
             // true; without it the adapter hands the object to express instead.
+            // Here the `in` operator is the contract under test, not a weak oracle.
+            // eslint-disable-next-line no-restricted-syntax
             expect("handler" in auth).toBe(true);
             expect(typeof auth.handler).toBe("function");
           },

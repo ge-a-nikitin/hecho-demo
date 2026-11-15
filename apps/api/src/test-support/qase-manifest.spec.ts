@@ -31,7 +31,7 @@ describe("Tooling", () => {
         const keys = new Set<string>(qaseCases.map((entry) => entry.key));
 
         for (const key of Object.keys(qaseCaseIds)) {
-          expect(keys.has(key), `stale case ID for \"${key}\"`).toBe(true);
+          expect(keys.has(key), `stale case ID for "${key}"`).toBe(true);
         }
       },
     );
@@ -71,7 +71,7 @@ describe("Tooling", () => {
           }
 
           const location = `${entry.suite.join(" / ")} > ${entry.title}`;
-          expect(locations.has(location), `duplicate case \"${location}\"`).toBe(false);
+          expect(locations.has(location), `duplicate case "${location}"`).toBe(false);
           locations.add(location);
         }
       },
@@ -91,7 +91,7 @@ describe("Tooling", () => {
         const keys = new Set<string>(qaseCases.map((entry) => entry.key));
 
         for (const key of usage.keys()) {
-          expect(keys.has(key), `\"${key}\" is called by a spec but missing from the manifest`).toBe(
+          expect(keys.has(key), `"${key}" is called by a spec but missing from the manifest`).toBe(
             true,
           );
         }

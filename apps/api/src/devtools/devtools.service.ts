@@ -13,7 +13,6 @@ import { PrismaService } from "../database/prisma.service.js";
 import { ObjectStorageService } from "../storage/object-storage.service.js";
 import { readAdminCredentials, resetAllData, type ResetReport } from "./reset.js";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 
 type DevToolUserUpdate = {
   email?: string;

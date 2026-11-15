@@ -39,6 +39,7 @@
 - For a bug fix, reproduce the defect with a test before touching the implementation, and keep that test afterwards as the regression guard.
 - Run the repository commands, not a generic one: the whole unit suite is `pnpm --filter @order-desk/api test`, a single file is `pnpm --filter @order-desk/api test src/orders/orders.dto.spec.ts` (no `--` separator, it eats the path), and a single case is `-t "<title>"` after the path.
 - Keep unit suites offline: no database, no network, no credentials, so pull-request checks and local runs never depend on infrastructure. A test that needs the running stack belongs in `apps/api/test/integration` and runs through `pnpm --filter @order-desk/api test:integration`.
+- `pnpm lint` runs ESLint over the workspace from the root flat config. The suites additionally reject `toBeDefined()`, the `in` operator as an oracle and any `.only`, so a case asserts the value or the property itself; the rare legitimate use takes an `eslint-disable-next-line no-restricted-syntax` comment that states why the operator is the contract under test.
 - Every test is a Qase TestOps case. Add or update its entry in the catalogue module under `apps/api/src/test-support/qase/cases/`, then call `it(qc("<key>", "<title>"), ...)`: `qc()` fails collection when the key is unknown or the title drifted, which keeps the catalogue and the suite together. Case content (`description`, `preconditions`, `steps`) is written in English, like the rest of the code, and explains why the case exists rather than restating the assertions.
 - After changing a case entry, run `pnpm qase:sync --dry-run`, review the plan, then `pnpm qase:sync`, so descriptions, steps, tags, and case IDs reach TestOps. `qase-case-ids.ts` is generated and written only by the sync; never edit it by hand.
 - When a test disappears, remove its catalogue entry and run `pnpm qase:sync` in the same change. Do not leave the catalogue ahead of or behind the suites: an offline parity test fails when a case ID survives its entry.
@@ -74,7 +75,7 @@
 
 ### Pull requests and merging
 
-- Before opening the pull request, run the relevant local checks for fast feedback: `pnpm typecheck`, `pnpm --filter @order-desk/api test`, and `pnpm build` when the change affects the bundles. `.github/workflows/checks.yml` repeats them on the pull request and gates the merge, so a failing or outdated run blocks it even after local success.
+- Before opening the pull request, run the relevant local checks for fast feedback: `pnpm typecheck`, `pnpm lint`, `pnpm --filter @order-desk/api test`, and `pnpm build` when the change affects the bundles. `.github/workflows/checks.yml` repeats them on the pull request and gates the merge, so a failing or outdated run blocks it even after local success.
 - Merge with a squash or a rebase so that `main` stays linear, and make the pull request title a valid commit subject, because a squash merge reuses it as the commit message.
 - Describe in the pull request what was verified, naming the commands run and the workflows or routes exercised.
 - Merging deploys. After the merge, confirm that the `Deploy` run for the merge commit succeeded and that production still answers (`https://hecho-demo.gnikitin.dev/api/health`) instead of assuming it worked.
