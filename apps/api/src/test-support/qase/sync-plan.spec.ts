@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { qc } from "../qase-case.js";
 import {
   archiveSuite,
+  caseTags,
   hasDrift,
   type PlannedCase,
   planArchives,
@@ -118,6 +119,25 @@ describe("Tooling", () => {
         ]);
       },
     );
+
+    it(
+      qc("tooling.qase-sync.tags", "writes each case tag once when a layer repeats a suite slug"),
+      () => {
+        expect(caseTags("orders.example", "api", ["API", "Access control"])).toEqual([
+          "order-desk:orders.example",
+          "api",
+          "access-control",
+        ]);
+
+        expect(caseTags("orders.example", "unit", ["API", "Orders"])).toEqual([
+          "order-desk:orders.example",
+          "unit",
+          "api",
+          "orders",
+        ]);
+      },
+    );
+
     it(
       qc(
         "tooling.qase-sync.drift",

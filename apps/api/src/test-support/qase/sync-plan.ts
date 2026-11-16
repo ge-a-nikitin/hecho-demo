@@ -2,7 +2,7 @@
  * Pure planning rules for the TestOps sync.
  *
  * The script in `apps/api/scripts/qase-sync-cases.ts` performs the HTTP calls;
- * everything it decides is computed here, so the identity, archiving and
+ * everything it decides is computed here, so the identity, archiving, tag and
  * conflict rules are unit-tested offline instead of against a live project.
  *
  * Identity is the `order-desk:<key>` tag the sync writes on every case: a case
@@ -11,12 +11,32 @@
  * case archive in its API, so retiring a case means moving it under
  * `Archive / <original top level suite>` rather than deleting anything.
  */
+import type { QaseLayer } from "./types.js";
 
 /** Prefix of the tag that ties a TestOps case to a catalogue key. */
 export const caseTagPrefix = "order-desk:";
 
 /** Top level suite that holds cases whose keys left the catalogue. */
 export const archiveSuite = "Archive";
+
+/**
+ * Composes the tags the sync writes on a case.
+ *
+ * TestOps stores tags as a set and drops a repeated title, so a layer that
+ * matches a suite slug (`api` in `API / …`) would otherwise make the payload
+ * describe a list the API never returns: the comparison in `matchesContent()`
+ * would see a difference on every run and the sync would never converge.
+ */
+export function caseTags(key: string, layer: QaseLayer, suite: readonly string[]): string[] {
+  return [...new Set([`${caseTagPrefix}${key}`, layer, ...suite.map(slugTag)])];
+}
+
+function slugTag(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 /** A catalogue entry with its suite path already resolved to a TestOps suite ID. */
 export interface PlannedCase {
