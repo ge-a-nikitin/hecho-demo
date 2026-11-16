@@ -263,7 +263,7 @@ export function OrderDetailView({
         aria-modal="true"
         aria-labelledby="order-detail-title"
         tabIndex={-1}
-        data-testid="order-detail"
+        data-testid="order-detail-panel"
       >
         <div className="order-sheet-grabber" aria-hidden="true" />
         <header className="order-detail-header" ref={headerRef}>
