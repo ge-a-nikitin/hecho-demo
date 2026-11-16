@@ -32,7 +32,8 @@
 
 ## Прогоны в CI
 
-- Прогоны отчитываются только после мержа. Workflow `.github/workflows/qase.yml` запускается на пуш в `main` и вручную: job `catalogue` проверяет каталог через `qase:sync --dry-run` и падает, если каталог и проект разошлись, jobs `unit` и `integration` прогоняют наборы с `QASE_MODE=testops` и пишут ссылку на прогон в summary, а job `publish` добавляет обе ссылки комментарием в смерженный pull-request.
+- Прогоны отчитываются только после мержа. Workflow `.github/workflows/qase.yml` запускается на пуш в `main` и вручную: job `catalogue` проверяет каталог через `qase:sync --dry-run` и падает, если каталог и проект разошлись, jobs `unit` и `integration` прогоняют наборы с `QASE_MODE=testops` и пишут ссылку на прогон в summary, job `e2e-report` вызывает reusable workflow репозитория `ge-a-nikitin/hecho-e2e` с `qase-mode: testops` для смерженного коммита, а job `publish` добавляет все три ссылки комментарием в смерженный pull-request.
+- Браузерный прогон называется `Order Desk web · e2e · <sha>`, получает теги `ci,e2e` и пишет результаты на кейсы каталога самого набора, а не каталога в `apps/api/src/test-support/qase/`. Workflow `.github/workflows/e2e.yml` запускает тот же набор на каждом pull-request с `qase-mode: off`: отчитываться может только `main`, а мерж, запускающий оба workflow, собирал бы образы дважды.
 - Pull-request токена Qase не получает, поэтому его проверки остаются офлайн, а fork не может отправить результаты в проект. Токен лежит в секрете репозитория `QASE_TESTOPS_API_TOKEN` и доступен только этому workflow.
 - Дефекты в Qase не связываются с GitHub Issues: найденные дефекты чинятся в том же pull-request вместе с регрессионным тестом.
 

@@ -1,0 +1,38 @@
+name: E2E
+
+# A pull request builds its own commit with the suite's docker-compose.e2e.yml and
+# runs the Playwright specs against it. A merge into `main` is covered by
+# qase.yml, which calls the same workflow with reporting; triggering here as well
+# would build the images twice per merge.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    # The suite in ge-a-nikitin/hecho-e2e owns every step: it builds this
+    # repository's images, checks that the build stamp matches the checkout, and
+    # runs the browser projects. A caller that copied those steps would drift
+    # from the build that was tested.
+    name: e2e
+    uses: ge-a-nikitin/hecho-e2e/.github/workflows/run-suite.yml@main
+    with:
+      sut-repository: ${{ github.repository }}
+      # The commit under review, never a branch name: a branch may move between
+      # the trigger and the checkout, and the stamp printed by the build has to
+      # match the commit this run reports on.
+      sut-ref: ${{ github.sha }}
+      suite-ref: main
+      # A pull request stays green without the Qase token, exactly like the
+      # offline mode of the unit and integration suites.
+      qase-mode: "off"
+      run-title: Order Desk web · e2e · ${{ github.sha }}
+    secrets:
+      QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}

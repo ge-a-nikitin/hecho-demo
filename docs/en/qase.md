@@ -32,7 +32,8 @@ The governing rule: Qase exists for reporting only. Neither suite needs the netw
 
 ## CI runs
 
-- Results are reported only after a merge. `.github/workflows/qase.yml` runs on a push to `main` and manually: the `catalogue` job checks the catalogue with `qase:sync --dry-run` and fails when it and the project disagree, the `unit` and `integration` jobs run the suites with `QASE_MODE=testops` and write their run link into the job summary, and the `publish` job adds both links as a comment on the merged pull request.
+- Results are reported only after a merge. `.github/workflows/qase.yml` runs on a push to `main` and manually: the `catalogue` job checks the catalogue with `qase:sync --dry-run` and fails when it and the project disagree, the `unit` and `integration` jobs run the suites with `QASE_MODE=testops` and write their run link into the job summary, the `e2e-report` job calls the reusable workflow of `ge-a-nikitin/hecho-e2e` with `qase-mode: testops` for the merged commit, and the `publish` job adds all three links as a comment on the merged pull request.
+- The browser run is titled `Order Desk web · e2e · <sha>`, is tagged `ci,e2e`, and reports onto the cases of the suite's own catalogue, not the one in `apps/api/src/test-support/qase/`. `.github/workflows/e2e.yml` runs the same suite on every pull request with `qase-mode: off`, because only `main` may report and a merge that triggered both workflows would build the images twice.
 - A pull request never receives the Qase token, so its checks stay offline and a fork cannot send results to the project. The token lives in the `QASE_TESTOPS_API_TOKEN` repository secret and only this workflow can read it.
 - Defects in Qase are not linked to GitHub Issues: a defect found while writing or rewriting tests is fixed in the same pull request together with a regression test.
 
