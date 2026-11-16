@@ -168,10 +168,28 @@ jobs:
         run: docker compose -f docker-compose.test.yml down -v --remove-orphans
 
 
+  # The browser suite lives in the separate public repository ge-a-nikitin/hecho-e2e
+  # and builds this repository's images from `sut-ref`, so a merge is tested as
+  # the exact commit that went into `main`. The called workflow owns the build,
+  # the browser projects and the reporter; `run-link` needs no `outputs` key here,
+  # because the reusable workflow declares it in `on.workflow_call.outputs`.
+  e2e-report:
+    name: e2e
+    needs: catalogue
+    uses: ge-a-nikitin/hecho-e2e/.github/workflows/run-suite.yml@main
+    with:
+      sut-repository: ${{ github.repository }}
+      sut-ref: ${{ github.sha }}
+      suite-ref: main
+      qase-mode: testops
+      run-title: Order Desk web · e2e · ${{ github.sha }}
+    secrets:
+      QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+
 
   publish:
     name: publish
-    needs: [unit, integration]
+    needs: [unit, integration, e2e-report]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -188,10 +206,11 @@ jobs:
           SHA: ${{ github.sha }}
           UNIT_LINK: ${{ needs.unit.outputs.run-link }}
           INTEGRATION_LINK: ${{ needs.integration.outputs.run-link }}
+          E2E_LINK: ${{ needs.e2e-report.outputs.run-link }}
         run: |
           set -euo pipefail
 
-          if [ -z "${UNIT_LINK}${INTEGRATION_LINK}" ]; then
+          if [ -z "${UNIT_LINK}${INTEGRATION_LINK}${E2E_LINK}" ]; then
             echo "No Qase run link to publish."
             exit 0
           fi
@@ -208,6 +227,7 @@ jobs:
             echo
             if [ -n "$UNIT_LINK" ]; then echo "- unit: $UNIT_LINK"; fi
             if [ -n "$INTEGRATION_LINK" ]; then echo "- integration: $INTEGRATION_LINK"; fi
+            if [ -n "$E2E_LINK" ]; then echo "- e2e: $E2E_LINK"; fi
           } > comment.md
 
           gh pr comment "$number" --repo "$REPOSITORY" --body-file comment.md
