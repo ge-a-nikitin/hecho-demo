@@ -289,6 +289,32 @@ export const toolingCases = [
     ],
   },
   {
+    key: "tooling.qase-sync.tags",
+    suite: syncSuite,
+    title: "writes each case tag once when a layer repeats a suite slug",
+    severity: "major",
+    priority: "medium",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "TestOps stores tags as a set and drops a repeated title, so a payload that lists the same tag twice " +
+      "can never describe what the project returns. The layer and a suite root share a slug whenever an " +
+      "`API / …` case is marked `layer: \"api\"` (or an `E2E / …` case `layer: \"e2e\"`), and without " +
+      "deduplication every dry run reports such a case as drifted: the sync patches it forever and the " +
+      "post-merge catalogue gate fails on every merge, so no run reaches the project.",
+    steps: [
+      {
+        action: "Compose the tags of a case whose `layer` and a suite slug are both `api`.",
+        expected: "The payload lists `api` once and still carries the identity tag and every suite slug.",
+      },
+      {
+        action: "Sync that case and plan the sync again.",
+        expected: "The second plan is empty instead of asking for another update.",
+      },
+    ],
+  },
+  {
     key: "tooling.qase-sync.drift",
     suite: syncSuite,
     title: "reports a dry run as drift when applying it would write anything",

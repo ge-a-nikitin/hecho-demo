@@ -193,5 +193,6 @@ export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
   "tooling.qase-sync.archive": 64,
   "tooling.qase-sync.restore": 65,
   "tooling.qase-sync.conflicts": 66,
+  "tooling.qase-sync.tags": 210,
   "tooling.qase-sync.drift": 68,
 };
