@@ -106,6 +106,60 @@ jobs:
           echo "Qase unit run: $link" >> "$GITHUB_STEP_SUMMARY"
 
 
+  web:
+    name: web
+    needs: catalogue
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      run-link: ${{ steps.link.outputs.run-link }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The browser suite needs no Prisma client and no database: it renders in
+      # jsdom with the API stubbed at the network boundary.
+      - name: Report the web suite
+        id: report
+        env:
+          QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+          QASE_TESTOPS_RUN_TITLE: Order Desk Web · unit · ${{ github.sha }}
+          QASE_TESTOPS_RUN_DESCRIPTION: Browser unit suite of ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          QASE_TESTOPS_RUN_TAGS: ci,unit
+        run: |
+          set -o pipefail
+          pnpm --filter @order-desk/web test:qase 2>&1 | tee qase-web.log
+
+      - name: Publish the run link
+        id: link
+        if: always()
+        run: |
+          set -euo pipefail
+          link=$(grep -oE 'Test run link: https://[^ ]+' qase-web.log | tail -1 | awk '{print $NF}' || true)
+
+          if [ -z "$link" ]; then
+            echo "No Qase run link in the output." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "run-link=$link" >> "$GITHUB_OUTPUT"
+          echo "Qase web run: $link" >> "$GITHUB_STEP_SUMMARY"
+
+
   integration:
     name: integration
     needs: catalogue
@@ -189,7 +243,7 @@ jobs:
 
   publish:
     name: publish
-    needs: [unit, integration, e2e-report]
+    needs: [unit, web, integration, e2e-report]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -205,12 +259,13 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           SHA: ${{ github.sha }}
           UNIT_LINK: ${{ needs.unit.outputs.run-link }}
+          WEB_LINK: ${{ needs.web.outputs.run-link }}
           INTEGRATION_LINK: ${{ needs.integration.outputs.run-link }}
           E2E_LINK: ${{ needs.e2e-report.outputs.run-link }}
         run: |
           set -euo pipefail
 
-          if [ -z "${UNIT_LINK}${INTEGRATION_LINK}${E2E_LINK}" ]; then
+          if [ -z "${UNIT_LINK}${WEB_LINK}${INTEGRATION_LINK}${E2E_LINK}" ]; then
             echo "No Qase run link to publish."
             exit 0
           fi
@@ -226,6 +281,7 @@ jobs:
             echo "Qase TestOps runs for \`$SHA\`:"
             echo
             if [ -n "$UNIT_LINK" ]; then echo "- unit: $UNIT_LINK"; fi
+            if [ -n "$WEB_LINK" ]; then echo "- web: $WEB_LINK"; fi
             if [ -n "$INTEGRATION_LINK" ]; then echo "- integration: $INTEGRATION_LINK"; fi
             if [ -n "$E2E_LINK" ]; then echo "- e2e: $E2E_LINK"; fi
           } > comment.md
