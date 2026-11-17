@@ -22,11 +22,16 @@ loadEnv({ path: resolve(import.meta.dirname, "../../.env"), quiet: true });
  * lives in `apps/api/src/test-support/qase`, so a spec imports `qc()` from
  * there. Those modules are plain TypeScript with no Nest or Prisma imports, so
  * the import costs nothing at run time.
+ *
+ * `test/integration` holds the same kind of offline case one level up: it mounts
+ * the whole application behind the real router, providers and session, and stubs
+ * the API at the same network boundary, so a case asserts what a person sees
+ * after a click instead of what one component renders.
  */
 export default defineConfig({
   plugins: [react()],
   test: {
-    include: ["src/**/*.spec.ts", "src/**/*.spec.tsx"],
+    include: ["src/**/*.spec.ts", "src/**/*.spec.tsx", "test/**/*.spec.ts", "test/**/*.spec.tsx"],
     environment: "node",
     reporters:
       (process.env.QASE_MODE ?? "off") === "off"
