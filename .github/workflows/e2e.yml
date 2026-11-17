@@ -21,18 +21,34 @@ jobs:
     # repository's images, checks that the build stamp matches the checkout, and
     # runs the browser projects. A caller that copied those steps would drift
     # from the build that was tested.
+    #
+    # `uses` names `@main`, so a fix over there reaches this gate without a change
+    # here, and a defect over there reddens these pull requests without one. That
+    # is the price of a shared gate, and it makes the suite's own `main` the place
+    # that has to stay green.
     name: e2e
     uses: ge-a-nikitin/hecho-e2e/.github/workflows/run-suite.yml@main
     with:
       sut-repository: ${{ github.repository }}
-      # The commit under review, never a branch name: a branch may move between
-      # the trigger and the checkout, and the stamp printed by the build has to
-      # match the commit this run reports on.
+      # On `pull_request` GitHub sets `github.sha` to its own merge commit,
+      # `refs/pull/<N>/merge`, so the build under test is this pull request merged
+      # into the current `main` and not the tip of the branch. That is intended:
+      # the gate reviews what a merge would produce, and one immutable commit can
+      # be matched against the stamp the build prints. Never replace it with a
+      # branch name — a branch moves between the trigger and the checkout, and the
+      # run would then vouch for a commit nobody reviewed.
       sut-ref: ${{ github.sha }}
       suite-ref: main
+      # Stay false. The reusable workflow fails the run when this is true and
+      # `sut-ref` is not `pin`, and the pin describes the suite's committed
+      # snapshot of this repository, not the pull request under review.
+      verify-sut-context: false
       # A pull request stays green without the Qase token, exactly like the
       # offline mode of the unit and integration suites.
       qase-mode: "off"
       run-title: Order Desk web · e2e · ${{ github.sha }}
-    secrets:
-      QASE_TESTOPS_API_TOKEN: ${{ secrets.QASE_TESTOPS_API_TOKEN }}
+    # Deliberately no `secrets`: `qase-mode: off` publishes nothing, so the token
+    # never reaches a run that executes pull-request code. Passing it anyway would
+    # hand a repository secret to whatever the pull request builds. Only qase.yml,
+    # which runs after a merge, passes it, and the reusable workflow declares the
+    # secret `required: false`.
