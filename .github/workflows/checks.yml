@@ -59,6 +59,10 @@ jobs:
       - name: Unit tests
         run: pnpm --filter @order-desk/api test
 
+      # The browser suite is offline as well: jsdom and a stubbed API, no stack.
+      - name: Web unit tests
+        run: pnpm --filter @order-desk/web test
+
       - name: Build
         run: pnpm build
 
