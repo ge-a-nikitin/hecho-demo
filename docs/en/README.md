@@ -2,7 +2,7 @@
 
 [← Project root](../../README.md) · [Русская версия](../ru/README.md) · [Database schema](./database-schema.md)
 
-> **About the project.** HECHO was built entirely in vibe-coding mode and may contain inaccuracies. The author is a QA engineer, not a professional developer; the project's main purpose is to be a lightweight showcase base for the author's QA portfolio.
+> **About the project.** HECHO was written entirely in vibe-coding mode, so it may contain inaccuracies. The author is a QA engineer, not a professional developer; a lightweight QA portfolio is what the project is for.
 
 ## Contents
 
@@ -20,7 +20,7 @@
 
 A single-organization application for accepting orders from registered customers, distributing and performing work, tracking time, and issuing internal invoices.
 
-This document records the agreed requirements, implementation status, and launch instructions. The monorepo foundation, PostgreSQL schema, and core backend API domain scenarios are implemented. The frontend includes a public landing page, authentication, and customer, executor, and administrator panels with profiles and order cards. The API and frontend run in Docker Compose together with PostgreSQL and SeaweedFS. Automated end-to-end checks are maintained in a separate training repository and are not part of this project; stable QA locators and a devtools API are supported here.
+This document records the agreed requirements, implementation status and launch instructions. The monorepo foundation, the PostgreSQL schema and the core backend API domain scenarios are in place. The frontend has a public landing page, authentication, and customer, executor and administrator panels with profiles and order cards. The API and frontend run in Docker Compose together with PostgreSQL and SeaweedFS. Automated end-to-end checks are maintained in a separate training repository and are not part of this project; stable QA locators and a devtools API are supported here.
 
 ## Agreed functionality
 
@@ -72,7 +72,7 @@ Agreed order flow:
 - After confirmation, the order moves to **In progress**.
 - The executor submits the completed work for review: **On review**.
 - If the customer requests changes, the order moves to **Needs revision**. When the executor starts revisions, the order returns to **In progress**; after revisions, the executor submits the order for review again: **On review**.
-- After the customer accepts the work, the administrator issues an invoice: **Invoice issued**. Accepting the work keeps the order **On review** and only records the acceptance time; issuing the invoice is what moves it to **Invoice issued**.
+- After the customer accepts the work, the administrator issues an invoice: **Invoice issued**. Accepting the work keeps the order **On review** and only records the acceptance time; issuing the invoice moves it to **Invoice issued**.
 - After accepting the work, the customer reports payment, and the order awaits the administrator's payment review in the **Invoice issued** status. After review, the administrator confirms payment, and the order moves to **Invoice paid**. Completion is a separate administrator action after confirming receipt of funds; only then does the order become **Completed**.
 - An order can be **Cancelled** according to the rules below.
 
@@ -177,7 +177,7 @@ The Better Auth request limiter is configured explicitly and no longer depends o
 
 ## Backlog
 
-Queue of test-infrastructure work. The item is deferred deliberately; its reason and current state are stated next to it.
+Queue of test-infrastructure work. Why each item is deferred and what is done so far sit next to it.
 
 1. **Rewriting tests by TDD.** Some unit cases asserted Prisma call arguments, which reflected the implementation rather than observable behaviour. The rewrite went slice by slice (orders → invoices → users → devtools → common → integration) through red-green-refactor, and all six slices are closed. The `orders`, `invoices`, `users`, `devtools` and `common` suites run against the in-memory database in `src/test-support/fake-database.ts`, which applies `where` filters and relations, honours `select`, rolls a transaction back on a throw, supplies column defaults, raises the real Prisma errors for a write that matched nothing, writes the rows of a nested `create`, cascades the deletes the schema declares, and lets a case assert the stored state instead of the query arguments. The `users` slice also replaced the Better Auth sign-up with a fake that writes through that database, so creating an executor is asserted by the account and sessions it leaves behind. The `devtools` slice added the tables, cascades, unique email and `failOn` error codes the seed and the reset need, and its cases assert which rows survive a seed cleanup, which tables an administrator reset leaves behind and what the seed import stores, so the fixture file itself is verified. The `common` slice removed the configuration those modules used to demand at import and construction time: the Prisma client and the Better Auth instance are built on first use behind a lazy proxy that also answers membership probes, and `ObjectStorageService` reads `S3_*` and creates its S3 client on the first call, so `vitest.config.ts` keeps no `env` block and the suite runs with no `.env` at all; the storage cases assert what their in-memory bucket holds instead of the commands sent to the SDK. The `integration` slice needed no rewrite: `test/integration/orders-lifecycle.spec.ts` drives the real HTTP API through `helpers/stack.ts`, which speaks only HTTP and the devtools reset route, so its sixteen cases already assert response statuses and bodies - the order lifecycle, the access control rules and the request validation - without touching the database or internal identifiers.
 
@@ -315,7 +315,7 @@ An honest boundary: with this approach secrets exist in plaintext in `.env` on t
    sudo ./svc.sh install "$USER" && sudo ./svc.sh start
    ```
 
-   The repository is public, so the workflow deliberately runs only on `push` to `main` and on manual `workflow_dispatch`. Never add the `pull_request` event: code from a fork would then execute on the VM.
+   The repository is public, so the workflow runs only on `push` to `main` and on manual `workflow_dispatch`. Never add the `pull_request` event: code from a fork would then execute on the VM.
 
 ### Deployment
 

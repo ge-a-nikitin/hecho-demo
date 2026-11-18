@@ -1,43 +1,43 @@
 # HECHO
 
-**HECHO** — учебная клиент-серверная доска заказов для одной организации: заказчик создаёт заказ, исполнитель выполняет работу, администратор управляет пользователями, распределением заказов, счетами и оплатой.
+**HECHO** is a learning client-server order desk for a single organization.
 
-[Документация](./docs/README.md) · [Русская документация](./docs/ru/README.md) · [English documentation](./docs/en/README.md) · [English README](./README.en.md) · [Схема базы данных](./docs/ru/database-schema.md)
+[Documentation](./docs/README.md) · [English documentation](./docs/en/README.md) · [Русская документация](./docs/ru/README.md) · [Русский README](./README.ru.md) · [Database schema](./docs/en/database-schema.md)
 
 > [!IMPORTANT]
-> **О проекте и качестве кода**
+> **About the project and code quality**
 >
-> Проект полностью создан в режиме вайб-кодинга (AI-assisted development) и может содержать неточности, неоптимальные решения и неполные сценарии. Автор — не профессиональный разработчик, а QA-инженер. Основная задача проекта — быть лёгкой и понятной базой для демонстрации автора как QA-инженера: навыков тест-дизайна, работы с требованиями, API и UI, QA-документации и автоматизации. Не рассматривайте этот код как production-ready эталон.
+> The project was written entirely in vibe-coding mode (AI-assisted development), so it may contain inaccuracies, questionable decisions and unfinished scenarios. The author is a QA engineer, not a professional developer. That is the point: a lightweight base for a portfolio — test design, requirements analysis, API and UI testing, QA documentation, automation. Do not treat this code as a production-ready reference.
 
-## Что это
+## What it is
 
-Приложение для приёма заказов от зарегистрированных заказчиков, распределения и выполнения работ, учёта времени и выставления внутренних счетов. Поддерживаются три роли:
+An application for accepting orders from registered customers, distributing and performing work, tracking time, and issuing internal invoices. It supports three roles:
 
-- **Заказчик** — создаёт заказы, согласует оценку, принимает работу, отправляет подтверждение оплаты.
-- **Исполнитель** — берёт заказы из общего пула, предлагает часы и стоимость, выполняет работу, ведёт учёт времени.
-- **Администратор** — управляет пользователями, распределяет и переназначает заказы, выставляет счета, проверяет оплату и завершает заказы.
+- **Customer** — creates orders, approves estimates, accepts work, and submits payment proof.
+- **Executor** — takes orders from the shared pool, proposes hours and cost, performs the work, and tracks time.
+- **Administrator** — manages users, assigns and reassigns orders, issues invoices, verifies payments, and completes orders.
 
-Интерфейс локализован на английский (по умолчанию), русский и испанский языки.
+The interface is localized into English (default), Russian, and Spanish.
 
-## Технологии
+## Technologies
 
-| Слой | Что используется |
+| Layer | Stack |
 |---|---|
-| Frontend | React 19, Vite 7, TypeScript, React Router, собственная i18n (`en` / `ru` / `es`) |
+| Frontend | React 19, Vite 7, TypeScript, React Router, custom i18n (`en` / `ru` / `es`) |
 | Backend | NestJS 12, REST API, Swagger/OpenAPI, class-validator, PDFKit |
-| Авторизация | Better Auth, серверные сессии в PostgreSQL, роли `CUSTOMER`, `EXECUTOR`, `ADMIN` |
-| База данных | PostgreSQL 17, Prisma 7, миграции и SQL-ограничения |
-| Файлы | SeaweedFS 4.52 через S3-совместимый API, лимит 1 MB на файл |
-| Инфраструктура | Docker Compose, Nginx для раздачи frontend |
-| Тесты | Unit- и интеграционные тесты API на Vitest; e2e-автотесты ведутся в отдельном репозитории |
+| Authentication | Better Auth, server-side sessions in PostgreSQL, roles `CUSTOMER`, `EXECUTOR`, `ADMIN` |
+| Database | PostgreSQL 17, Prisma 7, migrations and SQL constraints |
+| Files | SeaweedFS 4.52 via an S3-compatible API, 1 MB limit per file |
+| Infrastructure | Docker Compose, Nginx serving the frontend |
+| Tests | API unit and integration tests via Vitest; e2e automation lives in a separate repository |
 
-## Архитектура
+## Architecture
 
-Проект построен по клиент-серверной схеме. Браузер загружает статическое React-приложение с Nginx и обращается к NestJS API по REST; API проверяет сессию и права, работает с PostgreSQL через Prisma и хранит файлы в SeaweedFS.
+The project follows a client-server architecture. The browser loads the static React application from Nginx and calls the NestJS REST API; the API validates the session and permissions, works with PostgreSQL through Prisma, and stores files in SeaweedFS.
 
 ```mermaid
 flowchart LR
-    U["Браузер<br/>React SPA"]
+    U["Browser<br/>React SPA"]
 
     subgraph DC["Docker Compose"]
         N["Nginx<br/>frontend :6200"]
@@ -46,39 +46,39 @@ flowchart LR
         S[("SeaweedFS<br/>S3 API :6203")]
     end
 
-    U -->|"HTTP, статика"| N
+    U -->|"HTTP, static files"| N
     U -->|"REST /api, session cookie"| A
     A -->|"Prisma"| P
     A -->|"S3 API"| S
 ```
 
-- Frontend — одностраничное приложение с панелями `/customer`, `/executor` и `/admin`; прямые переходы по URL поддерживаются Nginx.
-- API — доменная логика, авторизация, проверка ролей и переходов статусов, работа с файлами и генерация PDF-счетов.
-- PostgreSQL — пользователи, категории, заказы, история, оценки, счета и платежи.
-- SeaweedFS — вложения заказов и подтверждения оплаты.
-- Docker Compose поднимает все сервисы, ждёт готовности PostgreSQL и применяет миграции перед стартом API.
+- Frontend — a single-page application with `/customer`, `/executor`, and `/admin` panels; Nginx supports direct URL navigation.
+- API — domain logic, authentication, role and status-transition checks, file handling, and PDF invoice generation.
+- PostgreSQL — users, categories, orders, history, estimates, invoices, and payments.
+- SeaweedFS — order attachments and payment proof.
+- Docker Compose starts all services, waits for PostgreSQL readiness, and applies migrations before the API starts.
 
-## Быстрый старт
+## Quick start
 
-### Требования
+### Requirements
 
-- Docker Engine с Docker Compose v2 (`docker compose`); Docker Desktop подходит для Windows и macOS.
+- Docker Engine with Docker Compose v2 (`docker compose`); Docker Desktop works on Windows and macOS.
 - Git.
-- Свободные локальные порты `6200`–`6204`.
-- Node.js `22.18+` и pnpm `12.15` нужны только для разработки на хосте; для запуска через Compose они не требуются.
+- Free local ports `6200`–`6204`.
+- Node.js `22.18+` and pnpm `12.15` are required only for host development; they are not needed for a Compose run.
 
-### Запуск через Docker Compose
+### Run with Docker Compose
 
-1. Клонируйте репозиторий и перейдите в его корень.
-2. Создайте локальный файл окружения: `cp .env.example .env` (в Windows PowerShell: `Copy-Item .env.example .env`).
-3. Замените в `.env` все значения `replace-this-*` на уникальные локальные пароли и секреты. Задайте `ADMIN_EMAIL` и `ADMIN_PASSWORD` для первого администратора. Пароль PostgreSQL должен быть URL-safe (буквы, цифры и `._~-`), потому что он используется в `DATABASE_URL`.
-4. Соберите образы и запустите сервисы: `docker compose up --build -d`. Первый запуск может занять несколько минут; API дождётся PostgreSQL и применит миграции.
-5. Создайте начального администратора: `pnpm db:sync:admin` (в контейнере — `docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'`). Команда безопасна для повторного запуска и применяет текущие `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
-6. Откройте `http://localhost:6200` и войдите под `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Исполнителей создаёт администратор, заказчики регистрируются самостоятельно.
+1. Clone the repository and go to its root.
+2. Create a local environment file: `cp .env.example .env` (on Windows PowerShell: `Copy-Item .env.example .env`).
+3. Replace every `replace-this-*` value in `.env` with unique local passwords and secrets. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the first administrator. The PostgreSQL password must be URL-safe (letters, digits, and `._~-`) because it is used in `DATABASE_URL`.
+4. Build the images and start the services: `docker compose up --build -d`. The first run may take a few minutes; the API waits for PostgreSQL and applies migrations.
+5. Create the initial administrator: `pnpm db:sync:admin` (inside the container, `docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'`). The command is safe to re-run and applies the current `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+6. Open `http://localhost:6200` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. The administrator creates executors; customers register independently.
 
-Контейнеры объявлены с `restart: "no"`, поэтому после перезагрузки ПК они не запускаются автоматически: поднимите стек вручную командой `docker compose up -d`.
+The containers use `restart: "no"`, so they do not start automatically after a host reboot: bring the stack up manually with `docker compose up -d`.
 
-| Сервис | Адрес по умолчанию |
+| Service | Default address |
 |---|---|
 | Frontend | `http://localhost:6200` |
 | API | `http://localhost:6201/api` |
@@ -88,55 +88,55 @@ flowchart LR
 | SeaweedFS S3 API | `http://localhost:6203` |
 | SeaweedFS Admin UI | `http://localhost:6204` |
 
-Все порты привязаны к `127.0.0.1` и доступны только с локальной машины. Подробности о настройке портов, разработке с hot reload и devtools API — в [инструкции по запуску](./docs/ru/README.md#запуск-проекта-локально).
+All ports are bound to `127.0.0.1` and are available only from the local machine. For port configuration, hot-reload development, and the devtools API, see the [setup guide](./docs/en/README.md#running-the-project-locally).
 
-Для публикации используется домашняя ВМ с `docker-compose.prod.yml` и туннелем Cloudflare: TLS завершается на границе Cloudflare, служба `cloudflared` ходит в локальный nginx, а frontend и API (`/api`, `/api/docs`) доступны через один домен без открытых входящих портов. Порядок действий, схема хранения секретов и эксплуатация описаны в разделе [«Развёртывание на домашней ВМ»](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel).
+For publishing, a home VM runs `docker-compose.prod.yml` behind a Cloudflare tunnel: TLS terminates at the Cloudflare edge, the `cloudflared` service connects to the local nginx, and one domain serves the frontend and the API (`/api`, `/api/docs`) without any inbound ports. The steps, secret layout, and operations are described in [Deploying to a home VM](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel).
 
-## Документация
+## Documentation
 
-| Раздел | Русский | English |
+| Section | English | Русский |
 |---|---|---|
-| Полная документация | [docs/ru/README.md](./docs/ru/README.md) | [docs/en/README.md](./docs/en/README.md) |
-| Назначение и функционал | [Функционал](./docs/ru/README.md#согласованный-функционал) | [Functionality](./docs/en/README.md#agreed-functionality) |
-| Технические ограничения | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) |
-| План и статус реализации | [План](./docs/ru/README.md#план-реализации) | [Plan](./docs/en/README.md#implementation-plan) |
-| Бэклог и очередь работ | [Бэклог](./docs/ru/README.md#бэклог) | [Backlog](./docs/en/README.md#backlog) |
-| Запуск и эксплуатация | [Запуск](./docs/ru/README.md#запуск-проекта-локально) | [Setup](./docs/en/README.md#running-the-project-locally) |
-| Развёртывание на домашней ВМ | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) |
-| Схема базы данных | [Схема БД](./docs/ru/database-schema.md) | [Database schema](./docs/en/database-schema.md) |
-| Отчёты в Qase TestOps | [Qase](./docs/ru/qase.md) | [Qase](./docs/en/qase.md) |
+| Full documentation | [docs/en/README.md](./docs/en/README.md) | [docs/ru/README.md](./docs/ru/README.md) |
+| Purpose and functionality | [Functionality](./docs/en/README.md#agreed-functionality) | [Функционал](./docs/ru/README.md#согласованный-функционал) |
+| Technical constraints | [Constraints](./docs/en/README.md#technical-constraints-and-preferences) | [Ограничения](./docs/ru/README.md#технические-ограничения-и-пожелания) |
+| Implementation plan | [Plan](./docs/en/README.md#implementation-plan) | [План](./docs/ru/README.md#план-реализации) |
+| Backlog | [Backlog](./docs/en/README.md#backlog) | [Бэклог](./docs/ru/README.md#бэклог) |
+| Setup and operations | [Setup](./docs/en/README.md#running-the-project-locally) | [Запуск](./docs/ru/README.md#запуск-проекта-локально) |
+| Home VM deployment | [Cloudflare Tunnel](./docs/en/README.md#deploying-to-a-home-vm-cloudflare-tunnel) | [Cloudflare Tunnel](./docs/ru/README.md#развёртывание-на-домашней-вм-cloudflare-tunnel) |
+| Database schema | [Database schema](./docs/en/database-schema.md) | [Схема БД](./docs/ru/database-schema.md) |
+| Qase TestOps reporting | [Qase](./docs/en/qase.md) | [Qase](./docs/ru/qase.md) |
 
-## Структура репозитория
+## Repository structure
 
 ```text
-apps/web/            React SPA: лендинг, авторизация, панели ролей
-apps/api/            NestJS API, Prisma-схема и миграции, тесты
-docs/                двуязычная документация проекта
-.github/ISSUE_TEMPLATE/  форма баг-репорта для GitHub Issues
-docker-compose.yml   PostgreSQL, SeaweedFS, API и frontend
-docker-compose.prod.yml  продовый override: автоперезапуск и адреса от DOMAIN
-deploy/prod.env      продовая конфигурация без секретов
-.github/workflows/   деплой на домашнюю ВМ через self-hosted runner
+apps/web/            React SPA: landing page, authentication, role panels
+apps/api/            NestJS API, Prisma schema and migrations, tests
+docs/                bilingual project documentation
+.github/ISSUE_TEMPLATE/  bug report form for GitHub Issues
+docker-compose.yml   PostgreSQL, SeaweedFS, API, and frontend
+docker-compose.prod.yml  production overlay: auto-restart and URLs derived from DOMAIN
+deploy/prod.env      production configuration without secrets
+.github/workflows/   deployment to the home VM through a self-hosted runner
 ```
 
-## QA и тестирование
+## QA and testing
 
-- Интерактивные элементы размечены стабильными `data-testid`, не зависящими от CSS и структуры DOM.
-- Контракт API доступен в Swagger: `http://localhost:6201/api/docs`. У каждой ручки с телом запроса описана схема с реалистичным примером, а поля и параметры с фиксированным набором значений (роли, статусы, флаги) показывают все допустимые варианты; значения перечислений чувствительны к регистру (`ADMIN`, а не `admin`).
-- Для подготовки данных есть devtools API; по умолчанию он выключен и защищён отдельным ключом. Полный сброс проекта (данные, пользователи, сессии и файлы) выполняется ручкой `POST /api/devtools/reset` или командой `pnpm db:reset`; администратор из `.env` создаётся заново. Пока `DEVTOOLS_ENABLED` не равен `true`, ручки отвечают `404` и не показываются в Swagger.
-- Unit-тесты API на Vitest: `pnpm --filter @order-desk/api test`. Они работают офлайн, без базы и сети, и лежат рядом с кодом в `apps/api/src/**/*.spec.ts`.
-- Интеграционные тесты API: `pnpm --filter @order-desk/api test:integration`. Набор сам собирает и поднимает отдельный стек `docker-compose.test.yml` (проект `order-desk-test`, порты `7101`–`7102`), ждёт `/api/health`, очищает базу через `POST /api/devtools/reset`, а после прогона удаляет контейнеры вместе с данными. Сценарии покрывают жизненный цикл заказа, конкурентный захват из пула, права доступа и валидацию запросов.
-- Проверки типов и сборка: `pnpm typecheck`, `pnpm build`.
-- CI на pull-request: `.github/workflows/checks.yml` прогоняет на GitHub-hosted раннере типы, unit-тесты и сборку (`static`), а также интеграционный набор на настоящем стеке (`integration`). Обе проверки обязательны для мержа: правила `main` запрещают прямой пуш, force-push и мерж с незелёными или устаревшими проверками.
-- Отчёты о прогонах можно отправлять в Qase TestOps (проект `HECHO`): `pnpm --filter @order-desk/api test:qase` и `test:qase:integration`. Кейсы описаны в каталоге `apps/api/src/test-support/qase/`, команда `pnpm qase:sync` создаёт и обновляет их в Qase (описание, предусловия, шаги, теги) и записывает ID в `qase-case-ids.ts`; кейс опознаётся по тегу `order-desk:<key>`, поэтому переименование сохраняет его историю, а снятая с каталога запись уезжает в `Archive / <исходный верхний suite>` вместо удаления. Токен хранится только в `.env`. После мержа в `main` workflow `qase.yml` проверяет, что каталог совпадает с проектом, прогоняет оба набора с выгрузкой результатов и публикует ссылки на прогоны в комментарии к смерженному pull-request; локально синхронизацию и unit-прогон с отчётом делает `pnpm qase:run`. Подробности — на странице [«Отчёты в Qase TestOps»](./docs/ru/qase.md).
-- Баг-репорты создаются через форму `.github/ISSUE_TEMPLATE/bug-report.yml`: прекондиции, шаги воспроизведения, ожидаемый и фактический результат. Пустые issues отключены, поэтому «New Issue» сразу открывает эту форму.
-- Сквозные e2e-сценарии поддерживаются в отдельном учебном репозитории и не входят в этот проект.
+- Interactive elements use stable `data-testid` attributes that do not depend on CSS or DOM structure.
+- The API contract is available in Swagger: `http://localhost:6201/api/docs`. Every endpoint with a request body documents a schema with a realistic example. Fields or parameters with a fixed set of values (roles, statuses, flags) list all allowed options, and enum values are case-sensitive: `ADMIN`, not `admin`.
+- A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`, and the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
+- API unit tests: `pnpm --filter @order-desk/api test`. They run offline, without a database or network, and live next to the code in `apps/api/src/**/*.spec.ts`.
+- API integration tests: `pnpm --filter @order-desk/api test:integration`. The suite builds and starts a dedicated `docker-compose.test.yml` stack (project `order-desk-test`, ports `7101`–`7102`), waits for `/api/health`, cleans the database through `POST /api/devtools/reset`, and removes the containers together with their data after the run. The scenarios cover the order lifecycle, concurrent claiming from the pool, access control, and request validation.
+- Type checks and build: `pnpm typecheck`, `pnpm build`.
+- Pull-request CI: `.github/workflows/checks.yml` runs types, unit tests and the build (`static`) plus the integration suite against a real stack (`integration`) on a GitHub-hosted runner. Both checks are required for merging: the `main` rules forbid direct pushes, force-pushes and merging with failing or outdated checks.
+- Runs can be reported to Qase TestOps (project `HECHO`): `pnpm --filter @order-desk/api test:qase` and `test:qase:integration`. Cases are described in the catalogue under `apps/api/src/test-support/qase/`. `pnpm qase:sync` creates and updates them in Qase (description, preconditions, steps, tags) and writes their IDs to `qase-case-ids.ts`. A case is identified by the `order-desk:<key>` tag, so a rename keeps its history, and an entry removed from the catalogue moves to `Archive / <original top level suite>` instead of being deleted. The token is stored in `.env` only. After a merge into `main`, `.github/workflows/qase.yml` checks that the catalogue matches the project, runs both suites with result reporting and comments the run links on the merged pull request. Locally, `pnpm qase:run` performs the sync and a reported unit run. The [Qase TestOps reporting](./docs/en/qase.md) page has the details.
+- Bug reports are filed through the `.github/ISSUE_TEMPLATE/bug-report.yml` form: preconditions, steps to reproduce, expected and actual result. Blank issues are disabled, so "New Issue" opens this form directly.
+- End-to-end e2e scenarios are maintained in a separate training repository and are not part of this project.
 
-## Связанные репозитории и артефакты
+## Related repositories and artifacts
 
-Ссылки на связанные материалы будут добавлены сюда позже:
+Links to related materials will be added here later:
 
-- репозиторий с e2e-автотестами;
-- тест-кейсы и чек-листы;
-- коллекция API/Postman;
-- баг-репорты и результаты тестирования.
+- e2e automation repository;
+- test cases and checklists;
+- API/Postman collection;
+- bug reports and test results.
