@@ -107,6 +107,39 @@ export const webIntegrationCases = [
     ],
   },
   {
+    key: "web.orders-page.attaches-files-on-create",
+    suite: ordersPageSuite,
+    title: "offers a file field in the create form and attaches the chosen files to the new draft",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "A customer describes the work with a photo or a PDF, and the order form is the only place that is open while " +
+      "the order is being described, so a form without a file field leaves the customer with no way to hand the " +
+      "executor the evidence at all. The api only accepts attachments on a draft, which fixes the order of the " +
+      "calls: the draft has to exist before the upload, and the upload has to finish before the order is sent. " +
+      "The case fills the form, chooses a file, submits and inspects both what the api received and in which order.",
+    preconditions:
+      "The session belongs to a customer; `POST /orders` answers with a draft, `POST /orders/<id>/attachments` accepts the file and `POST /orders/<id>/submit` sends the draft.",
+    steps: [
+      {
+        action: "Open `/customer` and press `new order`.",
+        expected: "The task form opens with a file field next to the description fields.",
+      },
+      {
+        action: "Fill in the title and the description, choose a PNG file and press `create and send`.",
+        expected:
+          "The api receives `POST /orders`, then `POST /orders/<id>/attachments` carrying that file as multipart form data, then `POST /orders/<id>/submit`.",
+      },
+      {
+        action: "Read the notification once the list has reloaded.",
+        expected: "It reports that the order was sent for distribution.",
+      },
+    ],
+  },
+  {
     key: "web.executor-panel.claims-pool-order",
     suite: executorPanelSuite,
     title: "claims a pool order and moves it into the assigned group",

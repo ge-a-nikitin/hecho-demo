@@ -315,6 +315,11 @@ export const es: Messages = {
     executorLabel: "Ejecutor",
     poolOption: "No asignar: el pedido irá al fondo común",
     locationLabel: "Lugar de trabajo",
+    attachmentLabel: "Archivos",
+    attachmentHint:
+      "PNG, JPEG, GIF, WebP o PDF, hasta 1 MB cada uno. Se adjuntan al borrador antes de enviarlo.",
+    attachmentUploadFailed:
+      "El pedido se guardó como borrador, pero no se pudo adjuntar «{filename}»: {error}",
     retryCategories: "Reintentar carga de categorías",
     noCategories: "Aún no hay categorías disponibles. Contacta con el administrador.",
     saveDraft: "Guardar borrador",

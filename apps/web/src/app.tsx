@@ -75,6 +75,9 @@ const panelPaths: Record<Role, string> = {
   ADMIN: "/admin",
 };
 
+/** Mirrors the api limit, so an oversized file is refused before an order exists. */
+const MAX_ATTACHMENT_BYTES = 1_048_576;
+
 export function App() {
   return (
     <BrowserRouter>
@@ -715,6 +718,7 @@ function CustomerOrdersPage() {
   const [dueAt, setDueAt] = useState("");
   const [location, setLocation] = useState("");
   const [editingOrderId, setEditingOrderId] = useState("");
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
@@ -784,10 +788,40 @@ function CustomerOrdersPage() {
     setOrdersPage(1);
   }
 
+  /**
+   * The api accepts attachments while the order is still a draft, so the files
+   * have to travel between the creation and the submission. A refused file ends
+   * the sequence with a message that names it: the draft exists by then, and
+   * sending it without the evidence the customer chose would be a silent loss.
+   */
+  async function attachSelectedFiles(orderId: string, files: File[]): Promise<string | null> {
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        await apiRequest(`/orders/${encodeURIComponent(orderId)}/attachments`, {
+          method: "POST",
+          body: form,
+        });
+      } catch (error) {
+        return format(t.customer.attachmentUploadFailed, {
+          filename: file.name,
+          error: errorMessage(error, t.toasts.attachFileFailed),
+        });
+      }
+    }
+    return null;
+  }
+
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
     const shouldSubmit = submitter instanceof HTMLElement && submitter.dataset.mode === "send";
+    const chosenFiles = attachmentFiles;
+    if (chosenFiles.some((file) => file.size > MAX_ATTACHMENT_BYTES)) {
+      showToast(t.toasts.fileTooLarge);
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -810,6 +844,14 @@ function CustomerOrdersPage() {
       setExecutorId("");
       setDueAt("");
       setLocation("");
+      setAttachmentFiles([]);
+
+      const attachmentFailure = await attachSelectedFiles(draft.id, chosenFiles);
+      if (attachmentFailure) {
+        showToast(attachmentFailure);
+        await loadOrders();
+        return;
+      }
 
       if (shouldSubmit) {
         try {
@@ -1019,6 +1061,18 @@ function CustomerOrdersPage() {
               data-testid="order-location"
             />
           </label>
+          <label>
+            {t.customer.attachmentLabel} <span className="optional-label">{t.common.optional}</span>
+            <input
+              type="file"
+              name="attachments"
+              multiple
+              accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+              onChange={(event) => setAttachmentFiles(Array.from(event.target.files ?? []))}
+              data-testid="order-attachments"
+            />
+          </label>
+          <p className="form-hint">{t.customer.attachmentHint}</p>
           {categoriesError && (
             <button className="button button-quiet" type="button" onClick={() => void loadCategories()} data-testid="retry-categories">
               {t.customer.retryCategories}

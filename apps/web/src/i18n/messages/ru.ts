@@ -314,6 +314,11 @@ export const ru: Messages = {
     executorLabel: "Исполнитель",
     poolOption: "Не назначать — заказ попадёт в общий пул",
     locationLabel: "Место выполнения",
+    attachmentLabel: "Файлы",
+    attachmentHint:
+      "PNG, JPEG, GIF, WebP или PDF, до 1 МБ каждый. Они прикрепляются к черновику до отправки.",
+    attachmentUploadFailed:
+      "Заказ сохранён черновиком, но файл «{filename}» прикрепить не удалось: {error}",
     retryCategories: "Повторить загрузку категорий",
     noCategories: "Пока нет доступных категорий. Обратитесь к администратору.",
     saveDraft: "Сохранить черновик",
