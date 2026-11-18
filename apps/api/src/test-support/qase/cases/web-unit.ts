@@ -51,6 +51,37 @@ export const webUnitCases = [
     ],
   },
   {
+    key: "web.orders.card-press",
+    suite: ordersListSuite,
+    title: "keeps the order card in place when it is pressed",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The order card is a container, not a control: the detail link, the action buttons and the draft form inside it " +
+      "answer their own presses. A press transform on the card itself scales the whole card under the pointer, which " +
+      "a tester reported as a card that `pumps` on every click, and on a long list it also makes the row under the " +
+      "cursor shift while the click is still travelling to the control the person aimed at. The case reads the " +
+      "stylesheet as the contract and asserts that the card carries no press state while the pointer feedback that " +
+      "belongs to it stays.",
+    steps: [
+      {
+        action: "Collect the rules of the order card from the stylesheet.",
+        expected: "The card has a base rule and a hover rule, and no other state.",
+      },
+      {
+        action: "Inspect the base rule for a transform and the state list for an `:active` rule.",
+        expected: "Neither exists, so pressing the card moves nothing.",
+      },
+      {
+        action: "Inspect the hover rule.",
+        expected: "The card still answers the pointer with a border and a shadow, because only the press was wrong.",
+      },
+    ],
+  },
+  {
     key: "web.orders.category-options",
     suite: ordersListSuite,
     title: "lists every category once, sorted by the locale of the interface",

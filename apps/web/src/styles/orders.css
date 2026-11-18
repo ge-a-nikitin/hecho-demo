@@ -103,13 +103,12 @@
   box-shadow: var(--shadow-1);
   transition:
     border-color var(--response-fast) var(--ease-out),
-    box-shadow var(--response-fast) var(--ease-out),
-    transform var(--response-tap) var(--ease-out),
-    background-color var(--response-fast) var(--ease-out);
+    box-shadow var(--response-fast) var(--ease-out);
 }
+/* The card is a container, not a control: the link, the buttons and the forms
+   inside it answer their own presses, and scaling the row would move every
+   control the person is aiming at, so the card answers the pointer only. */
 .order-list-card:hover { border-color: #ccdac9; box-shadow: var(--shadow-2); }
-/* The card itself answers on press, so touch users get feedback too. */
-.order-list-card:active { transform: scale(0.995); background: #fcfdfb; }
 
 .order-list-main { min-width: 0; flex: 1; }
 
