@@ -2,7 +2,7 @@
 
 [← Документация](./README.md) · [English version](../en/database-schema.md)
 
-Документ описывает текущую Prisma-модель PostgreSQL. Источник истины для типов, связей и полей — [`apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma); при изменении модели обновляйте эту диаграмму и описание ограничений.
+Текущая Prisma-модель PostgreSQL. Типы, связи и поля описаны в [`apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma): меняете модель — обновите эту диаграмму и список ограничений.
 
 ## ER-диаграмма
 

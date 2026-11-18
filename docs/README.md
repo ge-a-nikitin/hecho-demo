@@ -16,6 +16,6 @@
 
 ## О проекте / About the project
 
-HECHO полностью создан в режиме вайб-кодинга и может содержать неточности. Автор — QA-инженер, а не профессиональный разработчик; основная задача проекта — быть лёгкой демонстрационной базой для портфолио автора в области тестирования и обеспечения качества.
+HECHO написан целиком в режиме вайб-кодинга, поэтому неточности в нём возможны. Автор — QA-инженер, а не профессиональный разработчик; проект и задуман как лёгкое портфолио по тестированию и обеспечению качества.
 
-HECHO was built entirely in vibe-coding mode and may contain inaccuracies. The author is a QA engineer, not a professional developer; the project's main purpose is to be a lightweight showcase base for the author's QA portfolio.
+HECHO was written entirely in vibe-coding mode, so it may contain inaccuracies. The author is a QA engineer, not a professional developer; a lightweight QA portfolio is what the project is for.

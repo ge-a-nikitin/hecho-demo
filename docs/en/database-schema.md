@@ -2,7 +2,7 @@
 
 [← Documentation](./README.md) · [Русская версия](../ru/database-schema.md)
 
-This document describes the current Prisma model for PostgreSQL. The source of truth for types, relations, and fields is [`apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma); when changing the model, update this diagram and the constraint descriptions.
+This page describes the current Prisma model for PostgreSQL. Types, relations and fields live in [`apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma): change the model, update this diagram and the constraint list.
 
 ## ER diagram
 

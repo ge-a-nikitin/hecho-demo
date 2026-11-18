@@ -1,13 +1,13 @@
 # HECHO
 
-**HECHO** is a learning client-server order desk for a single organization: customers create orders, executors perform the work, and administrators manage users, order distribution, invoices, and payments.
+**HECHO** is a learning client-server order desk for a single organization.
 
 [Documentation](./docs/README.md) · [English documentation](./docs/en/README.md) · [Русская документация](./docs/ru/README.md) · [Русский README](./README.md) · [Database schema](./docs/en/database-schema.md)
 
 > [!IMPORTANT]
 > **About the project and code quality**
 >
-> The project was built entirely in vibe-coding mode (AI-assisted development) and may contain inaccuracies, suboptimal decisions, and incomplete scenarios. The author is not a professional developer but a QA engineer. The project's main purpose is to be a lightweight, understandable base for showcasing the author as a QA engineer: test design, requirements analysis, API and UI testing, QA documentation, and automation skills. Do not treat this code as a production-ready reference.
+> The project was written entirely in vibe-coding mode (AI-assisted development), so it may contain inaccuracies, questionable decisions and unfinished scenarios. The author is a QA engineer, not a professional developer. That is the point: a lightweight base for a portfolio — test design, requirements analysis, API and UI testing, QA documentation, automation. Do not treat this code as a production-ready reference.
 
 ## What it is
 
@@ -122,13 +122,13 @@ deploy/prod.env      production configuration without secrets
 ## QA and testing
 
 - Interactive elements use stable `data-testid` attributes that do not depend on CSS or DOM structure.
-- The API contract is available in Swagger: `http://localhost:6201/api/docs`. Every endpoint with a request body documents a schema with a realistic example, and fields or parameters with a fixed set of values (roles, statuses, flags) list all allowed options; enum values are case-sensitive (`ADMIN`, not `admin`).
-- A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`; the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
+- The API contract is available in Swagger: `http://localhost:6201/api/docs`. Every endpoint with a request body documents a schema with a realistic example. Fields or parameters with a fixed set of values (roles, statuses, flags) list all allowed options, and enum values are case-sensitive: `ADMIN`, not `admin`.
+- A devtools API is available for test data preparation; it is disabled by default and protected by a separate key. A full project reset (data, users, sessions and files) runs through `POST /api/devtools/reset` or `pnpm db:reset`, and the administrator from `.env` is recreated. While `DEVTOOLS_ENABLED` is not `true`, the endpoints answer `404` and are not shown in Swagger.
 - API unit tests: `pnpm --filter @order-desk/api test`. They run offline, without a database or network, and live next to the code in `apps/api/src/**/*.spec.ts`.
 - API integration tests: `pnpm --filter @order-desk/api test:integration`. The suite builds and starts a dedicated `docker-compose.test.yml` stack (project `order-desk-test`, ports `7101`–`7102`), waits for `/api/health`, cleans the database through `POST /api/devtools/reset`, and removes the containers together with their data after the run. The scenarios cover the order lifecycle, concurrent claiming from the pool, access control, and request validation.
 - Type checks and build: `pnpm typecheck`, `pnpm build`.
 - Pull-request CI: `.github/workflows/checks.yml` runs types, unit tests and the build (`static`) plus the integration suite against a real stack (`integration`) on a GitHub-hosted runner. Both checks are required for merging: the `main` rules forbid direct pushes, force-pushes and merging with failing or outdated checks.
-- Runs can be reported to Qase TestOps (project `HECHO`): `pnpm --filter @order-desk/api test:qase` and `test:qase:integration`. Cases are described in the catalogue under `apps/api/src/test-support/qase/`; `pnpm qase:sync` creates and updates them in Qase (description, preconditions, steps, tags) and writes their IDs to `qase-case-ids.ts`. A case is identified by the `order-desk:<key>` tag, so a rename keeps its history, and an entry removed from the catalogue moves to `Archive / <original top level suite>` instead of being deleted. The token is stored in `.env` only. After a merge into `main`, `.github/workflows/qase.yml` checks that the catalogue matches the project, runs both suites with result reporting, and comments the run links on the merged pull request; locally, `pnpm qase:run` performs the sync and a reported unit run. The [Qase TestOps reporting](./docs/en/qase.md) page has the details.
+- Runs can be reported to Qase TestOps (project `HECHO`): `pnpm --filter @order-desk/api test:qase` and `test:qase:integration`. Cases are described in the catalogue under `apps/api/src/test-support/qase/`. `pnpm qase:sync` creates and updates them in Qase (description, preconditions, steps, tags) and writes their IDs to `qase-case-ids.ts`. A case is identified by the `order-desk:<key>` tag, so a rename keeps its history, and an entry removed from the catalogue moves to `Archive / <original top level suite>` instead of being deleted. The token is stored in `.env` only. After a merge into `main`, `.github/workflows/qase.yml` checks that the catalogue matches the project, runs both suites with result reporting and comments the run links on the merged pull request. Locally, `pnpm qase:run` performs the sync and a reported unit run. The [Qase TestOps reporting](./docs/en/qase.md) page has the details.
 - Bug reports are filed through the `.github/ISSUE_TEMPLATE/bug-report.yml` form: preconditions, steps to reproduce, expected and actual result. Blank issues are disabled, so "New Issue" opens this form directly.
 - End-to-end e2e scenarios are maintained in a separate training repository and are not part of this project.
 
