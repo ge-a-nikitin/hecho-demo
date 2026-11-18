@@ -73,7 +73,7 @@ flowchart LR
 2. Создайте локальный файл окружения: `cp .env.example .env` (в Windows PowerShell: `Copy-Item .env.example .env`).
 3. Замените в `.env` все значения `replace-this-*` на уникальные локальные пароли и секреты. Задайте `ADMIN_EMAIL` и `ADMIN_PASSWORD` для первого администратора. Пароль PostgreSQL должен быть URL-safe (буквы, цифры и `._~-`), потому что он используется в `DATABASE_URL`.
 4. Соберите образы и запустите сервисы: `docker compose up --build -d`. Первый запуск может занять несколько минут; API дождётся PostgreSQL и применит миграции.
-5. Создайте начального администратора: `docker compose exec api pnpm --filter @order-desk/api db:seed:admin`. Команда безопасна для повторного запуска.
+5. Создайте начального администратора: `pnpm db:sync:admin` (в контейнере — `docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'`). Команда безопасна для повторного запуска и применяет текущие `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 6. Откройте `http://localhost:6200` и войдите под `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Исполнителей создаёт администратор, заказчики регистрируются самостоятельно.
 
 Контейнеры объявлены с `restart: "no"`, поэтому после перезагрузки ПК они не запускаются автоматически: поднимите стек вручную командой `docker compose up -d`.

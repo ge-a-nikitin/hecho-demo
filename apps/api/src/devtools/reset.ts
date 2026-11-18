@@ -1,13 +1,6 @@
 import { hashPassword } from "better-auth/crypto";
-import { randomUUID } from "node:crypto";
-import { Prisma } from "../generated/prisma/client.js";
-import type { PrismaClient } from "../generated/prisma/client.js";
-import { UserRole } from "../generated/prisma/enums.js";
-
-export type AdminCredentials = {
-  email: string;
-  password: string;
-};
+import { createAdministrator, type AdminCredentials } from "../auth/admin-account.js";
+import type { Prisma, PrismaClient } from "../generated/prisma/client.js";
 
 /** The subset of the object storage used by a reset; keeps the module testable. */
 export type StoragePurge = {
@@ -29,18 +22,6 @@ export type ResetReport = {
   /** Null when the caller kept files; otherwise the bucket purge outcome. */
   files: null | { deleted: number; failed: number; error?: string };
 };
-
-const administratorName = "Администратор";
-
-/** Administrator credentials from the environment, read before any data is destroyed. */
-export function readAdminCredentials(env: NodeJS.ProcessEnv = process.env): AdminCredentials {
-  const email = env.ADMIN_EMAIL?.trim().toLowerCase();
-  const password = env.ADMIN_PASSWORD;
-  if (!email || !password) {
-    throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD must be set to recreate the administrator");
-  }
-  return { email, password };
-}
 
 /**
  * Deletes every business record and recreates the single administrator from the
@@ -103,31 +84,3 @@ async function wipeData(tx: Prisma.TransactionClient): Promise<ResetReport["dele
   };
 }
 
-async function createAdministrator(
-  tx: Prisma.TransactionClient,
-  email: string,
-  passwordHash: string,
-): Promise<{ id: string; email: string }> {
-  const user = await tx.user.create({
-    data: {
-      name: administratorName,
-      email,
-      role: UserRole.ADMIN,
-      emailVerified: true,
-      isActive: true,
-    },
-    select: { id: true, email: true },
-  });
-
-  await tx.account.create({
-    data: {
-      id: randomUUID(),
-      accountId: user.id,
-      providerId: "credential",
-      userId: user.id,
-      password: passwordHash,
-    },
-  });
-
-  return user;
-}

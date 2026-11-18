@@ -200,7 +200,7 @@ Defects found while writing or rewriting tests are fixed in the same pull reques
 2. Create a local environment file: `cp .env.example .env` (on Windows PowerShell: `Copy-Item .env.example .env`).
 3. Open `.env` and replace all `replace-this-*` values with unique local passwords/secrets. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the first administrator. PostgreSQL passwords must be URL-safe (letters, digits, and `._~-`), because the API uses them in `DATABASE_URL`.
 4. Build the images and start all services: `docker compose up --build -d`. The first run may take a few minutes. The API waits for PostgreSQL and automatically applies all migrations before becoming available.
-5. Create the initial administrator account: `docker compose exec api pnpm --filter @order-desk/api db:seed:admin`. This command is safe to re-run and does not change an existing administrator.
+5. Create the initial administrator account: `pnpm db:sync:admin` (inside the container, `docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'`). The command is safe to re-run: it creates the administrator, moves a new `ADMIN_EMAIL` onto its row and replaces the password when it drifted from `ADMIN_PASSWORD`.
 6. Open the frontend and sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD`; executors can be created from the administrator panel. Customers can register independently.
 
 ### Default addresses and ports
@@ -241,7 +241,7 @@ When changing frontend/API ports, update the related origins/URLs in `.env`: `VI
 
 ### Development with applications running on the host
 
-For hot reload, install Node.js and pnpm, then run `pnpm install`. Create `.env` according to the instructions above and start only the infrastructure: `docker compose up -d postgres seaweedfs`. Validate the Prisma schema/client (`pnpm db:validate`, `pnpm db:generate`), apply migrations via `pnpm db:migrate`, then create the administrator with `pnpm db:seed:admin`. In separate terminals, start the API `pnpm --filter @order-desk/api dev` and frontend `pnpm --filter @order-desk/web dev`. In the browser, the frontend is usually available at `http://localhost:6200`, the API at `http://localhost:6201`; `VITE_API_URL` and `FRONTEND_ORIGIN` must match the actual addresses.
+For hot reload, install Node.js and pnpm, then run `pnpm install`. Create `.env` according to the instructions above and start only the infrastructure: `docker compose up -d postgres seaweedfs`. Validate the Prisma schema/client (`pnpm db:validate`, `pnpm db:generate`), apply migrations via `pnpm db:migrate`, then create the administrator with `pnpm db:sync:admin`. In separate terminals, start the API `pnpm --filter @order-desk/api dev` and frontend `pnpm --filter @order-desk/web dev`. In the browser, the frontend is usually available at `http://localhost:6200`, the API at `http://localhost:6201`; `VITE_API_URL` and `FRONTEND_ORIGIN` must match the actual addresses.
 
 ### Automated tests
 
@@ -325,7 +325,8 @@ On every push to `main` (or a manual run) `.github/workflows/deploy.yml`:
 2. renders `.env` from `deploy/prod.env` and the `PROD_ENV_SECRETS` secret with mode `600` and verifies the file stays untracked;
 3. runs `docker compose up -d --build --remove-orphans`;
 4. waits for `http://127.0.0.1:8080/` and `http://127.0.0.1:8080/api/health` (up to 200 seconds) and prints `docker compose ps` plus the `api`/`web` logs on failure;
-5. prunes dangling images.
+5. applies `ADMIN_EMAIL`/`ADMIN_PASSWORD` to the administrator account: it runs `prisma/sync-admin.ts` inside the `api` container, which creates the administrator, moves a new email onto its row and replaces the password whenever the values drifted from the database;
+6. prunes dangling images.
 
 Manual update on the VM: `git pull && docker compose up -d --build`.
 
@@ -333,13 +334,13 @@ Manual update on the VM: `git pull && docker compose up -d --build`.
 
 1. Fill in `deploy/prod.env` and add the `PROD_ENV_SECRETS` secret to the `production` environment, including `ADMIN_EMAIL` — the real administrator address; generate secrets with `openssl rand -base64 32` and keep the PostgreSQL password URL-safe.
 2. Run the workflow and wait for a green result.
-3. Create the administrator once, manually:
+3. The deploy creates the administrator itself: the `prisma/sync-admin.ts` step reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env` and brings the account in line with them. If the deploy ran on a revision without that step, run the same command by hand:
 
    ```bash
-   docker compose exec api pnpm --filter @order-desk/api db:seed:admin
+   docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'
    ```
 
-   The deploy does not create an administrator: `ADMIN_EMAIL`/`ADMIN_PASSWORD` are used only by the seed command and the full reset.
+   The command is safe to re-run: it writes nothing when the password already matches, and it fails with a clear message without touching the data when the email belongs to another account or the database holds several administrators.
 4. Verify production: `curl -I https://hecho-demo.gnikitin.dev`, `curl https://hecho-demo.gnikitin.dev/api/health`, open `https://hecho-demo.gnikitin.dev/api/docs`, and sign in to the interface as the administrator. Upload a file to an order — this checks both the cookie session and SeaweedFS.
 
 ### Rotating secrets
@@ -349,8 +350,8 @@ The general flow: change the value in GitHub → run the deploy again. The workf
 | Secret | What to keep in mind |
 |---|---|
 | `BETTER_AUTH_SECRET` | Every session is invalidated, so users must sign in again. |
-| `ADMIN_EMAIL` | Used only by `db:seed:admin` and the full reset: the email of an existing administrator does not change and applies on the next seed or reset. |
-| `ADMIN_PASSWORD` | Affects only `db:seed:admin` and the full reset; the password of an existing administrator does not change. |
+| `ADMIN_EMAIL` | The next deploy moves the address onto the existing administrator row: the row keeps its `id`, so the order, category and invoice history stays with it, and the administrator's sessions are revoked. If another account already owns the address, the deploy fails with an error and changes nothing. |
+| `ADMIN_PASSWORD` | The next deploy replaces the administrator's password hash and revokes its sessions; no other user has to sign in again. |
 | `POSTGRES_PASSWORD` | The password of an already initialised database does not change by itself: run `docker compose exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "ALTER USER <POSTGRES_USER> WITH PASSWORD '<new password>'"`, then update the secret and deploy. |
 | `S3_SECRET_KEY`, `SEAWEEDFS_ADMIN_PASSWORD` | Volume data survives; after the deploy check a file upload and sign-in to the SeaweedFS admin UI. |
 
