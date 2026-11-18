@@ -323,18 +323,62 @@ function AuthPage({ mode }: { mode: "login" | "register" }) {
   );
 }
 
+type PanelUser = { id: string; name: string; email: string };
+
+type SessionConfirmation =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "missing" }
+  | { state: "found"; user: PanelUser };
+
 function PanelRoute({ role }: { role: Role }) {
   const { data: session, isPending } = authClient.useSession();
   const location = useLocation();
+  const [confirmation, setConfirmation] = useState<SessionConfirmation>({ state: "idle" });
+
+  // The authentication client keeps the session it fetched last in a store-wide
+  // atom, and the hook reads it the moment this route mounts. Right after a
+  // sign-in the atom still holds the pre-login answer until the client's own
+  // refetch lands, so trusting it here sent the visitor straight back to the
+  // login page. A route without a session therefore asks the server once and
+  // redirects only when the server agrees that nobody is signed in.
+  useEffect(() => {
+    if (isPending || session) return;
+
+    let cancelled = false;
+    setConfirmation({ state: "checking" });
+    authClient
+      .getSession()
+      .then((result) => {
+        if (cancelled) return;
+        const user = result.data?.user;
+        setConfirmation(user ? { state: "found", user } : { state: "missing" });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setConfirmation({ state: "missing" });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPending, session]);
 
   if (isPending) return <LoadingPage />;
-  if (!session) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  if (getRole(session.user) !== role) {
-    const userRole = getRole(session.user);
+
+  const user = session?.user ?? (confirmation.state === "found" ? confirmation.user : undefined);
+  if (!user) {
+    return confirmation.state === "missing"
+      ? <Navigate to="/login" replace state={{ from: location.pathname }} />
+      : <LoadingPage />;
+  }
+
+  const userRole = getRole(user);
+  if (userRole !== role) {
     return <Navigate to={userRole ? panelPaths[userRole] : "/"} replace />;
   }
 
-  return <PanelPage role={role} user={session.user} />;
+  return <PanelPage role={role} user={user} />;
 }
 
 function PanelPage({

@@ -2,6 +2,7 @@ import type { QaseCase } from "../types.js";
 
 const ordersPageSuite = ["Web", "Orders page"] as const;
 const executorPanelSuite = ["Web", "Executor panel"] as const;
+const authenticationSuite = ["Web", "Authentication"] as const;
 
 /**
  * Cases of the browser-side integration suite in `apps/web/test/integration`.
@@ -136,6 +137,66 @@ export const webIntegrationCases = [
       {
         action: "Read the notification once the list has reloaded.",
         expected: "It reports that the order was sent for distribution.",
+      },
+    ],
+  },
+  {
+    key: "web.auth.login-opens-workspace",
+    suite: authenticationSuite,
+    title: "opens the workspace of the signed-in user instead of returning to the login page",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "The authentication client keeps the last session it fetched in a store-wide atom, and the panel route reads " +
+      "that atom the moment it mounts. Right after a sign-in the atom still holds the answer from before the login, " +
+      "so a route that trusts it sends the visitor back to the login page, where nothing waits for the session: the " +
+      "tester who reported the defect stayed on the form with valid credentials. The case mounts the real router and " +
+      "the real form with a stub that keeps the stale atom and answers the server call with a customer, which is the " +
+      "state the application is in immediately after signing in.",
+    preconditions:
+      "The session atom holds the pre-login answer, `signIn.email` accepts the credentials, and `getSession` answers with the session of a customer.",
+    steps: [
+      {
+        action: "Open `/login` and submit the credentials of a customer.",
+        expected: "The form reports no error and leaves the login page.",
+      },
+      {
+        action: "Inspect the page the browser lands on.",
+        expected: "The customer workspace is rendered with its orders region, not the login form.",
+      },
+      {
+        action: "Inspect the address and the visible page again.",
+        expected: "The panel stayed, because the route confirmed the session with the server instead of trusting the stale atom.",
+      },
+    ],
+  },
+  {
+    key: "web.auth.signed-out-visits-login",
+    suite: authenticationSuite,
+    title: "sends a visitor without a session from a workspace to the login page",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "negative",
+    description:
+      "Waiting for the server before deciding who is signed in must not become a way into the workspace: a visitor " +
+      "who holds no session cookie has to be sent to the login form, with the address they asked for kept so that the " +
+      "form can return them to it. The case mounts a workspace route with a stub that answers both the atom and the " +
+      "server call with `nobody`, so the redirect is the only correct outcome.",
+    preconditions:
+      "The session atom and `getSession` both report that nobody is signed in.",
+    steps: [
+      {
+        action: "Open `/customer` without a session.",
+        expected: "The login form is rendered.",
+      },
+      {
+        action: "Inspect the workspace route.",
+        expected: "No panel is mounted and no panel data is requested.",
       },
     ],
   },
