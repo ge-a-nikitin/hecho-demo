@@ -73,7 +73,7 @@ flowchart LR
 2. Create a local environment file: `cp .env.example .env` (on Windows PowerShell: `Copy-Item .env.example .env`).
 3. Replace every `replace-this-*` value in `.env` with unique local passwords and secrets. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the first administrator. The PostgreSQL password must be URL-safe (letters, digits, and `._~-`) because it is used in `DATABASE_URL`.
 4. Build the images and start the services: `docker compose up --build -d`. The first run may take a few minutes; the API waits for PostgreSQL and applies migrations.
-5. Create the initial administrator: `docker compose exec api pnpm --filter @order-desk/api db:seed:admin`. The command is safe to re-run.
+5. Create the initial administrator: `pnpm db:sync:admin` (inside the container, `docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'`). The command is safe to re-run and applies the current `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 6. Open `http://localhost:6200` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. The administrator creates executors; customers register independently.
 
 The containers use `restart: "no"`, so they do not start automatically after a host reboot: bring the stack up manually with `docker compose up -d`.

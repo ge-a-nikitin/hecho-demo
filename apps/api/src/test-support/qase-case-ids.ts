@@ -6,6 +6,15 @@
  * cases in Qase. An empty map simply means the suite reports without case links.
  */
 export const qaseCaseIds: Readonly<Record<string, number | undefined>> = {
+  "auth.admin-account.creates-missing-administrator": 285,
+  "auth.admin-account.renames-the-single-administrator": 286,
+  "auth.admin-account.leaves-a-matching-administrator-alone": 287,
+  "auth.admin-account.replaces-a-stale-password": 288,
+  "auth.admin-account.attaches-a-credential-account": 289,
+  "auth.admin-account.refuses-a-taken-email": 290,
+  "auth.admin-account.refuses-ambiguous-administrators": 291,
+  "auth.admin-credentials.normalises-the-email": 292,
+  "auth.admin-credentials.refuses-a-short-password": 293,
   "api.error-responses.validation-code": 1,
   "api.error-responses.forbidden-vs-not-found": 2,
   "api.error-responses.hides-server-details": 3,

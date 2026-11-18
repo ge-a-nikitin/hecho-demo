@@ -18,7 +18,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
-    "db:seed:admin": "tsx prisma/seed-admin.ts",
+    "db:sync:admin": "tsx prisma/sync-admin.ts",
     "db:reset": "tsx prisma/reset-all.ts"
   },
   "dependencies": {

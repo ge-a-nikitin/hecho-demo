@@ -1,3 +1,4 @@
+import { adminAccountCases } from "./cases/admin-account.js";
 import { apiCases } from "./cases/api.js";
 import { authCases } from "./cases/auth.js";
 import { categoriesCases } from "./cases/categories.js";
@@ -24,6 +25,7 @@ import type { QaseCase } from "./types.js";
  * TestOps report: entries stay grouped by the suite tree below.
  */
 export const qaseCases = [
+  ...adminAccountCases,
   ...apiCases,
   ...authCases,
   ...filesCases,

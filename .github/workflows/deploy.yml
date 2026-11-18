@@ -61,6 +61,19 @@ jobs:
           echo "::error::The stack did not become healthy in time"
           exit 1
 
+      # ADMIN_EMAIL and ADMIN_PASSWORD from PROD_ENV_SECRETS are the source of
+      # truth for the only account the demo cannot work without: this step creates
+      # the administrator on a fresh database, moves a changed email onto the
+      # existing row and replaces a changed password, so editing the secret is all
+      # a rotation needs. It runs inside the API container, which already carries
+      # the Prisma client and the generated config, and it fails the deploy on a
+      # conflict - the email belongs to another account, or the database holds
+      # several administrators - instead of guessing which row to rewrite.
+      - name: Apply ADMIN_EMAIL and ADMIN_PASSWORD to the administrator
+        run: |
+          set -euo pipefail
+          docker compose exec -T api sh -c 'cd apps/api && ./node_modules/.bin/tsx prisma/sync-admin.ts'
+
       - name: Remove dangling images
         if: always()
         run: docker image prune -f

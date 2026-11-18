@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 
 config({ path: resolve(fileURLToPath(new URL("../../../", import.meta.url)), ".env") });
 
-const [{ prisma }, { readAdminCredentials, resetAllData }, { ObjectStorageService }] = await Promise.all([
-  import("../src/database/prisma.service.ts"),
-  import("../src/devtools/reset.ts"),
-  import("../src/storage/object-storage.service.ts"),
-]);
+const [{ prisma }, { readAdminCredentials }, { resetAllData }, { ObjectStorageService }] =
+  await Promise.all([
+    import("../src/database/prisma.service.ts"),
+    import("../src/auth/admin-account.ts"),
+    import("../src/devtools/reset.ts"),
+    import("../src/storage/object-storage.service.ts"),
+  ]);
 
 try {
   const admin = readAdminCredentials();

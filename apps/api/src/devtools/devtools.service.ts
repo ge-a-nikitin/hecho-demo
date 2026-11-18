@@ -11,7 +11,8 @@ import { AssignmentOutcome, InvoiceStatus, OrderStatus, UserRole } from "../gene
 import { auth } from "../auth/auth.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ObjectStorageService } from "../storage/object-storage.service.js";
-import { readAdminCredentials, resetAllData, type ResetReport } from "./reset.js";
+import { readAdminCredentials } from "../auth/admin-account.js";
+import { resetAllData, type ResetReport } from "./reset.js";
 import { readFile } from "node:fs/promises";
 
 type DevToolUserUpdate = {
