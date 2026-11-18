@@ -225,6 +225,27 @@ export const webUnitCases = [
     ],
   },
   {
+    key: "web.i18n.cta-register",
+    suite: localizationSuite,
+    title: "labels the landing hero button as a registration action in every language",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The wording defect was reported against one language but the landing page is published in three, and a fix " +
+      "applied only to the English catalogue would leave Russian and Spanish visitors with `Go to orders`. The case " +
+      "reads the label out of every catalogue the provider can select, so a translation that keeps the old wording " +
+      "fails here instead of in a review of the two languages nobody on the team speaks.",
+    steps: [
+      {
+        action: "Collect the landing hero label from the English, Russian and Spanish catalogues.",
+        expected: "English reads `Register`, Russian reads `Зарегистрироваться`, Spanish reads `Registrarse`.",
+      },
+    ],
+  },
+  {
     key: "web.i18n.estimate-figures",
     suite: localizationSuite,
     title: "keeps the hours next to the amount in every language",

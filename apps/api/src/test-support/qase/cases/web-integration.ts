@@ -3,6 +3,7 @@ import type { QaseCase } from "../types.js";
 const ordersPageSuite = ["Web", "Orders page"] as const;
 const executorPanelSuite = ["Web", "Executor panel"] as const;
 const authenticationSuite = ["Web", "Authentication"] as const;
+const landingSuite = ["Web", "Landing page"] as const;
 
 /**
  * Cases of the browser-side integration suite in `apps/web/test/integration`.
@@ -15,6 +16,33 @@ const authenticationSuite = ["Web", "Authentication"] as const;
  * claim coverage this repository does not provide.
  */
 export const webIntegrationCases = [
+  {
+    key: "web.landing.register-label",
+    suite: landingSuite,
+    title: "labels the hero button of a returning customer as a registration action",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "A tester who opened the landing page with a customer session read `Go to orders` on the hero button and filed " +
+      "the wording as a defect: the button advertises registration, not a second way into the workspace that the top " +
+      "navigation already offers. The case mounts the landing page with that session and asserts the label, while " +
+      "pinning the destination so the wording change cannot silently send a signed-in customer to the registration " +
+      "form.",
+    preconditions: "The session belongs to a customer who owns orders.",
+    steps: [
+      {
+        action: "Open `/` with the session of a customer.",
+        expected: "The landing page renders its hero actions.",
+      },
+      {
+        action: "Read the primary hero button and follow where it points.",
+        expected: "The button reads `Register` and still points at `/customer`, not at `/register`.",
+      },
+    ],
+  },
   {
     key: "web.orders-page.loads-orders",
     suite: ordersPageSuite,

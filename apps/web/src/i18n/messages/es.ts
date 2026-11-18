@@ -119,7 +119,7 @@ export const es: Messages = {
     titleAccent: "En un solo lugar.",
     text:
       "Crea pedidos, encuentra ejecutores y mantén todo el proceso bajo control, desde la primera descripción hasta el resultado final.",
-    ctaCustomer: "Ir a los pedidos",
+    ctaCustomer: "Registrarse",
     ctaOpenWorkspace: "Abrir escritorio",
     ctaCreate: "Crear un pedido",
     haveAccount: "¿Ya tienes cuenta?",

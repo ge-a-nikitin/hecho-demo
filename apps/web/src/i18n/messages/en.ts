@@ -117,7 +117,7 @@ export const en = {
     titleAccent: "In one place.",
     text:
       "Create orders, find executors, and keep the whole process under control — from the first description to the finished result.",
-    ctaCustomer: "Go to orders",
+    ctaCustomer: "Register",
     ctaOpenWorkspace: "Open workspace",
     ctaCreate: "Create an order",
     haveAccount: "Already have an account?",
