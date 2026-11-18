@@ -77,5 +77,37 @@ describe("Web", () => {
         ]);
       },
     );
+    it(
+      qc("web.executor-panel.estimate-whole-hours", "steps the estimate hours by a whole hour and sends the number it shows"),
+      async () => {
+        const user = userEvent.setup();
+        const assignedOrder = order({
+          id: "order-2",
+          status: "ASSIGNED",
+          executor: { id: "executor-1", name: "Grace Hopper" },
+        });
+        const api = installFakeApi({
+          "GET /orders": { body: [assignedOrder] },
+          "POST /orders/order-2/estimate": { body: {} },
+        });
+
+        renderAppAt("/executor");
+
+        // One press of an arrow on a number field adds exactly `step`, so the
+        // attribute is the contract a tester feels as counting by 0.0001.
+        const hours = await screen.findByTestId("estimate-hours-order-2");
+        expect(hours).toHaveAttribute("min", "1");
+        expect(hours).toHaveAttribute("step", "1");
+
+        await user.type(hours, "3");
+        await user.click(screen.getByTestId("submit-estimate-order-2"));
+
+        expect(api.requests).toContainEqual({
+          method: "POST",
+          path: "/orders/order-2/estimate",
+          body: JSON.stringify({ hours: 3 }),
+        });
+      },
+    );
   });
 });

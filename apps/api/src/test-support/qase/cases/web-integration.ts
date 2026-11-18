@@ -201,6 +201,34 @@ export const webIntegrationCases = [
     ],
   },
   {
+    key: "web.executor-panel.estimate-whole-hours",
+    suite: executorPanelSuite,
+    title: "steps the estimate hours by a whole hour and sends the number it shows",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "The estimate field is a number spinner, and its `step` is what one press of an arrow adds. A step copied from " +
+      "a money field made every press move the value by `0.0001`, which a tester reported as hours that cannot be " +
+      "raised to a plan at all: the number looked unchanged while the ratio applied to the hourly rate kept its four " +
+      "decimal places. The case asserts the contract of the control and what the panel sends when the executor " +
+      "proposes the hours the field shows.",
+    preconditions:
+      "The session belongs to an executor, and `GET /orders` lists one `ASSIGNED` order without a pending estimate.",
+    steps: [
+      {
+        action: "Open `/executor` and read the estimate field of the assigned order.",
+        expected: "The field steps by one and starts at one whole hour.",
+      },
+      {
+        action: "Enter `3` and press `propose estimate`.",
+        expected: "The api receives `POST /orders/<id>/estimate` with `{\"hours\":3}`.",
+      },
+    ],
+  },
+  {
     key: "web.executor-panel.claims-pool-order",
     suite: executorPanelSuite,
     title: "claims a pool order and moves it into the assigned group",

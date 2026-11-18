@@ -224,9 +224,9 @@ export function ExecutorOrdersPage() {
                         {t.executor.estimateHours}
                         <input
                           type="number"
-                          min="0.0001"
+                          min="1"
                           max="100000"
-                          step="0.0001"
+                          step="1"
                           required
                           value={hoursByOrder[order.id] ?? ""}
                           onChange={(event) => setHoursByOrder((values) => ({ ...values, [order.id]: event.target.value }))}
