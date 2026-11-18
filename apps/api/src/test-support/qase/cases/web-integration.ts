@@ -108,6 +108,33 @@ export const webIntegrationCases = [
     ],
   },
   {
+    key: "web.orders-page.estimate-figures",
+    suite: ordersPageSuite,
+    title: "shows the estimate hours and the amount together on the order card",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "The estimate is the moment a customer decides, and the card used to print the amount alone, so a tester read " +
+      "`90` with no way to tell how much work it buys. The card now prints the hours and the price as one figure, and " +
+      "the case mounts the panel with a pending estimate to assert the whole sentence a customer reads before " +
+      "accepting or rejecting it.",
+    preconditions:
+      "The session belongs to a customer who owns an order with a `PENDING` estimate of two hours and ninety units.",
+    steps: [
+      {
+        action: "Open `/customer` with one order whose estimate is pending.",
+        expected: "The card offers the accept and reject controls for that estimate.",
+      },
+      {
+        action: "Read the estimate line above the controls.",
+        expected: "It prints the hours and the amount together, `2 h (90$)`, instead of the amount alone.",
+      },
+    ],
+  },
+  {
     key: "web.orders-page.attaches-files-on-create",
     suite: ordersPageSuite,
     title: "offers a file field in the create form and attaches the chosen files to the new draft",
@@ -225,6 +252,33 @@ export const webIntegrationCases = [
       {
         action: "Enter `3` and press `propose estimate`.",
         expected: "The api receives `POST /orders/<id>/estimate` with `{\"hours\":3}`.",
+      },
+    ],
+  },
+  {
+    key: "web.executor-panel.estimate-figures",
+    suite: executorPanelSuite,
+    title: "shows the hours and the amount of the latest estimate on the assigned card",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "The executor watches the same estimate from the other side, and the assigned card printed only the amount. Two " +
+      "roles read one number differently - the customer wants the price, the executor wants the workload - so the " +
+      "case asserts that the card in the executor workspace carries the hours next to the amount as well, which is " +
+      "the shared card the administrator sees too.",
+    preconditions:
+      "The session belongs to an executor, and `GET /orders` lists one `ASSIGNED` order with a `PENDING` estimate of two hours and ninety units.",
+    steps: [
+      {
+        action: "Open `/executor`.",
+        expected: "The order is rendered inside the assigned group with the estimate line.",
+      },
+      {
+        action: "Read the estimate line.",
+        expected: "It prints `2 h (90$)` and the status of the estimate, not the amount alone.",
       },
     ],
   },

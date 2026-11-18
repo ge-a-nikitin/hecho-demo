@@ -127,6 +127,28 @@ describe("Web", () => {
 
     it(
       qc(
+        "web.orders-page.estimate-figures",
+        "shows the estimate hours and the amount together on the order card",
+      ),
+      async () => {
+        installFakeApi(
+          customerPanelRoutes([
+            order({
+              id: "order-3",
+              status: "ESTIMATE_PENDING",
+              estimates: [{ id: "estimate-1", hours: 2, amount: 90, status: "PENDING" }],
+            }),
+          ]),
+        );
+
+        renderAppAt("/customer");
+
+        expect(await screen.findByTestId("estimate-response-order-3")).toHaveTextContent("2 h (90$)");
+      },
+    );
+
+    it(
+      qc(
         "web.orders-page.attaches-files-on-create",
         "offers a file field in the create form and attaches the chosen files to the new draft",
       ),

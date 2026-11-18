@@ -78,7 +78,36 @@ describe("Web", () => {
       },
     );
     it(
-      qc("web.executor-panel.estimate-whole-hours", "steps the estimate hours by a whole hour and sends the number it shows"),
+      qc(
+        "web.executor-panel.estimate-figures",
+        "shows the hours and the amount of the latest estimate on the assigned card",
+      ),
+      async () => {
+        installFakeApi({
+          "GET /orders": {
+            body: [
+              order({
+                id: "order-4",
+                status: "ASSIGNED",
+                executor: { id: "executor-1", name: "Grace Hopper" },
+                estimates: [{ id: "estimate-1", hours: 2, amount: 90, status: "PENDING" }],
+              }),
+            ],
+          },
+        });
+
+        renderAppAt("/executor");
+
+        const assigned = await screen.findByTestId("executor-assigned-orders");
+        expect(within(assigned).getByText("Latest estimate: 2 h (90$) · pending response")).toBeVisible();
+      },
+    );
+
+    it(
+      qc(
+        "web.executor-panel.estimate-whole-hours",
+        "steps the estimate hours by a whole hour and sends the number it shows",
+      ),
       async () => {
         const user = userEvent.setup();
         const assignedOrder = order({

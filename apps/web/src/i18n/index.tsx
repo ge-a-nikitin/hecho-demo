@@ -70,6 +70,7 @@ type I18nContextValue = {
   plural: (count: number, forms: PluralForms) => string;
   formatDate: (value: string) => string;
   formatAmount: (value: number | string) => string;
+  formatEstimate: (hours: number | string, amount: number | string) => string;
   formatBytes: (bytes: number) => string;
   formatMinutes: (minutes: number) => string;
   errorMessage: (error: unknown, fallback: string) => string;
@@ -137,6 +138,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     (value: number | string) => amountFormatter.format(Number(value)),
     [amountFormatter],
   );
+  const formatEstimate = useCallback(
+    (hours: number | string, amount: number | string) =>
+      formatTemplate(t.common.hoursAmount, {
+        hours: amountFormatter.format(Number(hours)),
+        amount: amountFormatter.format(Number(amount)),
+      }),
+    [amountFormatter, t],
+  );
   const formatBytes = useCallback(
     (bytes: number) =>
       bytes < 1024
@@ -200,6 +209,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     plural,
     formatDate,
     formatAmount,
+    formatEstimate,
     formatBytes,
     formatMinutes,
     errorMessage,

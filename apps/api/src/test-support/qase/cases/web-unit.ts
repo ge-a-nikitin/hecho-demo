@@ -225,6 +225,32 @@ export const webUnitCases = [
     ],
   },
   {
+    key: "web.i18n.estimate-figures",
+    suite: localizationSuite,
+    title: "keeps the hours next to the amount in every language",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "An estimate is a price for a number of hours, and a card that shows only the amount tells the customer nothing " +
+      "about the work behind it: a tester reported `90` where the product promises `2 h (90$)`. Every place that " +
+      "prints an estimate now fills one template, so the case renders that template in each language and asserts that " +
+      "the hours, the currency sign and the parentheses survive translation rather than relying on the one language " +
+      "the reviewer happens to read.",
+    steps: [
+      {
+        action: "Render the estimate template with two hours and an amount of ninety for every language.",
+        expected: "Each result carries the hours and the amount inside parentheses.",
+      },
+      {
+        action: "Compare the rendered strings with the expected wording of each language.",
+        expected: "English and Spanish read `2 h (90$)`, Russian reads `2 ч (90$)`, and none drops a figure.",
+      },
+    ],
+  },
+  {
     key: "web.i18n.template",
     suite: localizationSuite,
     title: "fills in the placeholders it was given and leaves the rest untouched",

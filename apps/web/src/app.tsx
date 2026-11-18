@@ -742,7 +742,7 @@ function ProfilePage({
 }
 
 function CustomerOrdersPage() {
-  const { t, locale, format, errorMessage, formatDate, formatAmount, statusLabel, invoiceStatusLabel } = useI18n();
+  const { t, locale, format, errorMessage, formatDate, formatAmount, formatEstimate, statusLabel, invoiceStatusLabel } = useI18n();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [executors, setExecutors] = useState<{ id: string; name: string }[]>([]);
@@ -1339,7 +1339,7 @@ function CustomerOrdersPage() {
                 {pendingEstimate && (
                   <div className="customer-order-actions" data-testid={`estimate-response-${order.id}`}>
                     <p className="form-hint">
-                      {format(t.customer.estimateLabel, { hours: pendingEstimate.hours, amount: formatAmount(pendingEstimate.amount) })}
+                      {format(t.customer.estimateLabel, { total: formatEstimate(pendingEstimate.hours, pendingEstimate.amount) })}
                     </p>
                     <button
                       className="button button-primary"
