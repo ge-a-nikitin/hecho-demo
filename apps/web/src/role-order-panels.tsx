@@ -58,7 +58,7 @@ type WorkOrder = {
 };
 
 export function ExecutorOrdersPage() {
-  const { t, locale, format, formatAmount, errorMessage, estimateStatusLabel } = useI18n();
+  const { t, locale, format, formatEstimate, errorMessage, estimateStatusLabel } = useI18n();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -224,9 +224,9 @@ export function ExecutorOrdersPage() {
                         {t.executor.estimateHours}
                         <input
                           type="number"
-                          min="0.0001"
+                          min="1"
                           max="100000"
-                          step="0.0001"
+                          step="1"
                           required
                           value={hoursByOrder[order.id] ?? ""}
                           onChange={(event) => setHoursByOrder((values) => ({ ...values, [order.id]: event.target.value }))}
@@ -321,7 +321,7 @@ export function ExecutorOrdersPage() {
                   {order.estimates.length > 0 && (
                     <p className="form-hint">
                       {format(t.executor.lastEstimate, {
-                        amount: formatAmount(order.estimates[0].amount),
+                        total: formatEstimate(order.estimates[0].hours, order.estimates[0].amount),
                         status: estimateStatusLabel(order.estimates[0].status),
                       })}
                     </p>
@@ -741,7 +741,7 @@ function OrderCard({
   panelPath: string;
   testId?: string;
 }) {
-  const { t, format, formatDate, formatAmount, statusLabel, invoiceStatusLabel } = useI18n();
+  const { t, format, formatDate, formatAmount, formatEstimate, statusLabel, invoiceStatusLabel } = useI18n();
   const pendingEstimate = order.estimates.find((estimate) => estimate.status === "PENDING");
   return (
     <article className="order-list-card role-order-card" data-testid={testId}>
@@ -762,7 +762,7 @@ function OrderCard({
         <Link className="order-detail-link" to={`${panelPath}/orders/${encodeURIComponent(order.id)}`} data-testid={`open-order-${order.id}`}>
           {t.common.openOrder} <span aria-hidden="true">↗</span>
         </Link>
-        {pendingEstimate && <p className="form-hint">{format(t.adminOrders.pendingEstimate, { amount: formatAmount(pendingEstimate.amount) })}</p>}
+        {pendingEstimate && <p className="form-hint">{format(t.adminOrders.pendingEstimate, { total: formatEstimate(pendingEstimate.hours, pendingEstimate.amount) })}</p>}
         {order.invoices.map((invoice) => (
           <p className="form-hint" key={invoice.id}>
             {format(t.common.invoiceLine, {

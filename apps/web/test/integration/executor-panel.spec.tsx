@@ -77,5 +77,66 @@ describe("Web", () => {
         ]);
       },
     );
+    it(
+      qc(
+        "web.executor-panel.estimate-figures",
+        "shows the hours and the amount of the latest estimate on the assigned card",
+      ),
+      async () => {
+        installFakeApi({
+          "GET /orders": {
+            body: [
+              order({
+                id: "order-4",
+                status: "ASSIGNED",
+                executor: { id: "executor-1", name: "Grace Hopper" },
+                estimates: [{ id: "estimate-1", hours: 2, amount: 90, status: "PENDING" }],
+              }),
+            ],
+          },
+        });
+
+        renderAppAt("/executor");
+
+        const assigned = await screen.findByTestId("executor-assigned-orders");
+        expect(within(assigned).getByText("Latest estimate: 2 h (90$) · pending response")).toBeVisible();
+      },
+    );
+
+    it(
+      qc(
+        "web.executor-panel.estimate-whole-hours",
+        "steps the estimate hours by a whole hour and sends the number it shows",
+      ),
+      async () => {
+        const user = userEvent.setup();
+        const assignedOrder = order({
+          id: "order-2",
+          status: "ASSIGNED",
+          executor: { id: "executor-1", name: "Grace Hopper" },
+        });
+        const api = installFakeApi({
+          "GET /orders": { body: [assignedOrder] },
+          "POST /orders/order-2/estimate": { body: {} },
+        });
+
+        renderAppAt("/executor");
+
+        // One press of an arrow on a number field adds exactly `step`, so the
+        // attribute is the contract a tester feels as counting by 0.0001.
+        const hours = await screen.findByTestId("estimate-hours-order-2");
+        expect(hours).toHaveAttribute("min", "1");
+        expect(hours).toHaveAttribute("step", "1");
+
+        await user.type(hours, "3");
+        await user.click(screen.getByTestId("submit-estimate-order-2"));
+
+        expect(api.requests).toContainEqual({
+          method: "POST",
+          path: "/orders/order-2/estimate",
+          body: JSON.stringify({ hours: 3 }),
+        });
+      },
+    );
   });
 });

@@ -51,6 +51,37 @@ export const webUnitCases = [
     ],
   },
   {
+    key: "web.orders.card-press",
+    suite: ordersListSuite,
+    title: "keeps the order card in place when it is pressed",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "negative",
+    description:
+      "The order card is a container, not a control: the detail link, the action buttons and the draft form inside it " +
+      "answer their own presses. A press transform on the card itself scales the whole card under the pointer, which " +
+      "a tester reported as a card that `pumps` on every click, and on a long list it also makes the row under the " +
+      "cursor shift while the click is still travelling to the control the person aimed at. The case reads the " +
+      "stylesheet as the contract and asserts that the card carries no press state while the pointer feedback that " +
+      "belongs to it stays.",
+    steps: [
+      {
+        action: "Collect the rules of the order card from the stylesheet.",
+        expected: "The card has a base rule and a hover rule, and no other state.",
+      },
+      {
+        action: "Inspect the base rule for a transform and the state list for an `:active` rule.",
+        expected: "Neither exists, so pressing the card moves nothing.",
+      },
+      {
+        action: "Inspect the hover rule.",
+        expected: "The card still answers the pointer with a border and a shadow, because only the press was wrong.",
+      },
+    ],
+  },
+  {
     key: "web.orders.category-options",
     suite: ordersListSuite,
     title: "lists every category once, sorted by the locale of the interface",
@@ -190,6 +221,53 @@ export const webUnitCases = [
       {
         action: "Make `fetch` reject with a transport error.",
         expected: "The caller receives `ApiError` with status `0` and code `NETWORK_ERROR`.",
+      },
+    ],
+  },
+  {
+    key: "web.i18n.cta-register",
+    suite: localizationSuite,
+    title: "labels the landing hero button as a registration action in every language",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "The wording defect was reported against one language but the landing page is published in three, and a fix " +
+      "applied only to the English catalogue would leave Russian and Spanish visitors with `Go to orders`. The case " +
+      "reads the label out of every catalogue the provider can select, so a translation that keeps the old wording " +
+      "fails here instead of in a review of the two languages nobody on the team speaks.",
+    steps: [
+      {
+        action: "Collect the landing hero label from the English, Russian and Spanish catalogues.",
+        expected: "English reads `Register`, Russian reads `Зарегистрироваться`, Spanish reads `Registrarse`.",
+      },
+    ],
+  },
+  {
+    key: "web.i18n.estimate-figures",
+    suite: localizationSuite,
+    title: "keeps the hours next to the amount in every language",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "An estimate is a price for a number of hours, and a card that shows only the amount tells the customer nothing " +
+      "about the work behind it: a tester reported `90` where the product promises `2 h (90$)`. Every place that " +
+      "prints an estimate now fills one template, so the case renders that template in each language and asserts that " +
+      "the hours, the currency sign and the parentheses survive translation rather than relying on the one language " +
+      "the reviewer happens to read.",
+    steps: [
+      {
+        action: "Render the estimate template with two hours and an amount of ninety for every language.",
+        expected: "Each result carries the hours and the amount inside parentheses.",
+      },
+      {
+        action: "Compare the rendered strings with the expected wording of each language.",
+        expected: "English and Spanish read `2 h (90$)`, Russian reads `2 ч (90$)`, and none drops a figure.",
       },
     ],
   },

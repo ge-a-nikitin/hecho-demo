@@ -309,6 +309,7 @@ function OrderDetailContent({
     format,
     formatDate,
     formatAmount,
+    formatEstimate,
     formatBytes,
     formatMinutes,
     errorMessage,
@@ -420,8 +421,7 @@ function OrderDetailContent({
       {order.approvedAmount !== null && order.approvedAmount !== undefined && (
         <DetailSection title={t.orderDetail.approvedEstimate}>
           <p>{format(t.orderDetail.approvedLine, {
-            amount: formatAmount(order.approvedAmount),
-            hours: order.approvedHours ?? 0,
+            total: formatEstimate(order.approvedHours ?? 0, order.approvedAmount),
             rate: formatAmount(order.approvedHourlyRate ?? 0),
           })}</p>
           {order.timeEntry && (
@@ -438,8 +438,7 @@ function OrderDetailContent({
             {order.estimates.map((estimate) => (
               <li key={estimate.id}>
                 <span>{format(t.orderDetail.estimateLine, {
-                  amount: formatAmount(estimate.amount),
-                  hours: estimate.hours,
+                  total: formatEstimate(estimate.hours, estimate.amount),
                   status: estimateStatusLabel(estimate.status),
                 })}</span>
                 <small>{formatDate(estimate.proposedAt)}{estimate.responseComment ? ` · ${estimate.responseComment}` : ""}</small>

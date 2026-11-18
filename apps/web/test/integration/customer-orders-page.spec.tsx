@@ -124,5 +124,77 @@ describe("Web", () => {
         expect(api.count("GET /orders")).toBe(2);
       },
     );
+
+    it(
+      qc(
+        "web.orders-page.estimate-figures",
+        "shows the estimate hours and the amount together on the order card",
+      ),
+      async () => {
+        installFakeApi(
+          customerPanelRoutes([
+            order({
+              id: "order-3",
+              status: "ESTIMATE_PENDING",
+              estimates: [{ id: "estimate-1", hours: 2, amount: 90, status: "PENDING" }],
+            }),
+          ]),
+        );
+
+        renderAppAt("/customer");
+
+        expect(await screen.findByTestId("estimate-response-order-3")).toHaveTextContent("2 h (90$)");
+      },
+    );
+
+    it(
+      qc(
+        "web.orders-page.attaches-files-on-create",
+        "offers a file field in the create form and attaches the chosen files to the new draft",
+      ),
+      async () => {
+        const user = userEvent.setup();
+        const receipt = new File(["receipt"], "receipt.png", { type: "image/png" });
+        const api = installFakeApi({
+          ...customerPanelRoutes([tapOrder]),
+          "POST /orders": { body: order({ id: "order-9", title: "Fix the sink" }) },
+          "POST /orders/order-9/attachments": { body: { id: "attachment-1" } },
+          "POST /orders/order-9/submit": {
+            body: order({ id: "order-9", status: "WAITING_DISTRIBUTION" }),
+          },
+        });
+
+        renderAppAt("/customer");
+        await screen.findByTestId("order-card-order-1");
+
+        await user.click(screen.getByTestId("create-order"));
+        await user.type(screen.getByTestId("order-title"), "Fix the sink");
+        await user.type(screen.getByTestId("order-description"), "Water is dripping under the sink.");
+        await user.upload(screen.getByTestId("order-attachments"), receipt);
+        await user.click(screen.getByTestId("submit-create-order"));
+
+        expect(
+          await screen.findByText(messagesByLanguage.en.customer.toastSentForDistribution),
+        ).toBeVisible();
+
+        const upload = api.requests.find((request) => request.path === "/orders/order-9/attachments");
+        expect(upload?.body).toBeInstanceOf(FormData);
+        const attached = (upload?.body as FormData).get("file");
+        expect(attached).toBeInstanceOf(File);
+        expect((attached as File).name).toBe("receipt.png");
+
+        // The api accepts attachments on a draft only, so the upload has to land
+        // between the creation of the order and its submission.
+        expect(api.calls).toEqual([
+          "GET /orders",
+          "GET /categories",
+          "GET /users/executors/available",
+          "POST /orders",
+          "POST /orders/order-9/attachments",
+          "POST /orders/order-9/submit",
+          "GET /orders",
+        ]);
+      },
+    );
   });
 });
