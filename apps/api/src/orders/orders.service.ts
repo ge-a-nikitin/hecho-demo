@@ -776,7 +776,10 @@ export class OrdersService {
     const order = await this.prisma.workOrder.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException("Order not found");
     if (actor.role === UserRole.ADMIN) return order;
-    if (actor.role === UserRole.CUSTOMER && order.customerId === actor.id && order.status === OrderStatus.NEW) {
+    // Attachments stay open for the whole life of the order, like comments: the
+    // customer keeps the card as the place to hand over a document that appears
+    // later, so the status is not part of the check, only the ownership.
+    if (actor.role === UserRole.CUSTOMER && order.customerId === actor.id) {
       return order;
     }
     if (actor.role === UserRole.EXECUTOR && order.executorId === actor.id) return order;

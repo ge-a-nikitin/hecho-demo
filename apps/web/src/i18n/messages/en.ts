@@ -119,7 +119,6 @@ export const en = {
       "Create orders, find executors, and keep the whole process under control — from the first description to the finished result.",
     ctaCustomer: "Register",
     ctaOpenWorkspace: "Open workspace",
-    ctaCreate: "Create an order",
     haveAccount: "Already have an account?",
     signInAction: "Sign in",
     note: "Order, team, and result — nothing gets lost",

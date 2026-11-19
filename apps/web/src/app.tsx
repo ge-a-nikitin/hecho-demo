@@ -133,7 +133,7 @@ function LandingPage() {
           </p>
           <div className="hero-actions">
             <Link className="button button-primary" to={role ? panelPaths[role] : "/register"} data-testid="hero-register">
-              {role === "CUSTOMER" ? t.landing.ctaCustomer : role ? t.landing.ctaOpenWorkspace : t.landing.ctaCreate} <span aria-hidden="true">↗</span>
+              {role && role !== "CUSTOMER" ? t.landing.ctaOpenWorkspace : t.landing.ctaCustomer} <span aria-hidden="true">↗</span>
             </Link>
             <Link className="button button-quiet" to="/login" data-testid="hero-login">
               {t.landing.haveAccount} <span>{t.landing.signInAction}</span>

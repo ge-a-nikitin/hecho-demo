@@ -55,7 +55,7 @@ This document records the agreed requirements, implementation status and launch 
 - The administrator can also distribute orders.
 - One executor performs an order. The administrator can reassign an order; the history preserves the previous executor. Reassigning work that is already in progress returns the order to **Assigned** with the approved hours, rate, and amount cleared, so the new executor proposes an estimate and the customer approves it again; the time the previous executor recorded stays on the order.
 - The selected or assigned executor can decline an order; the order returns to the unassigned pool.
-- In a draft, the customer can change all data. After submission, the main order parameters cannot be edited; the customer can add comments.
+- In a draft, the customer can change all data. After submission, the main order parameters cannot be edited; the customer can add comments and attach files in any status.
 - Title, description, and category are required. Due date, attachments/files, and location or address are optional.
 - Work categories are created by the administrator. The customer selects a category when creating an order; the executor sees the category and can filter the order list by it. The executor does not assign categories.
 - Order lists in all panels support search by title and description, filtering by status and category, and pagination of 10 orders per page.
@@ -119,6 +119,7 @@ Agreed order flow:
 ### Files and notifications
 
 - Images (PNG, JPEG, GIF, WebP) and PDF documents up to 1 MB per file can be attached to an order. The type is read from the file itself, not from the upload, anything else is refused with `415`, and every download is served as `application/octet-stream` with an attachment disposition, so the browser saves the file instead of rendering it in the application origin.
+- The customer attaches files to their own order in any status, the assigned executor attaches while the order is theirs, and the administrator attaches to any order. The order card shows the same file field before submission and after the order is completed or cancelled, so a document that appears later still reaches the order.
 - The quotas that keep one account from filling the disk are counted by the API before an object reaches SeaweedFS: 20 attachments per order, 100 uploads per account in a rolling 24 hours, and 20 open orders per customer (completed and cancelled orders do not count). Exceeding a quota answers `409`. The three values come from `ORDER_ATTACHMENT_LIMIT`, `ORDER_ATTACHMENT_DAILY_LIMIT` and `ORDER_OPEN_LIMIT`, and a value that cannot be read stops the API at startup.
 - A payment receipt is stored in its own field, not as a work attachment, so it does not count against the attachment quotas; it follows the same size and type limits instead.
 - Notifications are outside the MVP.

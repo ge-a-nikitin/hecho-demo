@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { qc } from "../../../api/src/test-support/qase-case";
 import { messagesByLanguage } from "../../src/i18n";
 import { installFakeApi } from "./support/fake-api";
-import { customerPanelRoutes, order } from "./support/fixtures";
+import { customerPanelRoutes, order, orderDetail } from "./support/fixtures";
 import { renderAppAt } from "./support/render-app";
 
 // `auth-client` builds its instance at import time against Better Auth, so the
@@ -194,6 +194,41 @@ describe("Web", () => {
           "POST /orders/order-9/submit",
           "GET /orders",
         ]);
+      },
+    );
+
+    it(
+      qc(
+        "web.orders-page.attaches-files-in-card",
+        "offers the file field in the card of a finished order",
+      ),
+      async () => {
+        const user = userEvent.setup();
+        const finished = order({ id: "order-4", title: "Leaking radiator", status: "COMPLETED" });
+        // jsdom ships no `matchMedia`, and the card asks it which layout it is
+        // in before it animates in; a wide screen is the simpler surface.
+        vi.stubGlobal("matchMedia", (query: string) => ({
+          matches: false,
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }));
+        installFakeApi({
+          ...customerPanelRoutes([tapOrder, finished]),
+          "GET /orders/order-4": {
+            body: orderDetail({ id: "order-4", title: "Leaking radiator", status: "COMPLETED" }),
+          },
+        });
+
+        renderAppAt("/customer");
+        await user.click(await screen.findByTestId("open-order-order-4"));
+
+        // The api keeps the upload open in every status, so the card of a
+        // finished order offers the same field as the card of a draft. The
+        // enter animation still holds the dialog at zero opacity in jsdom, so
+        // the case asserts the field rather than what the paint happens to be.
+        expect(await screen.findByTestId("attachment-upload-form")).toBeInTheDocument();
+        expect(screen.getByTestId("order-attachment-file")).toHaveAttribute("type", "file");
       },
     );
   });

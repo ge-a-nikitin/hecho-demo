@@ -331,9 +331,12 @@ function OrderDetailContent({
     order.status !== "INVOICE_ISSUED" &&
     order.status !== "INVOICE_PAID" &&
     (role === "ADMIN" || (role === "CUSTOMER" && notStarted));
+  // The api accepts an attachment on the customer's own order in any status, so
+  // the card offers the same field while the order is a draft and after it has
+  // been completed or cancelled.
   const canUploadAttachment =
+    role === "CUSTOMER" ||
     role === "ADMIN" ||
-    (role === "CUSTOMER" && order.status === "NEW") ||
     (role === "EXECUTOR" && order.executor !== null);
 
   async function addComment(event: FormEvent<HTMLFormElement>) {

@@ -121,7 +121,6 @@ export const es: Messages = {
       "Crea pedidos, encuentra ejecutores y mantén todo el proceso bajo control, desde la primera descripción hasta el resultado final.",
     ctaCustomer: "Registrarse",
     ctaOpenWorkspace: "Abrir escritorio",
-    ctaCreate: "Crear un pedido",
     haveAccount: "¿Ya tienes cuenta?",
     signInAction: "Iniciar sesión",
     note: "Pedido, equipo y resultado: nada se pierde",

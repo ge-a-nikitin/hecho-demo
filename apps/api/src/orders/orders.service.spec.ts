@@ -689,6 +689,48 @@ describe("Orders", () => {
     );
   });
 
+  describe("Attachments", () => {
+    it(
+      qc(
+        "orders.files.customer-uploads-in-any-status",
+        "keeps a customer able to attach a file after the order is finished",
+      ),
+      async () => {
+        const completed = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.COMPLETED })],
+        });
+
+        await expect(
+          completed.service.requireAttachmentUploadAccess("order-1", customer),
+        ).resolves.toMatchObject({ id: "order-1" });
+
+        const cancelled = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.CANCELLED })],
+        });
+
+        await expect(
+          cancelled.service.requireAttachmentUploadAccess("order-1", customer),
+        ).resolves.toMatchObject({ id: "order-1" });
+      },
+    );
+
+    it(
+      qc(
+        "orders.files.customer-scope",
+        "refuses an upload into another customer's order",
+      ),
+      async () => {
+        const { service } = serviceWith({
+          workOrder: [order({ id: "order-1", status: OrderStatus.COMPLETED })],
+        });
+
+        await expect(
+          service.requireAttachmentUploadAccess("order-1", otherCustomer),
+        ).rejects.toThrow(ForbiddenException);
+      },
+    );
+  });
+
   describe("Quotas", () => {
     it(
       qc("orders.create.rejects-open-order-quota", "refuses a new order when the customer is at the open-order quota"),
