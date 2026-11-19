@@ -183,7 +183,7 @@ describe("Web", () => {
         expect(attached).toBeInstanceOf(File);
         expect((attached as File).name).toBe("receipt.png");
 
-        // The api accepts attachments on a draft only, so the upload has to land
+        // The form has no order id before it is sent, so the upload has to land
         // between the creation of the order and its submission.
         expect(api.calls).toEqual([
           "GET /orders",
