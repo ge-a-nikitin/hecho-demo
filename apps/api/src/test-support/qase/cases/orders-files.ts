@@ -77,10 +77,10 @@ export const ordersFilesCases = [
     type: "security",
     behavior: "negative",
     description:
-      "Upload permission is narrower than read permission - a customer may attach only to their own order " +
-      "while it is still new - so the access check has to gate the write itself. A guard that ran after " +
-      "the upload would let any signed-in user write objects into the bucket under an order they cannot " +
-      "see, which is both a storage cost and an information leak.",
+      "Upload permission is narrower than read permission - a customer may attach only to their own order - " +
+      "so the access check has to gate the write itself. A guard that ran after the upload would let any " +
+      "signed-in user write objects into the bucket under an order they cannot see, which is both a " +
+      "storage cost and an information leak.",
     preconditions: "The order service refuses upload access for the acting user.",
     steps: [
       {
@@ -318,6 +318,50 @@ export const ordersFilesCases = [
       {
         action: "Upload a file today.",
         expected: "The object is stored and the order gains the attachment.",
+      },
+    ],
+  },
+  {
+    key: "orders.files.customer-uploads-in-any-status",
+    suite: filesSuite,
+    title: "keeps a customer able to attach a file after the order is finished",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "functional",
+    behavior: "positive",
+    description:
+      "A customer describes the work with a photo or a PDF and keeps the order card as the place to add evidence: " +
+      "a receipt of a visit, a photo of a defect found later, a document the executor asked for. Tying the " +
+      "upload to the draft took the file field away the moment the order was sent, so everything had to be " +
+      "attached before submitting. Comments stay open for the whole life of the order, and attachments follow " +
+      "the same rule, which is why the access check no longer reads the status.",
+    preconditions: "The order belongs to the acting customer and is already completed or cancelled.",
+    steps: [
+      {
+        action: "Ask the order service for upload access to the finished order.",
+        expected: "The access check resolves with the order instead of refusing the upload.",
+      },
+    ],
+  },
+  {
+    key: "orders.files.customer-scope",
+    suite: filesSuite,
+    title: "refuses an upload into another customer's order",
+    severity: "critical",
+    priority: "high",
+    layer: "unit",
+    type: "security",
+    behavior: "negative",
+    description:
+      "Opening the upload to every status must not widen it to every order: the customer still reaches only the " +
+      "orders they created. The case asserts the ownership check on its own, so a later change of the status " +
+      "rule cannot quietly turn the attachment route into a way to write into a stranger's order.",
+    preconditions: "The order belongs to another customer.",
+    steps: [
+      {
+        action: "Ask the order service for upload access as a different customer.",
+        expected: "`ForbiddenException` is thrown and the order is not returned.",
       },
     ],
   },

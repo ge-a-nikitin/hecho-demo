@@ -44,6 +44,32 @@ export const webIntegrationCases = [
     ],
   },
   {
+    key: "web.landing.guest-register-label",
+    suite: landingSuite,
+    title: "labels the hero button of a guest as a registration action",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "A visitor without a session read `Create an order` on the hero button and pressed it, and the site answered " +
+      "with the registration form: the label promised an action the visitor could not take before signing up, " +
+      "which is not what the ticket asked for. The button already points at `/register`, so the case pins both " +
+      "the label and the destination for the visitor that wording is written for.",
+    preconditions: "No session is present.",
+    steps: [
+      {
+        action: "Open `/` without a session.",
+        expected: "The landing page renders its hero actions.",
+      },
+      {
+        action: "Read the primary hero button and follow where it points.",
+        expected: "The button reads `Register` and points at `/register`.",
+      },
+    ],
+  },
+  {
     key: "web.orders-page.loads-orders",
     suite: ordersPageSuite,
     title: "renders the orders the api returns and drops the loading state",
@@ -174,8 +200,8 @@ export const webIntegrationCases = [
     description:
       "A customer describes the work with a photo or a PDF, and the order form is the only place that is open while " +
       "the order is being described, so a form without a file field leaves the customer with no way to hand the " +
-      "executor the evidence at all. The api only accepts attachments on a draft, which fixes the order of the " +
-      "calls: the draft has to exist before the upload, and the upload has to finish before the order is sent. " +
+      "executor the evidence at all. The form has no order to attach to yet, which fixes the order of the calls: " +
+      "the draft has to exist before the upload, and the upload has to finish before the order is sent. " +
       "The case fills the form, chooses a file, submits and inspects both what the api received and in which order.",
     preconditions:
       "The session belongs to a customer; `POST /orders` answers with a draft, `POST /orders/<id>/attachments` accepts the file and `POST /orders/<id>/submit` sends the draft.",
@@ -192,6 +218,35 @@ export const webIntegrationCases = [
       {
         action: "Read the notification once the list has reloaded.",
         expected: "It reports that the order was sent for distribution.",
+      },
+    ],
+  },
+  {
+    key: "web.orders-page.attaches-files-in-card",
+    suite: ordersPageSuite,
+    title: "offers the file field in the card of a finished order",
+    severity: "major",
+    priority: "high",
+    layer: "unit",
+    type: "integration",
+    behavior: "positive",
+    description:
+      "The order card is where the customer reads the order after it has left the draft, and the evidence often " +
+      "appears later: a photo of the defect the executor found, a signed act, a receipt of the visit. The api " +
+      "keeps the upload open in every status and the card is the only place that offers the field outside the " +
+      "create form, so tying the field to the draft left the customer with no way to add the file at all. " +
+      "The case opens the card of a completed order and checks that the same file field the draft card shows " +
+      "is still there.",
+    preconditions:
+      "The session belongs to a customer and `GET /orders/<id>` answers with a completed order.",
+    steps: [
+      {
+        action: "Open `/customer` and press `open order` on a completed order.",
+        expected: "The card opens with the file field under `files`.",
+      },
+      {
+        action: "Inspect the field.",
+        expected: "It accepts a file, so the customer can hand over a document after the work is finished.",
       },
     ],
   },
